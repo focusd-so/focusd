@@ -91,7 +91,7 @@ jobs:
                    -X '${PACKAGE_PATH}.CompileTimeHexP2=${HEX_P2}' \
                    -X '${PACKAGE_PATH}.CompileTimeHexP3=${HEX_P3}'"
 
-          task -d build/darwin sign:notarize:universal DMG_PATH="bin/Focusd.dmg" LDFLAGS="$LDFLAGS"
+          task darwin:sign:notarize:universal LDFLAGS="$LDFLAGS"
 
       # ── Verify signature and notarization ────────────────────────────
       - name: Verify signature
@@ -104,7 +104,7 @@ jobs:
       - name: Build DMG
         run: |
           brew install create-dmg
-          task -d build/darwin dmg
+          task darwin:dmg
 
       # ── Publish GitHub Release ────────────────────────────────────────
       - name: Create GitHub Release
