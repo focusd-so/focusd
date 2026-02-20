@@ -28,10 +28,10 @@ COPY --from=builder /app/focusd .
 # All config is passed via environment variables instead
 RUN touch .env
 
-ENV PORT=8089
+ENV PORT=8080
 
-EXPOSE 8089
+EXPOSE 8080
 
 # TURSO_CONNECTION_PATH and TURSO_CONNECTION_TOKEN must be provided at runtime
 # e.g. docker run -e TURSO_CONNECTION_PATH=... -e TURSO_CONNECTION_TOKEN=... focusd
-CMD ["./focusd", "serve"]
+CMD ["./focusd", "serve", "--port", "8080"]
