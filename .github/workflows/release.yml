@@ -1,0 +1,114 @@
+name: Release macOS
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: macos-14 # Apple Silicon (M1) runner
+    timeout-minutes: 30
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────
+      - uses: actions/checkout@v4
+
+      # ── Go ──────────────────────────────────────────────────────────
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # ── Node (Vite frontend build) ───────────────────────────────────
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      # ── Wails v3 CLI ─────────────────────────────────────────────────
+      - name: Install wails3
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+
+      # ── Task runner ──────────────────────────────────────────────────
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+
+      # ── Import Developer ID certificate from GitHub Secrets ──────────
+      - name: Import signing certificate
+        env:
+          CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 20)
+
+          # Create a temporary keychain for this CI run
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Decode and import the .p12 certificate
+          echo "$CERTIFICATE_P12_BASE64" | base64 --decode -o /tmp/cert.p12
+          security import /tmp/cert.p12 \
+            -k "$KEYCHAIN_PATH" \
+            -P "$CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+
+          # Make the keychain the default search path and allow codesign access
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      # ── Store notarization credentials in keychain ────────────────────
+      - name: Store notarization credentials
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          xcrun notarytool store-credentials "focusd-notary" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD"
+
+      # ── Build → Sign → Notarize ───────────────────────────────────────
+      - name: Build, sign, and notarize
+        env:
+          HEX_P1: ${{ secrets.HEX_P1 }}
+          HEX_P2: ${{ secrets.HEX_P2 }}
+          HEX_P3: ${{ secrets.HEX_P3 }}
+        run: |
+          PACKAGE_PATH="github.com/focusd-so/focusd/internal/identity"
+          LDFLAGS="-X '${PACKAGE_PATH}.CompileTimeHexP1=${HEX_P1}' \
+                   -X '${PACKAGE_PATH}.CompileTimeHexP2=${HEX_P2}' \
+                   -X '${PACKAGE_PATH}.CompileTimeHexP3=${HEX_P3}'"
+
+          task -d build/darwin sign:notarize \
+            ARCH=arm64 \
+            LDFLAGS="$LDFLAGS"
+
+      # ── Verify signature and notarization ────────────────────────────
+      - name: Verify signature
+        run: |
+          codesign --verify --deep --strict --verbose=2 bin/Focusd.app
+          xcrun stapler validate bin/Focusd.app
+          spctl --assess --type exec --verbose bin/Focusd.app
+
+      # ── Package into DMG ──────────────────────────────────────────────
+      - name: Install create-dmg and build DMG
+        run: |
+          brew install create-dmg
+          task -d build/darwin dmg
+
+      # ── Publish GitHub Release ────────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bin/Focusd.dmg
+          generate_release_notes: true

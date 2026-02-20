@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package api.v1;
+
+option go_package = "github.com/focusd-so/focusd/gen/api/v1;apiv1";
+
+import "buf/validate/validate.proto";
+
+service ApiService {
+    // ---------------------------------------------------------
+    // IDENTITY MANAGEMENT
+    // ---------------------------------------------------------
+    // Exchanges a Hardware Fingerprint for a PASETO Session Token.
+    // Note: Request requires HMAC Headers (X-Signature, X-Timestamp, X-Nonce).
+    rpc DeviceHandshake(DeviceHandshakeRequest) returns (DeviceHandshakeResponse);
+
+    // ---------------------------------------------------------
+    // LLM METHODS
+    // ---------------------------------------------------------
+    rpc LLMClassify(LLMClassifyRequest) returns (LLMClassifyResponse);
+
+    // ---------------------------------------------------------
+    // Checkout & Subscription Management
+    // ---------------------------------------------------------
+    rpc CheckoutGetLink(CheckoutGetLinkRequest) returns (CheckoutGetLinkResponse);
+}
+
+// ---------------------------------------------------------
+// IDENTITY MANAGEMENT
+// ---------------------------------------------------------
+message DeviceHandshakeRequest {
+    string device_fingerprint = 1;
+    string os_platform = 2;       // e.g. "darwin", "windows" - for analytics
+    string os_version = 3;        // e.g. "14.2.1"
+    string app_version = 4;       // e.g. "1.0.4" - allows force-update checks
+}
+
+message DeviceHandshakeResponse {
+    enum AccountTier {
+        ACCOUNT_TIER_UNSPECIFIED = 0;
+        ACCOUNT_TIER_FREE = 1;
+        ACCOUNT_TIER_TRIAL = 2;
+        ACCOUNT_TIER_BASIC = 3;
+        ACCOUNT_TIER_PRO = 4;
+    }
+
+    int64 user_id = 1;             // The user ID
+    string session_token = 2;     // The PASETO v2.local token
+    int64 expires_at = 3;         // Unix timestamp (hint for client refresh)
+
+    // Limits / Account Status
+    AccountTier account_tier = 4;
+}
+
+// ---------------------------------------------------------
+// LLM METHODS
+// ---------------------------------------------------------
+message LLMClassifyRequest {
+    string bundle_id = 1;
+    string window_title = 2;
+    string website_url = 3;
+    string website_title = 4;
+    string website_description = 5;
+    string website_content_snapshot = 6;
+}
+
+message LLMClassifyResponse {
+    string classification = 1;
+    string reasoning = 2;
+    repeated string tags = 3;
+    string detected_project = 4;
+    string detected_communication_channel = 5;
+}
+
+// ---------------------------------------------------------
+// Checkout & Subscription Management
+// ---------------------------------------------------------
+enum CheckoutProduct {
+    CHECKOUT_PRODUCT_UNSPECIFIED = 0;
+    CHECKOUT_PRODUCT_BASIC = 1;
+    CHECKOUT_PRODUCT_PRO = 2;
+}
+
+message CheckoutGetLinkRequest {
+    CheckoutProduct product = 1;
+}
+
+message CheckoutGetLinkResponse {
+    string link = 1;
+}
