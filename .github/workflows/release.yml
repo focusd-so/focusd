@@ -79,6 +79,13 @@ jobs:
             --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD"
 
+      # ── Reconstruct sensitive source files ─────────────────────────────
+      - name: Reconstruct hmac.prod.go
+        env:
+          HMAC_PROD_GO_BASE64: ${{ secrets.HMAC_PROD_GO_BASE64 }}
+        run: |
+          printf "%s" "$HMAC_PROD_GO_BASE64" | base64 -D > internal/identity/hmac.prod.go
+
       # ── Build → Sign → Notarize ───────────────────────────────────────
       - name: Build, sign, and notarize
         env:
