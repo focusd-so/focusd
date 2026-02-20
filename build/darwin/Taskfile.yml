@@ -6,7 +6,7 @@ includes:
 vars:
   # Signing configuration
   # Replace with output of: security find-identity -v -p codesigning
-  SIGN_IDENTITY: "Developer ID Application: YOUR NAME (TEAMID)"
+  SIGN_IDENTITY: '{{.SIGN_IDENTITY | default "Developer ID Application: YOUR NAME (TEAMID)"}}'
   # Name you chose when running: xcrun notarytool store-credentials
   KEYCHAIN_PROFILE: "focusd-notary"
   ENTITLEMENTS: "build/darwin/entitlements.plist"

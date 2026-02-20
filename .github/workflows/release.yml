@@ -93,6 +93,16 @@ jobs:
           HEX_P2: ${{ secrets.HEX_P2 }}
           HEX_P3: ${{ secrets.HEX_P3 }}
         run: |
+          # Discover signing identity from the imported certificate
+          SIGN_IDENTITY=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)"/\1/')
+          if [ -z "$SIGN_IDENTITY" ]; then
+            echo "ERROR: No Developer ID Application identity found in keychain"
+            security find-identity -v -p codesigning
+            exit 1
+          fi
+          echo "Using signing identity: $SIGN_IDENTITY"
+          export SIGN_IDENTITY
+
           PACKAGE_PATH="github.com/focusd-so/focusd/internal/identity"
           LDFLAGS="-X '${PACKAGE_PATH}.CompileTimeHexP1=${HEX_P1}' \
                    -X '${PACKAGE_PATH}.CompileTimeHexP2=${HEX_P2}' \
