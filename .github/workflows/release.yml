@@ -36,6 +36,7 @@ jobs:
         uses: arduino/setup-task@v2
         with:
           version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       # ── Import Developer ID certificate from GitHub Secrets ──────────
       - name: Import signing certificate
