@@ -199,6 +199,18 @@ tasks:
       - sh: '[ -n "{{.KEYCHAIN_PROFILE}}" ]'
         msg: "KEYCHAIN_PROFILE is required. Set it in the vars section at the top of build/darwin/Taskfile.yml"
 
+  sign:notarize:universal:
+    summary: Signs and notarizes the universal application bundle
+    deps:
+      - task: package:universal
+    cmds:
+      - wails3 tool sign --input {{.BIN_DIR}}/{{.APP_NAME}}.app --identity "{{.SIGN_IDENTITY}}" {{if .ENTITLEMENTS}}--entitlements {{.ENTITLEMENTS}}{{end}} --notarize --keychain-profile {{.KEYCHAIN_PROFILE}}
+    preconditions:
+      - sh: '[ -n "{{.SIGN_IDENTITY}}" ]'
+        msg: "SIGN_IDENTITY is required. Set it in the vars section at the top of build/darwin/Taskfile.yml"
+      - sh: '[ -n "{{.KEYCHAIN_PROFILE}}" ]'
+        msg: "KEYCHAIN_PROFILE is required. Set it in the vars section at the top of build/darwin/Taskfile.yml"
+
   dmg:
     summary: Creates a distributable DMG from the signed .app
     desc: |

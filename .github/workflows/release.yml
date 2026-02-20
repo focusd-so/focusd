@@ -90,9 +90,7 @@ jobs:
                    -X '${PACKAGE_PATH}.CompileTimeHexP2=${HEX_P2}' \
                    -X '${PACKAGE_PATH}.CompileTimeHexP3=${HEX_P3}'"
 
-          task -d build/darwin sign:notarize \
-            ARCH=arm64 \
-            LDFLAGS="$LDFLAGS"
+          task -d build/darwin sign:notarize:universal DMG_PATH="bin/Focusd.dmg" LDFLAGS="$LDFLAGS"
 
       # ── Verify signature and notarization ────────────────────────────
       - name: Verify signature
@@ -102,7 +100,7 @@ jobs:
           spctl --assess --type exec --verbose bin/Focusd.app
 
       # ── Package into DMG ──────────────────────────────────────────────
-      - name: Install create-dmg and build DMG
+      - name: Build DMG
         run: |
           brew install create-dmg
           task -d build/darwin dmg
