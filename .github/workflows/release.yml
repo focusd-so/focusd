@@ -8,6 +8,7 @@ on:
 jobs:
   release:
     runs-on: macos-14 # Apple Silicon (M1) runner
+    environment: Production release
     timeout-minutes: 30
 
     steps:
