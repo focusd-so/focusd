@@ -151,7 +151,7 @@ func (s *Service) checkAndApply(ctx context.Context) error {
 		return fmt.Errorf("replacing app bundle: %w", err)
 	}
 
-	slog.Info("update applied, restarting", "version", rel.GetTagName())
+	slog.Info("update applied successfully, restarting", "version", rel.GetTagName())
 	return relaunch(appPath)
 }
 
