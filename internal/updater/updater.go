@@ -164,27 +164,40 @@ func (s *Service) findLatestRelease(ctx context.Context) (selfupdate.SourceRelea
 		return nil, nil, fmt.Errorf("listing releases: %w", err)
 	}
 
+	slog.Info("updater: found releases", "count", len(releases), "current", s.currentVersion)
+
 	for _, rel := range releases {
+		tag := rel.GetTagName()
+		slog.Info("updater: checking release", "tag", tag, "draft", rel.GetDraft(), "prerelease", rel.GetPrerelease())
+
 		if rel.GetDraft() || rel.GetPrerelease() {
 			continue
 		}
 
-		tag := rel.GetTagName()
 		v, err := semver.NewVersion(strings.TrimPrefix(tag, "v"))
 		if err != nil {
+			slog.Warn("updater: skipping release with unparseable tag", "tag", tag, "error", err)
 			continue
 		}
 
+		slog.Info("updater: version check", "release", v, "current", s.currentVersion, "newer", v.GreaterThan(s.currentVersion))
+
 		if !v.GreaterThan(s.currentVersion) {
 			// Releases are returned newest-first; no point checking older ones
+			slog.Info("updater: already up to date")
 			return nil, nil, nil
 		}
 
+		// This release is newer — look for the zip asset
+		var assetNames []string
 		for _, asset := range rel.GetAssets() {
+			assetNames = append(assetNames, asset.GetName())
 			if asset.GetName() == zipAssetName {
+				slog.Info("updater: found zip asset", "tag", tag, "url", asset.GetBrowserDownloadURL())
 				return rel, asset, nil
 			}
 		}
+		slog.Warn("updater: newer release has no zip asset, skipping", "tag", tag, "assets", assetNames)
 	}
 
 	return nil, nil, nil
