@@ -259,7 +259,7 @@ export const useUsageStore = create<UsageState>()((set, get) => ({
         GetUsageList(blockedItemsOptions),
       ]);
       const blockedItemsMap = new Map<string, BlockedItem>();
-      blockedItems.forEach((usage) => {
+      blockedItems.forEach((usage: ApplicationUsage) => {
         const key = usage.application?.hostname || usage.application?.bundle_id || String(usage.id);
         const existing = blockedItemsMap.get(key);
         const existingStarted = existing?.usage.started_at ?? 0;
@@ -401,7 +401,3 @@ useUsageStore.getState().initSubscription();
 useUsageStore.getState().fetchRecentUsages();
 useUsageStore.getState().fetchWhitelist();
 
-
-// fbbffca0-168e-43e9-9af1-661575da2870
-// ReymundJost/Goof
-// --target-name should take priority over remote-url 
