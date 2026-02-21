@@ -36,8 +36,6 @@ const (
 	// ApiServiceDeviceHandshakeProcedure is the fully-qualified name of the ApiService's
 	// DeviceHandshake RPC.
 	ApiServiceDeviceHandshakeProcedure = "/api.v1.ApiService/DeviceHandshake"
-	// ApiServiceLLMClassifyProcedure is the fully-qualified name of the ApiService's LLMClassify RPC.
-	ApiServiceLLMClassifyProcedure = "/api.v1.ApiService/LLMClassify"
 	// ApiServiceCheckoutGetLinkProcedure is the fully-qualified name of the ApiService's
 	// CheckoutGetLink RPC.
 	ApiServiceCheckoutGetLinkProcedure = "/api.v1.ApiService/CheckoutGetLink"
@@ -51,10 +49,6 @@ type ApiServiceClient interface {
 	// Exchanges a Hardware Fingerprint for a PASETO Session Token.
 	// Note: Request requires HMAC Headers (X-Signature, X-Timestamp, X-Nonce).
 	DeviceHandshake(context.Context, *connect.Request[v1.DeviceHandshakeRequest]) (*connect.Response[v1.DeviceHandshakeResponse], error)
-	// ---------------------------------------------------------
-	// LLM METHODS
-	// ---------------------------------------------------------
-	LLMClassify(context.Context, *connect.Request[v1.LLMClassifyRequest]) (*connect.Response[v1.LLMClassifyResponse], error)
 	// ---------------------------------------------------------
 	// Checkout & Subscription Management
 	// ---------------------------------------------------------
@@ -78,12 +72,6 @@ func NewApiServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithSchema(apiServiceMethods.ByName("DeviceHandshake")),
 			connect.WithClientOptions(opts...),
 		),
-		lLMClassify: connect.NewClient[v1.LLMClassifyRequest, v1.LLMClassifyResponse](
-			httpClient,
-			baseURL+ApiServiceLLMClassifyProcedure,
-			connect.WithSchema(apiServiceMethods.ByName("LLMClassify")),
-			connect.WithClientOptions(opts...),
-		),
 		checkoutGetLink: connect.NewClient[v1.CheckoutGetLinkRequest, v1.CheckoutGetLinkResponse](
 			httpClient,
 			baseURL+ApiServiceCheckoutGetLinkProcedure,
@@ -96,18 +84,12 @@ func NewApiServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 // apiServiceClient implements ApiServiceClient.
 type apiServiceClient struct {
 	deviceHandshake *connect.Client[v1.DeviceHandshakeRequest, v1.DeviceHandshakeResponse]
-	lLMClassify     *connect.Client[v1.LLMClassifyRequest, v1.LLMClassifyResponse]
 	checkoutGetLink *connect.Client[v1.CheckoutGetLinkRequest, v1.CheckoutGetLinkResponse]
 }
 
 // DeviceHandshake calls api.v1.ApiService.DeviceHandshake.
 func (c *apiServiceClient) DeviceHandshake(ctx context.Context, req *connect.Request[v1.DeviceHandshakeRequest]) (*connect.Response[v1.DeviceHandshakeResponse], error) {
 	return c.deviceHandshake.CallUnary(ctx, req)
-}
-
-// LLMClassify calls api.v1.ApiService.LLMClassify.
-func (c *apiServiceClient) LLMClassify(ctx context.Context, req *connect.Request[v1.LLMClassifyRequest]) (*connect.Response[v1.LLMClassifyResponse], error) {
-	return c.lLMClassify.CallUnary(ctx, req)
 }
 
 // CheckoutGetLink calls api.v1.ApiService.CheckoutGetLink.
@@ -123,10 +105,6 @@ type ApiServiceHandler interface {
 	// Exchanges a Hardware Fingerprint for a PASETO Session Token.
 	// Note: Request requires HMAC Headers (X-Signature, X-Timestamp, X-Nonce).
 	DeviceHandshake(context.Context, *connect.Request[v1.DeviceHandshakeRequest]) (*connect.Response[v1.DeviceHandshakeResponse], error)
-	// ---------------------------------------------------------
-	// LLM METHODS
-	// ---------------------------------------------------------
-	LLMClassify(context.Context, *connect.Request[v1.LLMClassifyRequest]) (*connect.Response[v1.LLMClassifyResponse], error)
 	// ---------------------------------------------------------
 	// Checkout & Subscription Management
 	// ---------------------------------------------------------
@@ -146,12 +124,6 @@ func NewApiServiceHandler(svc ApiServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(apiServiceMethods.ByName("DeviceHandshake")),
 		connect.WithHandlerOptions(opts...),
 	)
-	apiServiceLLMClassifyHandler := connect.NewUnaryHandler(
-		ApiServiceLLMClassifyProcedure,
-		svc.LLMClassify,
-		connect.WithSchema(apiServiceMethods.ByName("LLMClassify")),
-		connect.WithHandlerOptions(opts...),
-	)
 	apiServiceCheckoutGetLinkHandler := connect.NewUnaryHandler(
 		ApiServiceCheckoutGetLinkProcedure,
 		svc.CheckoutGetLink,
@@ -162,8 +134,6 @@ func NewApiServiceHandler(svc ApiServiceHandler, opts ...connect.HandlerOption) 
 		switch r.URL.Path {
 		case ApiServiceDeviceHandshakeProcedure:
 			apiServiceDeviceHandshakeHandler.ServeHTTP(w, r)
-		case ApiServiceLLMClassifyProcedure:
-			apiServiceLLMClassifyHandler.ServeHTTP(w, r)
 		case ApiServiceCheckoutGetLinkProcedure:
 			apiServiceCheckoutGetLinkHandler.ServeHTTP(w, r)
 		default:
@@ -177,10 +147,6 @@ type UnimplementedApiServiceHandler struct{}
 
 func (UnimplementedApiServiceHandler) DeviceHandshake(context.Context, *connect.Request[v1.DeviceHandshakeRequest]) (*connect.Response[v1.DeviceHandshakeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v1.ApiService.DeviceHandshake is not implemented"))
-}
-
-func (UnimplementedApiServiceHandler) LLMClassify(context.Context, *connect.Request[v1.LLMClassifyRequest]) (*connect.Response[v1.LLMClassifyResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v1.ApiService.LLMClassify is not implemented"))
 }
 
 func (UnimplementedApiServiceHandler) CheckoutGetLink(context.Context, *connect.Request[v1.CheckoutGetLinkRequest]) (*connect.Response[v1.CheckoutGetLinkResponse], error) {

@@ -88,7 +88,7 @@ func main() {
 	// Resolve the API base URL based on build type.
 	apiBaseURL := "http://localhost:8089"
 	if isProductionBuild {
-		apiBaseURL = "https://focusd.so"
+		apiBaseURL = "https://api.focusd.so"
 	}
 
 	// This client is used to perform the handshake and get the token. It is not authenticated.

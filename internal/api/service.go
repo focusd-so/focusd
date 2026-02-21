@@ -13,12 +13,10 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"google.golang.org/genai"
 	"gorm.io/gorm"
 
 	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
 	"github.com/focusd-so/focusd/gen/api/v1/apiv1connect"
-	"github.com/focusd-so/focusd/internal/api/classification"
 )
 
 type ServiceImpl struct {
@@ -81,32 +79,6 @@ func (s *ServiceImpl) DeviceHandshake(ctx context.Context, req *connect.Request[
 		UserId:       user.ID,
 		AccountTier:  accountTier,
 	}), nil
-}
-
-func (s *ServiceImpl) LLMClassify(ctx context.Context, req *connect.Request[apiv1.LLMClassifyRequest]) (*connect.Response[apiv1.LLMClassifyResponse], error) {
-	apiKey := os.Getenv("GOOGLE_API_KEY")
-	if apiKey == "" {
-		apiKey = os.Getenv("GEMINI_API_KEY")
-	}
-	if apiKey == "" {
-		return nil, fmt.Errorf("GOOGLE_API_KEY or GEMINI_API_KEY environment variable not set")
-	}
-
-	client, err := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey:  apiKey,
-		Backend: genai.BackendGeminiAPI,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Gemini client: %w", err)
-	}
-
-	classificationService := classification.NewClassification(client)
-	response, err := classificationService.Classify(ctx, req.Msg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to classify: %w", err)
-	}
-
-	return connect.NewResponse(response), nil
 }
 
 func (s *ServiceImpl) verifyHMAC(req *connect.Request[apiv1.DeviceHandshakeRequest]) error {

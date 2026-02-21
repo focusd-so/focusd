@@ -566,11 +566,10 @@ const file_api_v1_service_proto_rawDesc = "" +
 	"\x0fCheckoutProduct\x12 \n" +
 	"\x1cCHECKOUT_PRODUCT_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16CHECKOUT_PRODUCT_BASIC\x10\x01\x12\x18\n" +
-	"\x14CHECKOUT_PRODUCT_PRO\x10\x022\xfc\x01\n" +
+	"\x14CHECKOUT_PRODUCT_PRO\x10\x022\xb4\x01\n" +
 	"\n" +
 	"ApiService\x12R\n" +
-	"\x0fDeviceHandshake\x12\x1e.api.v1.DeviceHandshakeRequest\x1a\x1f.api.v1.DeviceHandshakeResponse\x12F\n" +
-	"\vLLMClassify\x12\x1a.api.v1.LLMClassifyRequest\x1a\x1b.api.v1.LLMClassifyResponse\x12R\n" +
+	"\x0fDeviceHandshake\x12\x1e.api.v1.DeviceHandshakeRequest\x1a\x1f.api.v1.DeviceHandshakeResponse\x12R\n" +
 	"\x0fCheckoutGetLink\x12\x1e.api.v1.CheckoutGetLinkRequest\x1a\x1f.api.v1.CheckoutGetLinkResponseB.Z,github.com/focusd-so/focusd/gen/api/v1;apiv1b\x06proto3"
 
 var (
@@ -601,13 +600,11 @@ var file_api_v1_service_proto_depIdxs = []int32{
 	1, // 0: api.v1.DeviceHandshakeResponse.account_tier:type_name -> api.v1.DeviceHandshakeResponse.AccountTier
 	0, // 1: api.v1.CheckoutGetLinkRequest.product:type_name -> api.v1.CheckoutProduct
 	2, // 2: api.v1.ApiService.DeviceHandshake:input_type -> api.v1.DeviceHandshakeRequest
-	4, // 3: api.v1.ApiService.LLMClassify:input_type -> api.v1.LLMClassifyRequest
-	6, // 4: api.v1.ApiService.CheckoutGetLink:input_type -> api.v1.CheckoutGetLinkRequest
-	3, // 5: api.v1.ApiService.DeviceHandshake:output_type -> api.v1.DeviceHandshakeResponse
-	5, // 6: api.v1.ApiService.LLMClassify:output_type -> api.v1.LLMClassifyResponse
-	7, // 7: api.v1.ApiService.CheckoutGetLink:output_type -> api.v1.CheckoutGetLinkResponse
-	5, // [5:8] is the sub-list for method output_type
-	2, // [2:5] is the sub-list for method input_type
+	6, // 3: api.v1.ApiService.CheckoutGetLink:input_type -> api.v1.CheckoutGetLinkRequest
+	3, // 4: api.v1.ApiService.DeviceHandshake:output_type -> api.v1.DeviceHandshakeResponse
+	7, // 5: api.v1.ApiService.CheckoutGetLink:output_type -> api.v1.CheckoutGetLinkResponse
+	4, // [4:6] is the sub-list for method output_type
+	2, // [2:4] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
 	2, // [2:2] is the sub-list for extension extendee
 	0, // [0:2] is the sub-list for field type_name

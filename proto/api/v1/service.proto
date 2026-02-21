@@ -15,11 +15,6 @@ service ApiService {
     rpc DeviceHandshake(DeviceHandshakeRequest) returns (DeviceHandshakeResponse);
 
     // ---------------------------------------------------------
-    // LLM METHODS
-    // ---------------------------------------------------------
-    rpc LLMClassify(LLMClassifyRequest) returns (LLMClassifyResponse);
-
-    // ---------------------------------------------------------
     // Checkout & Subscription Management
     // ---------------------------------------------------------
     rpc CheckoutGetLink(CheckoutGetLinkRequest) returns (CheckoutGetLinkResponse);
