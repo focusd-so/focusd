@@ -30,6 +30,7 @@ import (
 	"github.com/focusd-so/focusd/internal/identity"
 	"github.com/focusd-so/focusd/internal/native"
 	"github.com/focusd-so/focusd/internal/settings"
+	"github.com/focusd-so/focusd/internal/updater"
 	"github.com/focusd-so/focusd/internal/usage"
 )
 
@@ -37,6 +38,9 @@ import (
 // Any files in the frontend/dist folder will be embedded into the binary and
 // made available to the frontend.
 // See https://pkg.go.dev/embed for more information.
+
+// Version is set at build time via -ldflags "-X 'main.Version=v1.2.3'"
+var Version = "dev"
 
 //go:embed all:frontend/dist
 var assets embed.FS
@@ -170,14 +174,24 @@ func main() {
 		}
 	})
 
+	var updaterService *updater.Service
+	if isProductionBuild {
+		updaterService = updater.NewService(Version, "focusd-so", "focusd")
+	}
+
+	services := []application.Service{
+		application.NewService(usageService),
+		application.NewService(settingsService),
+		application.NewService(identityService),
+	}
+	if updaterService != nil {
+		services = append(services, application.NewService(updaterService))
+	}
+
 	wailsApp := application.New(application.Options{
 		Name:        "Focusd",
 		Description: "Stay in flow, ship without distractions",
-		Services: []application.Service{
-			application.NewService(usageService),
-			application.NewService(settingsService),
-			application.NewService(identityService),
-		},
+		Services:    services,
 		LogLevel: slog.LevelWarn,
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -218,6 +232,10 @@ func main() {
 		// usageService.IdleChanged(ctx, idleSeconds > 120)
 	})
 	go native.StartObserver()
+
+	if updaterService != nil {
+		go updaterService.Start(ctx)
+	}
 
 	// Create the system tray
 	systemTray := wailsApp.SystemTray.New()
@@ -300,7 +318,24 @@ func main() {
 
 	// Tray Menu
 	menu := wailsApp.NewMenu()
-	menu.Add("Quit").OnClick(func(ctx *application.Context) {
+	if updaterService != nil {
+		menu.Add("Check for Updates...").OnClick(func(_ *application.Context) {
+			go func() {
+				info, err := updaterService.CheckForUpdate(ctx)
+				if err != nil {
+					slog.Error("manual update check failed", "error", err)
+					return
+				}
+				if info == nil {
+					slog.Info("manual update check: already up to date")
+					return
+				}
+				slog.Info("manual update check: update available, applying", "version", info.Version)
+				updaterService.ApplyUpdate(ctx)
+			}()
+		})
+	}
+	menu.Add("Quit").OnClick(func(_ *application.Context) {
 		wailsApp.Quit()
 	})
 	systemTray.SetMenu(menu)
