@@ -145,6 +145,7 @@ func main() {
 			}
 		}),
 		usage.WithGenaiClient(genaiClient),
+		usage.WithSettingsService(settingsService),
 	)
 	if err != nil {
 		log.Fatal("failed to create usage service: %w", err)
@@ -192,7 +193,7 @@ func main() {
 		Name:        "Focusd",
 		Description: "Stay in flow, ship without distractions",
 		Services:    services,
-		LogLevel: slog.LevelWarn,
+		LogLevel:    slog.LevelWarn,
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
 		},
