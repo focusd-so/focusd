@@ -106,8 +106,10 @@ jobs:
           echo "Using signing identity: $SIGN_IDENTITY"
           export SIGN_IDENTITY
 
+          VERSION_TAG="${GITHUB_REF_NAME}"
           PACKAGE_PATH="github.com/focusd-so/focusd/internal/identity"
-          LDFLAGS="-X '${PACKAGE_PATH}.CompileTimeHexP1=${HEX_P1}' \
+          LDFLAGS="-X 'main.Version=${VERSION_TAG}' \
+                   -X '${PACKAGE_PATH}.CompileTimeHexP1=${HEX_P1}' \
                    -X '${PACKAGE_PATH}.CompileTimeHexP2=${HEX_P2}' \
                    -X '${PACKAGE_PATH}.CompileTimeHexP3=${HEX_P3}'"
 
@@ -126,9 +128,15 @@ jobs:
           brew install create-dmg
           task darwin:dmg
 
+      # ── Create ZIP for auto-updater ─────────────────────────────────
+      - name: Create update ZIP
+        run: ditto -c -k --sequesterRsrc --keepParent bin/Focusd.app bin/Focusd.zip
+
       # ── Publish GitHub Release ────────────────────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: bin/Focusd.dmg
+          files: |
+            bin/Focusd.dmg
+            bin/Focusd.zip
           generate_release_notes: true
