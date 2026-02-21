@@ -1,6 +1,6 @@
 #import <Cocoa/Cocoa.h>
 #include <stdlib.h>
-#include "overlay.h"
+#include "overlay_darwin.h"
 
 void MyFree(void *ptr) {
     free(ptr);
