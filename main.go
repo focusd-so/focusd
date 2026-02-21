@@ -108,6 +108,9 @@ func main() {
 			BaseURL: apiBaseURL + "/api/v1/gemini",
 		},
 	})
+	if err != nil {
+		slog.Error("failed to create genai client: %w", err)
+	}
 
 	usageService, err := usage.NewService(
 		ctx, db, usage.WithProtectionPaused(func(pause usage.ProtectionPause) {
