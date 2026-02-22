@@ -107,6 +107,10 @@ func main() {
 		HTTPOptions: genai.HTTPOptions{
 			BaseURL: apiBaseURL + "/api/v1/gemini",
 		},
+		// TODO: this will be used for BYOK.
+		// Since this is required to create the client, we are stubbing it for now.
+		// All the request will be going through api.focusd.so proxy.
+		APIKey: "stubbed",
 	})
 	if err != nil {
 		slog.Error("failed to create genai client: %w", err)
