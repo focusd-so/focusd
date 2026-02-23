@@ -15,6 +15,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { useEffect, useState } from "react";
+import { GetAppVersion } from "../../bindings/github.com/focusd-so/focusd/internal/settings/service";
 
 interface MenuItem {
   title: string;
@@ -99,7 +101,28 @@ export function AppSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+        <VersionDisplay />
       </SidebarFooter>
     </Sidebar>
+  );
+}
+
+function VersionDisplay() {
+  const [version, setVersion] = useState<string>("");
+
+  useEffect(() => {
+    GetAppVersion()
+      .then(setVersion)
+      .catch(console.error);
+  }, []);
+
+  if (!version) return null;
+
+  return (
+    <div className="px-4 pb-4 mt-auto">
+      <p className="text-xs text-muted-foreground/50 text-center">
+        {version === "dev" ? "dev build" : version}
+      </p>
+    </div>
   );
 }

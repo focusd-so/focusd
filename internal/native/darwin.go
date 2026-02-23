@@ -217,7 +217,7 @@ func StartObserver() {
 
 			onIdleChange(idle)
 
-			time.Sleep(1 * time.Second)
+			time.Sleep(5 * time.Second)
 		}
 	}()
 

@@ -80,7 +80,7 @@ func main() {
 		log.Fatal("failed to setup web server: %w", err)
 	}
 
-	settingsService, err := settings.NewService(db)
+	settingsService, err := settings.NewService(db, Version)
 	if err != nil {
 		log.Fatal("failed to create settings service: %w", err)
 	}

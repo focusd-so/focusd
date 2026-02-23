@@ -22,15 +22,16 @@ type Settings struct {
 }
 
 type Service struct {
-	db *gorm.DB
+	db         *gorm.DB
+	appVersion string
 }
 
-func NewService(db *gorm.DB) (*Service, error) {
+func NewService(db *gorm.DB, appVersion string) (*Service, error) {
 	if err := db.Migrator().AutoMigrate(&Settings{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate settings table: %w", err)
 	}
 
-	return &Service{db: db}, nil
+	return &Service{db: db, appVersion: appVersion}, nil
 }
 
 func (s *Service) Save(key SettingsKey, value string) error {
@@ -118,4 +119,8 @@ func (s *Service) GetVersionHistory(key SettingsKey, limit int) ([]Settings, err
 		return nil, fmt.Errorf("failed to get version history: %w", err)
 	}
 	return settings, nil
+}
+
+func (s *Service) GetAppVersion() string {
+	return s.appVersion
 }

@@ -37,9 +37,12 @@ export function PauseConfirmationDialog({
   const [allowingKey, setAllowingKey] = useState<string | null>(null);
 
   // Fetch pause history for the last 30 days when the dialog opens
+  // and reset selected duration when the dialog is closed.
   useEffect(() => {
     if (open) {
       getPauseHistory(30);
+    } else {
+      setSelectedDuration(null);
     }
   }, [open, getPauseHistory]);
 
