@@ -39,6 +39,20 @@ const applicationItems: MenuItem[] = [
 //   { title: "Trends", to: "/screen-time/trends", icon: IconTrendingUp },
 // ];
 
+function VersionDisplay() {
+  const [version, setVersion] = useState<string>("");
+
+  useEffect(() => {
+    GetAppVersion()
+      .then(setVersion)
+      .catch(console.error);
+  }, []);
+
+  if (!version) return null;
+
+  return <span> {version === "dev" ? "dev" : `v${version}`}</span>;
+}
+
 export function AppSidebar() {
   const matchRoute = useMatchRoute();
 
@@ -46,7 +60,10 @@ export function AppSidebar() {
     <Sidebar variant="floating">
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Application</SidebarGroupLabel>
+          <SidebarGroupLabel className="flex items-center gap-1 font-semibold">
+            Focusd
+            <VersionDisplay />
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {applicationItems.map((item) => {
@@ -99,7 +116,6 @@ export function AppSidebar() {
                   <IconSettings className="w-4 h-4" />
                   <span>Settings</span>
                 </div>
-                <VersionDisplay />
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -109,20 +125,3 @@ export function AppSidebar() {
   );
 }
 
-function VersionDisplay() {
-  const [version, setVersion] = useState<string>("");
-
-  useEffect(() => {
-    GetAppVersion()
-      .then(setVersion)
-      .catch(console.error);
-  }, []);
-
-  if (!version) return null;
-
-  return (
-    <span className="text-[10px] text-muted-foreground/60 transition-colors group-hover:text-foreground/80 font-medium">
-      {version === "dev" ? "dev" : `v${version}`}
-    </span>
-  );
-}
