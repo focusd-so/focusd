@@ -1,9 +1,6 @@
 import {
   IconSettings,
   IconShield,
-  IconLayoutDashboard,
-  IconClock,
-  IconTrendingUp,
 } from "@tabler/icons-react";
 import { Link, useMatchRoute } from "@tanstack/react-router";
 
@@ -34,11 +31,11 @@ const applicationItems: MenuItem[] = [
   },
 ];
 
-const insightItems: MenuItem[] = [
-  { title: "Overview", to: "/screen-time", icon: IconLayoutDashboard },
-  { title: "Screen Time", to: "/screen-time/screentime", icon: IconClock },
-  { title: "Trends", to: "/screen-time/trends", icon: IconTrendingUp },
-];
+// const insightItems: MenuItem[] = [
+//   { title: "Overview", to: "/screen-time", icon: IconLayoutDashboard },
+//   { title: "Screen Time", to: "/screen-time/screentime", icon: IconClock },
+//   { title: "Trends", to: "/screen-time/trends", icon: IconTrendingUp },
+// ];
 
 export function AppSidebar() {
   const matchRoute = useMatchRoute();
