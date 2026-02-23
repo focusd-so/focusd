@@ -109,7 +109,7 @@ export function PauseConfirmationDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-sm border-orange-500/20 bg-background/95 backdrop-blur-md"
+        className="max-w-sm border-border bg-background backdrop-blur-xl shadow-xl shadow-black/20"
         showCloseButton={false}
       >
         <DialogHeader className="sr-only">
@@ -210,13 +210,13 @@ export function PauseConfirmationDialog({
                   <button
                     key={opt.value}
                     onClick={() => setSelectedDuration(opt.value)}
-                    className={`flex flex-col items-center gap-1 p-2 rounded-lg border transition-all ${selectedDuration === opt.value
-                      ? "border-orange-500/50 bg-orange-500/10 text-orange-400"
-                      : "border-border/50 hover:border-orange-500/30 hover:bg-orange-500/5 text-muted-foreground hover:text-foreground"
+                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all cursor-pointer ${selectedDuration === opt.value
+                      ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400"
+                      : "border-border/60 hover:border-border text-muted-foreground hover:bg-muted/50"
                       }`}
                   >
                     <IconClock className="w-4 h-4" />
-                    <span className="text-xs font-medium">{opt.label}</span>
+                    <span className="text-xs font-semibold">{opt.label}</span>
                   </button>
                 ))}
               </div>
@@ -224,23 +224,21 @@ export function PauseConfirmationDialog({
           </div>
         </DialogBody>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 pt-2">
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
             onClick={handleCancel}
-            className="flex-1"
+            className="flex-1 rounded-xl h-11 font-medium hover:bg-muted/80"
           >
             Cancel
           </Button>
           <Button
-            variant="outline"
-            size="sm"
+            variant="default"
             onClick={handleConfirmPause}
             disabled={!selectedDuration || isPausing}
-            className={`flex-1 transition-all ${selectedDuration
-              ? "border-orange-500/50 bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 hover:text-orange-300"
-              : "opacity-50"
+            className={`flex-1 rounded-xl h-11 font-semibold transition-all shadow-sm ${selectedDuration
+              ? "bg-orange-500 text-white hover:bg-orange-600 shadow-orange-500/10"
+              : "bg-muted text-muted-foreground opacity-50"
               }`}
           >
             {isPausing ? "Pausing..." : "Pause Protection"}
