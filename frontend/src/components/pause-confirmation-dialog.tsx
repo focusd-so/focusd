@@ -122,8 +122,8 @@ export function PauseConfirmationDialog({
           {blockedItems.length > 0 && (
             <>
               <div className="space-y-2">
-                <div className="px-1 text-center">
-                  <h3 className="text-sm font-semibold text-emerald-400">
+                <div className="px-1 text-center pb-1">
+                  <h3 className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
                     Need to use a blocked app?
                   </h3>
                 </div>
