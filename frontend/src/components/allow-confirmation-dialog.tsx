@@ -35,26 +35,31 @@ export function AllowConfirmationDialog({
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
   const [isAllowing, setIsAllowing] = useState(false);
 
+  const handleOpenChange = (newOpen: boolean) => {
+    onOpenChange(newOpen);
+    if (!newOpen) {
+      setSelectedDuration(null);
+    }
+  };
+
   const handleConfirmAllow = async () => {
     if (!selectedDuration) return;
 
     setIsAllowing(true);
     try {
       await onConfirm(selectedDuration);
-      onOpenChange(false);
-      setSelectedDuration(null);
+      handleOpenChange(false);
     } finally {
       setIsAllowing(false);
     }
   };
 
   const handleCancel = () => {
-    onOpenChange(false);
-    setSelectedDuration(null);
+    handleOpenChange(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className="max-w-sm border-border bg-background backdrop-blur-xl shadow-xl shadow-black/20"
         showCloseButton={false}
