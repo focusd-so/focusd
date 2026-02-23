@@ -24,13 +24,13 @@ function SettingsPage() {
   };
 
   return (
-    <div className="flex flex-col h-full p-6 overflow-hidden space-y-6">
+    <div className="flex flex-col h-full p-4 overflow-hidden space-y-4">
       <Tabs
         value={tab || "general"}
         onValueChange={handleTabChange}
         className="flex-1 flex flex-col min-h-0"
       >
-        <TabsList className="mb-4">
+        <TabsList className="mb-2">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="rules">Custom Rules</TabsTrigger>
         </TabsList>

@@ -11,8 +11,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { IconDeviceFloppy, IconHistory, IconX, IconFileText } from "@tabler/icons-react";
+import { IconDeviceFloppy, IconHistory, IconFileText } from "@tabler/icons-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 const TYPES_FILE_PATH = "file:///focusd-types.d.ts";
 const SETTINGS_KEY = "custom_rules";
@@ -330,38 +331,54 @@ export function CustomRules() {
   }, []);
 
   return (
-    <div className="flex flex-col h-full w-full space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="space-y-1 flex items-center gap-2">
-          <p className="font-semibold text-sm">Custom Rules</p>
+    <div className="flex flex-col h-full w-full border rounded-lg bg-card overflow-hidden">
+      {/* Integrated Toolbar */}
+      <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b border-border/50">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-background/50 border border-border/50 shadow-sm">
+            <IconFileText className="w-4 h-4 text-muted-foreground" />
+            <span className="text-xs font-medium">rules.ts</span>
+          </div>
           {hasUnsavedChanges && (
-            <span className="text-xs text-muted-foreground">(unsaved changes)</span>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary"></span>
+              </span>
+              <span className="text-[10px] uppercase tracking-wider font-bold text-primary">Unsaved</span>
+            </div>
           )}
         </div>
+
         <div className="flex items-center gap-2">
           <DropdownMenu onOpenChange={handleHistoryOpen}>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="outline" className="gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-muted-foreground hover:text-foreground transition-colors"
+              >
                 <IconHistory className="w-4 h-4" />
-                History
+                <span className="text-xs font-medium sr-only sm:not-sr-only ml-1.5">History</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Version History</DropdownMenuLabel>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Version History</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {customRulesHistory.length === 0 ? (
-                <DropdownMenuItem disabled>No history available</DropdownMenuItem>
+                <DropdownMenuItem disabled className="text-xs">No history available</DropdownMenuItem>
               ) : (
                 customRulesHistory.map((version, index) => (
                   <DropdownMenuItem
                     key={version.id}
                     onClick={() => handleRestoreVersion(version.value)}
+                    className="flex flex-col items-start gap-0.5 py-2"
                   >
                     <div className="flex items-center justify-between w-full">
-                      <span>v{version.version}</span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="font-semibold text-sm">Version {version.version}</span>
+                      <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                         {index === 0 && version.value === customRules
-                          ? "current"
+                          ? "CURRENT"
                           : formatDate(version.created_at)}
                       </span>
                     </div>
@@ -370,35 +387,54 @@ export function CustomRules() {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button size="sm" onClick={handleSave} className="gap-2">
-            <IconDeviceFloppy className="w-4 h-4" />
-            Save Rules
+
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={!hasUnsavedChanges}
+            className={cn(
+              "h-8 px-3 transition-all duration-200",
+              hasUnsavedChanges
+                ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-500"
+                : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
+            )}
+          >
+            <IconDeviceFloppy className="w-4 h-4 sm:mr-1.5" />
+            <span className="text-xs font-bold sm:inline hidden">Save Rules</span>
           </Button>
         </div>
       </div>
 
       {/* Draft restoration banner */}
       {showDraftBanner && (
-        <div className="flex items-center justify-between gap-3 px-3 py-2 bg-muted/50 border border-border/50 rounded-md">
+        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-primary/5 border-b border-primary/10">
           <div className="flex items-center gap-2">
-            <IconFileText className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">
-              You have unsaved changes from a previous session.
+            <IconFileText className="w-4 h-4 text-primary/70" />
+            <span className="text-xs text-muted-foreground">
+              Restorable draft found from a previous session.
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={handleDiscardDraft} className="gap-1">
-              <IconX className="w-3 h-3" />
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleDiscardDraft}
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive transition-colors"
+            >
               Discard
             </Button>
-            <Button size="sm" onClick={handleRestoreDraft}>
+            <Button
+              size="sm"
+              onClick={handleRestoreDraft}
+              className="h-7 px-3 text-xs bg-primary/20 text-primary hover:bg-primary/30 border-none"
+            >
               Restore Draft
             </Button>
           </div>
         </div>
       )}
 
-      <div className="flex-1 min-h-[320px] user-select-allow">
+      <div className="flex-1 min-h-[400px] user-select-allow bg-[#1e1e1e]">
         <Editor
           value={displayedRules}
           height="100%"
@@ -413,6 +449,19 @@ export function CustomRules() {
             renderLineHighlight: "line",
             minimap: { enabled: false },
             tabSize: 2,
+            fontSize: 13,
+            fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Source Code Pro', monospace",
+            scrollBeyondLastLine: false,
+            padding: { top: 10, bottom: 10 },
+            overviewRulerBorder: false,
+            hideCursorInOverviewRuler: true,
+            scrollbar: {
+              vertical: 'visible',
+              horizontal: 'visible',
+              useShadows: false,
+              verticalScrollbarSize: 10,
+              horizontalScrollbarSize: 10,
+            }
           }}
         />
       </div>
