@@ -25,13 +25,6 @@ export function GetAll() {
 }
 
 /**
- * @returns {$CancellablePromise<string>}
- */
-export function GetAppVersion() {
-    return $Call.ByID(919915518);
-}
-
-/**
  * @param {$models.SettingsKey} key
  * @returns {$CancellablePromise<$models.Settings | null>}
  */

@@ -89,7 +89,7 @@ function ClassificationSourceBadge({
     return (
       <Link
         to="/settings"
-        search={{ tab: "rules" }}
+        search={{ tab: "customise" }}
         className="no-underline inline-flex items-center"
       >
         {badgeContent}
@@ -355,7 +355,7 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
                 <TruncatedLabel className="max-w-[200px]">
                   <Link
                     to="/settings"
-                    search={{ tab: "rules" }}
+                    search={{ tab: "customise" }}
                     className="hover:text-foreground hover:underline transition-colors"
                   >
                     {termSource.label}

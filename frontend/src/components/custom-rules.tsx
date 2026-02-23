@@ -330,22 +330,15 @@ export function CustomRules() {
   }, []);
 
   return (
-    <div className="flex flex-col h-full w-full gap-4 pb-2">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-2">
-            <h3 className="text-lg font-medium">Custom Rules</h3>
-            {hasUnsavedChanges && (
-              <span className="text-xs font-medium text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">
-                Unsaved changes
-              </span>
-            )}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Define custom classification and blocking logic using TypeScript.
-          </p>
+    <div className="flex flex-col h-full w-full space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="space-y-1 flex items-center gap-2">
+          <p className="font-semibold text-sm">Custom Rules</p>
+          {hasUnsavedChanges && (
+            <span className="text-xs text-muted-foreground">(unsaved changes)</span>
+          )}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2">
           <DropdownMenu onOpenChange={handleHistoryOpen}>
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="outline" className="gap-2">
@@ -386,7 +379,7 @@ export function CustomRules() {
 
       {/* Draft restoration banner */}
       {showDraftBanner && (
-        <div className="flex items-center justify-between gap-3 px-4 py-3 bg-muted/50 border border-border/50 rounded-lg">
+        <div className="flex items-center justify-between gap-3 px-3 py-2 bg-muted/50 border border-border/50 rounded-md">
           <div className="flex items-center gap-2">
             <IconFileText className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm text-muted-foreground">
@@ -394,18 +387,18 @@ export function CustomRules() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={handleDiscardDraft} className="gap-1 h-8">
+            <Button size="sm" variant="outline" onClick={handleDiscardDraft} className="gap-1">
               <IconX className="w-3 h-3" />
               Discard
             </Button>
-            <Button size="sm" onClick={handleRestoreDraft} className="h-8">
+            <Button size="sm" onClick={handleRestoreDraft}>
               Restore Draft
             </Button>
           </div>
         </div>
       )}
 
-      <div className="flex-1 min-h-[320px] border border-border rounded-lg shadow-sm overflow-hidden user-select-allow relative">
+      <div className="flex-1 min-h-[320px] user-select-allow">
         <Editor
           value={displayedRules}
           height="100%"
@@ -420,9 +413,6 @@ export function CustomRules() {
             renderLineHighlight: "line",
             minimap: { enabled: false },
             tabSize: 2,
-            padding: { top: 16, bottom: 16 },
-            scrollBeyondLastLine: false,
-            fontSize: 13,
           }}
         />
       </div>

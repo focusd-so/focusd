@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import {
   IconAlertTriangle,
   IconClock,
@@ -32,6 +33,7 @@ export function PauseConfirmationDialog({
   onOpenChange,
 }: PauseConfirmationDialogProps) {
   const { getBlockedItemsList, addToWhitelist, pauseProtection, pauseHistory, getPauseHistory } = useUsageStore();
+  const navigate = useNavigate();
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
   const [isPausing, setIsPausing] = useState(false);
   const [allowingKey, setAllowingKey] = useState<string | null>(null);
@@ -181,6 +183,21 @@ export function PauseConfirmationDialog({
                     );
                   })}
                 </div>
+              </div>
+              <div className="px-1 pt-3">
+                <p className="text-[10px] text-muted-foreground/50 text-center leading-relaxed italic">
+                  Did you know? You can{" "}
+                  <button
+                    onClick={() => {
+                      navigate({ to: "/settings", search: { tab: "rules" } });
+                      onOpenChange(false);
+                    }}
+                    className="underline hover:text-muted-foreground/80 transition-colors"
+                  >
+                    customize your rules
+                  </button>{" "}
+                  to allow specific apps permanently.
+                </p>
               </div>
               <div className="h-px w-full bg-border/40 !my-5" />
             </>

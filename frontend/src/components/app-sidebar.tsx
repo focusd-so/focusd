@@ -15,8 +15,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { useEffect, useState } from "react";
-import { GetAppVersion } from "../../bindings/github.com/focusd-so/focusd/internal/settings/service";
 
 interface MenuItem {
   title: string;
@@ -39,20 +37,6 @@ const applicationItems: MenuItem[] = [
 //   { title: "Trends", to: "/screen-time/trends", icon: IconTrendingUp },
 // ];
 
-function VersionDisplay() {
-  const [version, setVersion] = useState<string>("");
-
-  useEffect(() => {
-    GetAppVersion()
-      .then(setVersion)
-      .catch(console.error);
-  }, []);
-
-  if (!version) return null;
-
-  return <span> {version === "dev" ? "dev" : `v${version}`}</span>;
-}
-
 export function AppSidebar() {
   const matchRoute = useMatchRoute();
 
@@ -60,10 +44,7 @@ export function AppSidebar() {
     <Sidebar variant="floating">
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="flex items-center gap-1 font-semibold">
-            Focusd
-            <VersionDisplay />
-          </SidebarGroupLabel>
+          <SidebarGroupLabel>Application</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {applicationItems.map((item) => {
@@ -111,11 +92,9 @@ export function AppSidebar() {
               asChild
               isActive={!!matchRoute({ to: "/settings" })}
             >
-              <Link to="/settings" className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <IconSettings className="w-4 h-4" />
-                  <span>Settings</span>
-                </div>
+              <Link to="/settings">
+                <IconSettings className="w-4 h-4" />
+                <span>Settings</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -124,4 +103,3 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
-
