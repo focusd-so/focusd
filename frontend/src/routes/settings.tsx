@@ -3,15 +3,31 @@ import { CustomRules } from "@/components/custom-rules";
 import { useSettingsStore } from "@/stores/settings-store";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+type SettingsSearch = {
+  tab?: string;
+};
+
 export const Route = createFileRoute("/settings")({
+  validateSearch: (search: Record<string, unknown>): SettingsSearch => {
+    return {
+      tab: typeof search.tab === "string" ? search.tab : "general",
+    };
+  },
   loader: () => useSettingsStore.getState().fetchSettings(),
   component: SettingsPage,
 });
 
 function SettingsPage() {
+  const { tab } = Route.useSearch();
+  const navigate = Route.useNavigate();
+
   return (
     <div className="flex flex-col h-full p-4 overflow-hidden">
-      <Tabs defaultValue="rules" className="flex flex-col h-full w-full overflow-hidden">
+      <Tabs
+        value={tab}
+        onValueChange={(value) => navigate({ search: { tab: value }, replace: true })}
+        className="flex flex-col h-full w-full overflow-hidden"
+      >
         <div>
           <TabsList className="w-fit">
             <TabsTrigger value="general">General</TabsTrigger>

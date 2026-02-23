@@ -307,7 +307,7 @@ export function ClassificationReasoningLabel({
         <TruncatedLabel className="max-w-[300px]">
           <Link
             to="/settings"
-            search={{ tab: "customise" }}
+            search={{ tab: "rules" }}
             className="hover:text-muted-foreground hover:underline transition-colors"
           >
             {displayText}

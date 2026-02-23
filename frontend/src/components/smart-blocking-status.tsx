@@ -58,7 +58,7 @@ export function SmartBlockingStatus() {
   }
 
   const navigateToCustomise = () => {
-    navigate({ to: "/settings", search: { tab: "customise" } });
+    navigate({ to: "/settings", search: { tab: "rules" } });
   };
 
   // Paused state
