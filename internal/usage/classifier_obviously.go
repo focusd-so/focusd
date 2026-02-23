@@ -476,7 +476,6 @@ var alwaysAllowPathCategories = []hostnameCategory{
 	},
 }
 
-
 // ObviousClassification is a classifier that uses obvious rules to classify websites or applications
 //
 // There are 4 main classification principles for websites:
@@ -534,7 +533,7 @@ func (s *Service) classifyObviouslyWebsite(ctx context.Context, browserURL strin
 	}
 
 	// 1. Check ambiguous hostnames first (YouTube, Reddit, etc.)
-	// If exact hostname match with no path, return Supporting
+	// If exact hostname match with no path, return Neutral
 	// If has path, pass to LLM for analysis
 	if exactMatch(ambiguousHostnameCategory.hostnames) {
 		if hasPath {

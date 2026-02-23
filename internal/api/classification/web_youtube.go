@@ -16,7 +16,7 @@ Output: A single, raw JSON object (no markdown, no explanations).
 
 ## JSON Schema
 Return exactly these keys:
-1. "classification": "supporting" (focus aids) or "distracting" (everything else).
+1. "classification": "neutral" (focus aids) or "distracting" (everything else).
 2. "reasoning": Brief explanation.
 3. "tags": Array of strings (e.g., ["supporting-audio", "entertainment", "news", "learning", "content-consumption", "time-sink"]).
 4. "confidence_score": Float (0.0 - 1.0)
@@ -25,7 +25,7 @@ Return exactly these keys:
 
 ## Classification Logic
 
-### **supporting**
+### **neutral**
 **Criteria:** Content that is audio-centric, calming, or passive background noise designed to help the user focus.
 **Keywords to detect:**
 - "lofi", "music", "ambient", "instrumental", "jazz", "classical"
@@ -48,7 +48,7 @@ Return exactly these keys:
 
 **Output**
 {
-  "classification": "supporting",
+  "classification": "neutral",
   "reasoning": "Passive, non-lyrical audio designed for background focus.",
   "tags": ["supporting-audio"],
   "confidence_score": 1.0

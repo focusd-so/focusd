@@ -22,7 +22,7 @@ const typeDefinitions = `
 /**
  * Represents the type of activity classification.
  */
-type ClassificationType = "none" | "productive" | "distracting" | "supporting" | "system";
+type ClassificationType = "unknown" | "productive" | "distracting" | "neutral" | "system";
 
 /**
  * Global constant for classification values.
@@ -34,10 +34,10 @@ type ClassificationType = "none" | "productive" | "distracting" | "supporting" |
  * };
  */
 declare const Classification: {
-  readonly None: "none";
+  readonly Unknown: "unknown";
   readonly Productive: "productive";
   readonly Distracting: "distracting";
-  readonly Supporting: "supporting";
+  readonly Neutral: "neutral";
   readonly System: "system";
 };
 

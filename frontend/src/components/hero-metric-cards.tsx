@@ -10,7 +10,7 @@ import { Progress } from "@/components/ui/progress";
 // Defined locally - screentime service was removed from backend
 interface UsageStats {
   productive_minutes: number;
-  supportive_minutes: number;
+  neutral_minutes: number;
   distractive_minutes: number;
   productivity_score: number;
 }
@@ -21,7 +21,7 @@ export type ComparisonMode = "7-day-avg" | "yesterday";
 export type DailyStats = {
   date: number;
   productive_minutes: number;
-  supportive_minutes: number;
+  neutral_minutes: number;
   distractive_minutes: number;
 };
 
@@ -225,7 +225,7 @@ export function HeroMetricCards({
   // Calculate totals for footer
   const totalActiveMinutes =
     stats.productive_minutes +
-    stats.supportive_minutes +
+    stats.neutral_minutes +
     stats.distractive_minutes;
 
   const focusScore = Number.isFinite(stats.productivity_score)
@@ -247,9 +247,9 @@ export function HeroMetricCards({
           colorScheme="rose"
           contextLabel={contextLabel}
         />
-         <MetricCard
+        <MetricCard
           title="Other"
-          minutes={stats.supportive_minutes}
+          minutes={stats.neutral_minutes}
           colorScheme="amber"
           contextLabel={contextLabel}
         />

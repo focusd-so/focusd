@@ -16,7 +16,7 @@ Output: A single, raw JSON object (no markdown, no explanations).
 
 ## JSON Schema
 Return exactly these keys:
-1. "classification": "productive" | "supporting" | "neutral" | "distracting"
+1. "classification": "productive" | "neutral" | "distracting"
 2. "reasoning": Brief explanation for the classification.
 3. "tags": Array of strings from the allowed list below.
 4. "detected_project": (string | null) - Project name if identifiable, otherwise null.
@@ -39,15 +39,12 @@ Apps that directly support work or skill development:
 - Technical research: documentation viewers, API tools
 - Learning: tutorial apps, dev courses
 
-### **supporting**
-Apps that aid focus without being work:
+### **neutral**
+Apps that are neither productive nor distracting, or aid focus without being work:
 - Music apps: Spotify, Apple Music, Tidal, Amazon Music
 - Ambient sound apps: Brain.fm, Noisli
 - White noise generators
 - Pomodoro timers, focus apps
-
-### **neutral**
-Apps that are neither productive nor distracting:
 - System utilities: Finder, System Settings, Activity Monitor
 - Calculator, Spotlight, Preview
 - File managers, archive tools
@@ -104,7 +101,7 @@ Window **context matters**. The same app can fall under different classification
 
 **Output**
 {
-  "classification": "supporting",
+  "classification": "neutral",
   "reasoning": "Music app playing focus playlist.",
   "tags": ["supporting-audio", "music"],
   "detected_project": null,

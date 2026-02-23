@@ -16,7 +16,7 @@ Output: A single, raw JSON object (no markdown, no explanations).
 
 ## JSON Schema
 Return exactly these keys:
-1. "classification": "productive" | "supporting" | "neutral" | "distracting"
+1. "classification": "productive" | "neutral" | "distracting"
 2. "reasoning": Brief explanation for the classification.
 3. "tags": Array of strings from the allowed list below.
 4. "detected_project": (string | null) - Project name if web-based code editor, otherwise null.
@@ -40,14 +40,11 @@ Sites that directly support work, coding, or skill development:
 - Technical Q&A: Stack Overflow (when solving a specific problem)
 - Learning platforms: Coursera, Udemy, Pluralsight, official tutorials
 
-### **supporting**
-Sites that aid focus without being work:
+### **neutral**
+Sites that are neither productive nor distracting, or aid focus without being work:
 - Music streaming: Spotify web player, Apple Music web, SoundCloud (playlists)
 - Ambient/focus audio: Brain.fm, Noisli, mynoise.net
 - Focus tools: Pomodoro timers, ambient sound generators
-
-### **neutral**
-Sites that are neither productive nor distracting:
 - Search engines: Google, Bing, DuckDuckGo (search results page)
 - Reference: Wikipedia, dictionaries, encyclopedias
 - Utilities: Calculators, converters, weather sites
@@ -121,7 +118,7 @@ If no project name can be reliably inferred, return null.
 
 **Output**
 {
-  "classification": "supporting",
+  "classification": "neutral",
   "reasoning": "Music streaming for focus.",
   "tags": ["supporting-audio"],
   "detected_project": null,

@@ -211,7 +211,9 @@ func StartObserver() {
 		for {
 			// CGEventSourceSecondsSinceLastEventType returns seconds since last input
 			idle := float64(C.CGEventSourceSecondsSinceLastEventType(C.kCGEventSourceStateHIDSystemState, C.kCGAnyInputEventType))
-			fmt.Printf("\rIdle: %.2f sec", idle)
+			if idle > 120 {
+				fmt.Printf("\rIdle: %.2f sec", idle)
+			}
 
 			onIdleChange(idle)
 

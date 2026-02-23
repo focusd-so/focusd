@@ -19,13 +19,13 @@ import {
 export type DailyStats = {
   date: number;
   productive_minutes: number;
-  supportive_minutes: number;
+  neutral_minutes: number;
   distractive_minutes: number;
 };
 
 const trendChartConfig = {
   productive: { label: "Productive", color: "#22c55e" },
-  supportive: { label: "Supportive", color: "#eab308" },
+  neutral: { label: "Neutral", color: "#eab308" },
   distractive: { label: "Distractive", color: "#ef4444" },
 } satisfies ChartConfig;
 
@@ -45,13 +45,13 @@ function generateMockData(): DailyStats[] {
 
     // Generate varied but realistic mock data
     const productiveBase = 240 + Math.floor(Math.random() * 180); // 4-7 hours
-    const supportiveBase = 30 + Math.floor(Math.random() * 60); // 0.5-1.5 hours
+    const neutralBase = 30 + Math.floor(Math.random() * 60); // 0.5-1.5 hours
     const distractiveBase = 20 + Math.floor(Math.random() * 80); // 0.3-1.6 hours
 
     data.push({
       date: Math.floor(date.getTime() / 1000),
       productive_minutes: productiveBase,
-      supportive_minutes: supportiveBase,
+      neutral_minutes: neutralBase,
       distractive_minutes: distractiveBase,
     });
   }
@@ -87,7 +87,7 @@ export function WeeklyTrendChart({
   const chartData = last7Days.map((day) => ({
     day: getDayName(day.date),
     productive: minutesToHours(day.productive_minutes),
-    supportive: minutesToHours(day.supportive_minutes),
+    neutral: minutesToHours(day.neutral_minutes),
     distractive: minutesToHours(day.distractive_minutes),
   }));
 
@@ -138,9 +138,9 @@ export function WeeklyTrendChart({
           radius={[0, 0, 0, 0]}
         />
         <Bar
-          dataKey="supportive"
+          dataKey="neutral"
           stackId="1"
-          fill="var(--color-supportive)"
+          fill="var(--color-neutral)"
           radius={[0, 0, 0, 0]}
         />
         <Bar

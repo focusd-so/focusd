@@ -3,7 +3,7 @@
 export interface DailyStats {
   date: number; // unix timestamp (start of day)
   productiveMinutes: number;
-  supportiveMinutes: number;
+  neutralMinutes: number;
   distractiveMinutes: number;
   focusScore: number;
   deepWorkSessions: number;
@@ -16,7 +16,7 @@ export interface HourlyStats {
   hour: number; // 0-23
   productiveMinutes: number;
   distractiveMinutes: number;
-  supportiveMinutes: number;
+  neutralMinutes: number;
 }
 
 export interface ProjectStats {
@@ -56,7 +56,7 @@ export interface AppUsageStats {
   icon?: string;
   totalMinutes: number;
   sessionsCount: number;
-  classification: "productive" | "distracting" | "supporting";
+  classification: "productive" | "distracting" | "neutral";
 }
 
 export interface DayData {
@@ -128,7 +128,7 @@ function generateHourlyBreakdown(seed: number): HourlyStats[] {
     const isWorkHour = hour >= 9 && hour <= 18;
     const baseProductive = isWorkHour ? 30 + (seed % 25) : seed % 5;
     const baseDistractive = isWorkHour ? 2 + (seed % 8) : seed % 3;
-    const baseSupporting = isWorkHour ? 5 + (seed % 10) : seed % 2;
+    const baseNeutral = isWorkHour ? 5 + (seed % 10) : seed % 2;
 
     // Add some variation based on hour
     const peakBonus = (hour >= 10 && hour <= 12) || (hour >= 14 && hour <= 16) ? 10 : 0;
@@ -138,7 +138,7 @@ function generateHourlyBreakdown(seed: number): HourlyStats[] {
       hour,
       productiveMinutes: Math.max(0, baseProductive + peakBonus + lunchDip + ((seed * hour) % 10)),
       distractiveMinutes: Math.max(0, baseDistractive + ((seed * hour) % 5)),
-      supportiveMinutes: Math.max(0, baseSupporting + ((seed * hour) % 5)),
+      neutralMinutes: Math.max(0, baseNeutral + ((seed * hour) % 5)),
     });
   }
   return hours;
@@ -347,7 +347,7 @@ function generateDayData(date: Date, dayOffset: number): DayData {
 
   const productiveMinutes = hourly.reduce((sum, h) => sum + h.productiveMinutes, 0);
   const distractiveMinutes = hourly.reduce((sum, h) => sum + h.distractiveMinutes, 0);
-  const supportiveMinutes = hourly.reduce((sum, h) => sum + h.supportiveMinutes, 0);
+  const neutralMinutes = hourly.reduce((sum, h) => sum + h.neutralMinutes, 0);
   const totalActive = productiveMinutes + distractiveMinutes;
 
   const projects = generateProjects(seed, dayOffset);
@@ -359,7 +359,7 @@ function generateDayData(date: Date, dayOffset: number): DayData {
   const stats: DailyStats = {
     date: getStartOfDay(date),
     productiveMinutes,
-    supportiveMinutes,
+    neutralMinutes,
     distractiveMinutes,
     focusScore: totalActive > 0 ? Math.round((productiveMinutes / totalActive) * 100) : 0,
     deepWorkSessions: deepWorkSessions.length,
@@ -439,7 +439,7 @@ export const mockAppUsage: AppUsageStats[] = [
     bundleId: "com.tinyspeck.slackmacgap",
     totalMinutes: 67,
     sessionsCount: 45,
-    classification: "supporting",
+    classification: "neutral",
   },
   {
     id: "4",
