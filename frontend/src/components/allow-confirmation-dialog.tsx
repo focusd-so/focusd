@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { IconClock, IconShieldCheck } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,12 +35,11 @@ export function AllowConfirmationDialog({
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
   const [isAllowing, setIsAllowing] = useState(false);
 
-  const handleOpenChange = (newOpen: boolean) => {
-    onOpenChange(newOpen);
-    if (!newOpen) {
+  useEffect(() => {
+    if (!open) {
       setSelectedDuration(null);
     }
-  };
+  }, [open]);
 
   const handleConfirmAllow = async () => {
     if (!selectedDuration) return;
@@ -48,18 +47,20 @@ export function AllowConfirmationDialog({
     setIsAllowing(true);
     try {
       await onConfirm(selectedDuration);
-      handleOpenChange(false);
+      onOpenChange(false);
+      setSelectedDuration(null);
     } finally {
       setIsAllowing(false);
     }
   };
 
   const handleCancel = () => {
-    handleOpenChange(false);
+    onOpenChange(false);
+    setSelectedDuration(null);
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="max-w-sm border-border bg-background backdrop-blur-xl shadow-xl shadow-black/20"
         showCloseButton={false}
