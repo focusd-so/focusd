@@ -35,6 +35,13 @@ export function GetLatest(key) {
 }
 
 /**
+ * @returns {$CancellablePromise<string>}
+ */
+export function GetVersion() {
+    return $Call.ByID(2488333625);
+}
+
+/**
  * GetVersionHistory returns the last N versions of a setting key, ordered by version descending.
  * 
  * Parameters:

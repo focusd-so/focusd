@@ -16,7 +16,7 @@ import (
 func setupSettingsService(t *testing.T) *settings.Service {
 	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 
-	service, err := settings.NewService(db)
+	service, err := settings.NewService(db, "test")
 	require.NoError(t, err, "failed to create settings service")
 
 	return service

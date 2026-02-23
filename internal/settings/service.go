@@ -22,15 +22,20 @@ type Settings struct {
 }
 
 type Service struct {
-	db *gorm.DB
+	db      *gorm.DB
+	version string
 }
 
-func NewService(db *gorm.DB) (*Service, error) {
+func NewService(db *gorm.DB, version string) (*Service, error) {
 	if err := db.Migrator().AutoMigrate(&Settings{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate settings table: %w", err)
 	}
 
-	return &Service{db: db}, nil
+	return &Service{db: db, version: version}, nil
+}
+
+func (s *Service) GetVersion() string {
+	return s.version
 }
 
 func (s *Service) Save(key SettingsKey, value string) error {

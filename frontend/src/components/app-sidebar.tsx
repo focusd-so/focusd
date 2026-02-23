@@ -3,6 +3,9 @@ import {
   IconShield,
 } from "@tabler/icons-react";
 import { Link, useMatchRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+
+import { GetVersion } from "../../bindings/github.com/focusd-so/focusd/internal/settings/service";
 
 import {
   Sidebar,
@@ -39,12 +42,20 @@ const applicationItems: MenuItem[] = [
 
 export function AppSidebar() {
   const matchRoute = useMatchRoute();
+  const [version, setVersion] = useState<string>("");
+
+  useEffect(() => {
+    GetVersion().then(setVersion).catch(console.error);
+  }, []);
 
   return (
     <Sidebar variant="floating">
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Application</SidebarGroupLabel>
+          <SidebarGroupLabel className="flex items-center justify-between w-full">
+            <span>Focusd</span>
+            <span className="text-xs font-normal opacity-50">{version}</span>
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {applicationItems.map((item) => {

@@ -271,7 +271,7 @@ func setUpServiceWithSettings(t *testing.T, customRules string) (*usage.Service,
 
 	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 
-	settingsService, err := settings.NewService(db)
+	settingsService, err := settings.NewService(db, "test")
 	require.NoError(t, err)
 
 	err = settingsService.Save(settings.SettingsKeyCustomRules, customRules)
