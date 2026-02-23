@@ -4,6 +4,7 @@ import {
   IconAlertTriangle,
   IconClock,
   IconShieldOff,
+  IconBulb,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -184,20 +185,28 @@ export function PauseConfirmationDialog({
                   })}
                 </div>
               </div>
-              <div className="px-1 pt-3">
-                <p className="text-[10px] text-muted-foreground/50 text-center leading-relaxed italic">
-                  Did you know? You can{" "}
-                  <button
-                    onClick={() => {
-                      navigate({ to: "/settings", search: { tab: "rules" } });
-                      onOpenChange(false);
-                    }}
-                    className="underline hover:text-muted-foreground/80 transition-colors"
-                  >
-                    customize your rules
-                  </button>{" "}
-                  to allow specific apps permanently.
-                </p>
+
+              <div className="p-3 rounded-xl border border-blue-500/20 bg-blue-500/5 flex gap-3 items-start">
+                <div className="mt-0.5 w-6 h-6 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
+                  <IconBulb className="w-3.5 h-3.5 text-blue-500" />
+                </div>
+                <div className="text-left space-y-0.5 pt-0.5">
+                  <p className="text-xs font-semibold text-blue-500 dark:text-blue-400">
+                    Did you know?
+                  </p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    You can{" "}
+                    <button
+                      onClick={() => {
+                        navigate({ to: "/settings", search: { tab: "rules" } });
+                        onOpenChange(false);
+                      }}
+                      className="text-foreground font-medium underline underline-offset-2 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+                    >
+                      customize your rules
+                    </button>{" "} to allow flexible usage patterns.
+                  </p>
+                </div>
               </div>
               <div className="h-px w-full bg-border/40 !my-5" />
             </>
