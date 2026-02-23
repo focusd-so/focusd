@@ -67,7 +67,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-{/* <SidebarGroup>
+        {/* <SidebarGroup>
           <SidebarGroupLabel>Insights</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>

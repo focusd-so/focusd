@@ -136,18 +136,18 @@ code {
 }
 
 @layer base {
-  * {
+  *:not(.user-select-allow) {
     @apply border-border outline-ring/50;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
     user-select: none;
     overscroll-behavior: none;
-    cursor: default;
+    /* cursor: default; */
   }
   .user-select-allow {
-    -webkit-user-select: text;
-    user-select: text;
-    cursor: auto;
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    cursor: auto !important;
   }
   body {
     @apply bg-background text-foreground;

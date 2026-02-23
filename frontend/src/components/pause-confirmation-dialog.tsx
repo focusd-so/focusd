@@ -1,9 +1,6 @@
-import { useState, useMemo } from "react";
-import { Link } from "@tanstack/react-router";
+import { useState, useMemo, useEffect } from "react";
 import {
   IconAlertTriangle,
-  IconCheck,
-  IconChevronRight,
   IconClock,
   IconShieldOff,
 } from "@tabler/icons-react";
@@ -25,7 +22,6 @@ interface PauseConfirmationDialogProps {
 }
 
 const PAUSE_OPTIONS = [
-  { label: "5 min", value: 5 },
   { label: "15 min", value: 15 },
   { label: "30 min", value: 30 },
   { label: "1 hour", value: 60 },
@@ -35,20 +31,42 @@ export function PauseConfirmationDialog({
   open,
   onOpenChange,
 }: PauseConfirmationDialogProps) {
-  const { getBlockedItemsList, addToWhitelist, pauseProtection, pauseHistory } = useUsageStore();
+  const { getBlockedItemsList, addToWhitelist, pauseProtection, pauseHistory, getPauseHistory } = useUsageStore();
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
   const [isPausing, setIsPausing] = useState(false);
   const [allowingKey, setAllowingKey] = useState<string | null>(null);
 
+  // Fetch pause history for the last 30 days when the dialog opens
+  useEffect(() => {
+    if (open) {
+      getPauseHistory(30);
+    }
+  }, [open, getPauseHistory]);
+
   // Get last 2 blocked items to show as quick allow options
   const blockedItems = getBlockedItemsList().slice(0, 2);
-  const blockedCount = getBlockedItemsList().length;
 
-  // Calculate pause count from backend history (last 7 days)
-  const pauseCount = useMemo(() => {
-    if (!pauseHistory) return 0;
+  const { todayCount, weekCount } = useMemo(() => {
+    if (!pauseHistory) return { todayCount: 0, weekCount: 0 };
+
+    let tCount = 0;
+    let wCount = 0;
+
+    // Create Date objects for midnight today and 7 days ago
+    const now = new Date();
+    const startOfTodaySeconds = Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000);
     const oneWeekAgoSeconds = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
-    return pauseHistory.filter((p) => p.created_at >= oneWeekAgoSeconds).length;
+
+    pauseHistory.forEach((p) => {
+      if (p.created_at >= startOfTodaySeconds) {
+        tCount++;
+      }
+      if (p.created_at >= oneWeekAgoSeconds) {
+        wCount++;
+      }
+    });
+
+    return { todayCount: tCount, weekCount: wCount };
   }, [pauseHistory]);
 
   const handleConfirmPause = async () => {
@@ -69,11 +87,11 @@ export function PauseConfirmationDialog({
     setSelectedDuration(null);
   };
 
-  const handleQuickAllow = async (executablePath: string, hostname: string) => {
+  const handleQuickAllow = async (executablePath: string, hostname: string, durationMinutes: number) => {
     const key = hostname || executablePath;
     setAllowingKey(key);
     try {
-      await addToWhitelist(executablePath, hostname, 15); // 15 minutes default
+      await addToWhitelist(executablePath, hostname, durationMinutes);
       onOpenChange(false);
     } finally {
       setAllowingKey(null);
@@ -94,144 +112,114 @@ export function PauseConfirmationDialog({
         className="max-w-sm border-orange-500/20 bg-background/95 backdrop-blur-md"
         showCloseButton={false}
       >
-        <DialogHeader className="pb-2">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-orange-500/10 border border-orange-500/20">
-              <IconShieldOff className="w-5 h-5 text-orange-500" />
-            </div>
-            <div>
-              <DialogTitle className="text-base">
-                Pause All Protection?
-              </DialogTitle>
-              <DialogDescription className="text-xs">
-                This will disable blocking for everything
-              </DialogDescription>
-            </div>
-          </div>
+        <DialogHeader className="sr-only">
+          <DialogTitle>Pause Protection</DialogTitle>
+          <DialogDescription>Choose to pause protection globally or allow a specific app.</DialogDescription>
         </DialogHeader>
 
-        <DialogBody className="space-y-4">
-          {/* Warning/Stats Section */}
-          {pauseCount > 0 && (
-            <div className="flex items-center gap-2 text-xs text-orange-400">
-              <IconAlertTriangle className="w-3.5 h-3.5" />
-              <span>
-                You've paused{" "}
-                <span className="font-bold">{pauseCount} time{pauseCount !== 1 ? "s" : ""}</span>{" "}
-                this week
-              </span>
-            </div>
+        <DialogBody className="space-y-4 pt-6">
+          {/* Top Half: Selective Pause */}
+          {blockedItems.length > 0 && (
+            <>
+              <div className="space-y-2">
+                <div className="px-1 text-center">
+                  <h3 className="text-sm font-semibold text-emerald-400">
+                    Need to use a blocked app?
+                  </h3>
+                </div>
+
+                <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 overflow-hidden divide-y divide-emerald-500/10">
+                  {blockedItems.map((item) => {
+                    const app = item.usage.application;
+                    const key = app?.hostname || app?.bundle_id || String(item.usage.id);
+                    const isAllowing = allowingKey === key;
+
+                    return (
+                      <div
+                        key={key}
+                        className="flex items-center gap-3 px-3 py-2.5"
+                      >
+                        {/* App Icon */}
+                        {app?.icon ? (
+                          <img
+                            src={`data:image/png;base64,${app.icon}`}
+                            alt=""
+                            className="w-5 h-5 rounded grayscale-[0.2]"
+                          />
+                        ) : (
+                          <div className="w-5 h-5 rounded bg-muted-foreground/20" />
+                        )}
+
+                        {/* App Name */}
+                        <span className="text-sm font-medium text-muted-foreground flex-1 truncate">
+                          {getDisplayName(item)}
+                        </span>
+
+                        {/* Allow Buttons */}
+                        <div className="flex items-center rounded-md border border-border/40 bg-muted/30 overflow-hidden divide-x divide-border/40">
+                          {[15, 30, 60].map((durationFn) => (
+                            <button
+                              key={durationFn}
+                              onClick={() =>
+                                handleQuickAllow(app?.executable_path || "", app?.hostname || "", durationFn)
+                              }
+                              disabled={isAllowing}
+                              className="px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:bg-green-500/10 hover:text-green-400 transition-all disabled:opacity-50"
+                            >
+                              {isAllowing ? (
+                                "..."
+                              ) : (
+                                durationFn === 60 ? "1h" : `${durationFn}m`
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="h-px w-full bg-border/40 !my-5" />
+            </>
           )}
 
-          {/* Quick Allow Section */}
-          <div className="rounded-lg border border-green-500/20 bg-green-500/5 overflow-hidden">
-            {/* Header */}
-            <div className="px-3 py-2 border-b border-green-500/10">
-              <p className="text-xs font-medium text-green-400">
-                Need just one app?
-              </p>
-              <p className="text-[10px] text-green-400/60">
-                Allow specific items instead of pausing everything
-              </p>
-            </div>
-
-            {/* Blocked Items List */}
-            {blockedItems.length > 0 ? (
-              <div className="divide-y divide-green-500/10">
-                {blockedItems.map((item) => {
-                  const app = item.usage.application;
-                  const key = app?.hostname || app?.bundle_id || String(item.usage.id);
-                  const isAllowing = allowingKey === key;
-
-                  return (
-                    <div
-                      key={key}
-                      className="flex items-center gap-2 px-3 py-2"
-                    >
-                      {/* App Icon */}
-                      {app?.icon ? (
-                        <img
-                          src={`data:image/png;base64,${app.icon}`}
-                          alt=""
-                          className="w-5 h-5 rounded"
-                        />
-                      ) : (
-                        <div className="w-5 h-5 rounded bg-muted-foreground/20" />
-                      )}
-
-                      {/* App Name */}
-                      <span className="text-xs text-foreground flex-1 truncate">
-                        {getDisplayName(item)}
-                      </span>
-
-                      {/* Allow Button */}
-                      <button
-                        onClick={() =>
-                          handleQuickAllow(app?.executable_path || "", app?.hostname || "")
-                        }
-                        disabled={isAllowing}
-                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 hover:text-green-300 transition-all disabled:opacity-50"
-                      >
-                        {isAllowing ? (
-                          "Allowing..."
-                        ) : (
-                          <>
-                            <IconCheck className="w-3 h-3" />
-                            Allow 15m
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  );
-                })}
+          {/* Bottom Half: Global Pause */}
+          <div className="space-y-4">
+            <div className="flex flex-col gap-3 px-1">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-orange-500/10 border border-orange-500/20">
+                  <IconShieldOff className="w-4 h-4 text-orange-500" />
+                </div>
+                <h3 className="text-base font-semibold text-foreground">Pause All Protection</h3>
               </div>
-            ) : (
-              <div className="px-3 py-2 text-[10px] text-muted-foreground">
-                No items currently blocked
-              </div>
-            )}
 
-            {/* Link to Custom Rules */}
-            <Link
-              to="/settings"
-              search={{ tab: "customise" }}
-              onClick={() => onOpenChange(false)}
-              className="flex items-center justify-center gap-1.5 mx-2 my-2 px-3 py-1.5 rounded-md bg-green-500/15 border border-green-500/30 hover:bg-green-500/25 hover:border-green-500/50 transition-all group"
-            >
-              <span className="text-xs font-medium text-green-400 group-hover:text-green-300">
-                Set Up Custom Rules
-              </span>
-              <IconChevronRight className="w-3.5 h-3.5 text-green-400 group-hover:text-green-300" />
-            </Link>
-          </div>
-
-          {/* Duration Selection */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground font-medium">
-                Pause duration:
-              </p>
-              {blockedCount > 0 && (
-                <p className="text-[10px] text-muted-foreground/60">
-                  {blockedCount} item{blockedCount !== 1 ? "s" : ""} blocked
-                </p>
+              {(todayCount > 0 || weekCount > 0) && (
+                <div className="flex items-center gap-1.5 text-xs text-orange-500/90 bg-orange-500/10 border border-orange-500/20 rounded-md px-2.5 py-1.5 w-fit">
+                  <IconAlertTriangle className="w-3.5 h-3.5 min-w-[14px]" />
+                  <span>
+                    You've paused <strong className="font-bold text-orange-500">{todayCount} time{todayCount !== 1 ? "s" : ""}</strong> today, and <strong className="font-bold text-orange-500">{weekCount} time{weekCount !== 1 ? "s" : ""}</strong> this week
+                  </span>
+                </div>
               )}
             </div>
-            <div className="grid grid-cols-4 gap-2">
-              {PAUSE_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setSelectedDuration(opt.value)}
-                  className={`flex flex-col items-center gap-1 p-2 rounded-lg border transition-all ${
-                    selectedDuration === opt.value
+
+            {/* Duration Selection */}
+            <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-2">
+                {PAUSE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setSelectedDuration(opt.value)}
+                    className={`flex flex-col items-center gap-1 p-2 rounded-lg border transition-all ${selectedDuration === opt.value
                       ? "border-orange-500/50 bg-orange-500/10 text-orange-400"
                       : "border-border/50 hover:border-orange-500/30 hover:bg-orange-500/5 text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <IconClock className="w-4 h-4" />
-                  <span className="text-xs font-medium">{opt.label}</span>
-                </button>
-              ))}
+                      }`}
+                  >
+                    <IconClock className="w-4 h-4" />
+                    <span className="text-xs font-medium">{opt.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </DialogBody>
@@ -250,11 +238,10 @@ export function PauseConfirmationDialog({
             size="sm"
             onClick={handleConfirmPause}
             disabled={!selectedDuration || isPausing}
-            className={`flex-1 transition-all ${
-              selectedDuration
-                ? "border-orange-500/50 bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 hover:text-orange-300"
-                : "opacity-50"
-            }`}
+            className={`flex-1 transition-all ${selectedDuration
+              ? "border-orange-500/50 bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 hover:text-orange-300"
+              : "opacity-50"
+              }`}
           >
             {isPausing ? "Pausing..." : "Pause Protection"}
           </Button>

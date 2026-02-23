@@ -398,7 +398,7 @@ export function CustomRules() {
         </div>
       )}
 
-      <div className="flex-1 min-h-[320px]">
+      <div className="flex-1 min-h-[320px] user-select-allow">
         <Editor
           value={displayedRules}
           height="100%"
