@@ -20,9 +20,9 @@ interface AllowConfirmationDialogProps {
 }
 
 const ALLOW_OPTIONS = [
-  { label: "5 min", value: 5 },
-  { label: "10 min", value: 10 },
   { label: "15 min", value: 15 },
+  { label: "30 min", value: 30 },
+  { label: "1 hour", value: 60 },
 ];
 
 export function AllowConfirmationDialog({
@@ -98,11 +98,10 @@ export function AllowConfirmationDialog({
                 <button
                   key={opt.value}
                   onClick={() => setSelectedDuration(opt.value)}
-                  className={`flex flex-col items-center gap-1 p-2 rounded-lg border transition-all ${
-                    selectedDuration === opt.value
+                  className={`flex flex-col items-center gap-1 p-2 rounded-lg border transition-all ${selectedDuration === opt.value
                       ? "border-yellow-500/50 bg-yellow-500/10 text-yellow-400"
                       : "border-border/50 hover:border-yellow-500/30 hover:bg-yellow-500/5 text-muted-foreground hover:text-foreground"
-                  }`}
+                    }`}
                 >
                   <IconClock className="w-4 h-4" />
                   <span className="text-xs font-medium">{opt.label}</span>
@@ -126,11 +125,10 @@ export function AllowConfirmationDialog({
             size="sm"
             onClick={handleConfirmAllow}
             disabled={!selectedDuration || isAllowing}
-            className={`flex-1 transition-all ${
-              selectedDuration
+            className={`flex-1 transition-all ${selectedDuration
                 ? "border-yellow-500/50 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 hover:text-yellow-300"
                 : "opacity-50"
-            }`}
+              }`}
           >
             {isAllowing ? "Allowing..." : "Allow"}
           </Button>
