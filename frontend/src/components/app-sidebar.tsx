@@ -94,14 +94,16 @@ export function AppSidebar() {
               asChild
               isActive={!!matchRoute({ to: "/settings" })}
             >
-              <Link to="/settings">
-                <IconSettings className="w-4 h-4" />
-                <span>Settings</span>
+              <Link to="/settings" className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <IconSettings className="w-4 h-4" />
+                  <span>Settings</span>
+                </div>
+                <VersionDisplay />
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <VersionDisplay />
       </SidebarFooter>
     </Sidebar>
   );
@@ -119,10 +121,8 @@ function VersionDisplay() {
   if (!version) return null;
 
   return (
-    <div className="px-4 pb-4 mt-auto">
-      <p className="text-xs text-muted-foreground/50 text-center">
-        {version === "dev" ? "dev build" : version}
-      </p>
-    </div>
+    <span className="text-[10px] text-muted-foreground/60 transition-colors group-hover:text-foreground/80 font-medium">
+      {version === "dev" ? "dev" : `v${version}`}
+    </span>
   );
 }
