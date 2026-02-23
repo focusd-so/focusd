@@ -234,8 +234,21 @@ func goOnTitleChange(cPID C.int, cBundleID *C.char, cTitle *C.char, cAppName *C.
 	appIcon := C.GoString(cAppIcon)
 
 	go func() {
-		// Resolve browser URL if applicable (uses osascript, may block)
-		browserURL := getBrowserURL(bundleID)
+		var browserURL string
+
+		// If it's a browser, resolve URL & precise title synchronously via AppleScript
+		if IsBrowser(bundleID) {
+			bURL, bTitle := getBrowserURLAndTitle(bundleID)
+			browserURL = bURL
+
+			// Override the accessibility API title with the browser's true active tab title.
+			// This eliminates race conditions where the OS accessibility tree (which provides the 'title')
+			// lags behind the browser's internal data model (which provides the 'URL'),
+			// guaranteeing they perfectly match.
+			if bTitle != "" && bURL != "" {
+				title = bTitle
+			}
+		}
 
 		onTitleChange(NativeEvent{
 			Type:           AxEventTypeTitle,
@@ -266,332 +279,10 @@ func GetIdentity() (string, error) {
 	return fmt.Sprintf("%s:%s:%s", uuid, serial, appSalt), nil
 }
 
-// package native
-
-// /*
-// #cgo CFLAGS: -fobjc-arc -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
-// #cgo LDFLAGS: -framework AppKit -framework ApplicationServices -framework Foundation
-// #include <stdlib.h>
-// #include "ax_observer.h"
-// #include "overlay.h"
-
-// extern void goAXEventCallback(AXEventData* data);
-
-// static void cGoCallbackWrapper(AXEventData* data) {
-//     goAXEventCallback(data);
-// }
-
-// static int startObserverWithGoCallback() {
-//     return AXObserverStart(cGoCallbackWrapper);
-// }
-// */
-// import "C"
-
-// import (
-// 	"context"
-// 	"crypto/sha256"
-// 	"encoding/base64"
-// 	"encoding/hex"
-// 	"encoding/json"
-// 	"fmt"
-// 	"log"
-// 	"log/slog"
-// 	"net/url"
-// 	"os/exec"
-// 	"runtime"
-// 	"slices"
-// 	"strings"
-// 	"sync"
-// 	"time"
-// 	"unsafe"
-
-// 	"github.com/progrium/darwinkit/macos/appkit"
-// )
-
-// // Global callback storage
-// var (
-// 	titleCallback   func(AxEvent)
-// 	idleCallback    func(AxEvent)
-// 	axCallbackMu    sync.Mutex
-// 	observerOnce    sync.Once
-// 	observerStarted bool
-
-// 	// Browser polling state
-// 	pollingMu       sync.Mutex
-// 	stopPolling     chan struct{}
-// 	currentBundleID string
-// 	lastTitle       string
-// 	lastURL         string
-// )
-
-// //export goAXEventCallback
-// func goAXEventCallback(data *C.AXEventData) {
-// 	axCallbackMu.Lock()
-// 	tFn := titleCallback
-// 	iFn := idleCallback
-// 	axCallbackMu.Unlock()
-
-// 	// COPY DATA SYNCHRONOUSLY
-// 	eventType := int(data.event_type)
-// 	isIdle := data.is_idle == 1
-// 	idleSeconds := float64(data.idle_seconds)
-// 	pid := int(data.pid)
-// 	appName := C.GoString(data.app_name)
-// 	bundleID := C.GoString(data.bundle_id)
-// 	initialTitle := C.GoString(data.title)
-// 	appIcon := C.GoString(data.app_icon)
-
-// 	// Process in a goroutine
-// 	go func() {
-// 		if eventType == C.AX_EVENT_TYPE_IDLE {
-// 			if iFn != nil {
-// 				iFn(AxEvent{
-// 					Type:        AxEventTypeIdle,
-// 					IsIdle:      isIdle,
-// 					IdleSeconds: idleSeconds,
-// 				})
-// 			}
-// 			return
-// 		}
-
-// 		if tFn == nil {
-// 			return
-// 		}
-
-// 		title := initialTitle
-// 		if (eventType == C.AX_EVENT_TYPE_APP || title == "") && pid > 0 {
-// 			title = getProcessTitle(int32(pid))
-// 		}
-
-// 		url := getBrowserURL(bundleID)
-
-// 		axEventType := AxEventTypeTitle
-// 		if eventType == C.AX_EVENT_TYPE_APP {
-// 			axEventType = AxEventTypeApp
-
-// 			// Handle browser polling lifecycle
-// 			manageBrowserPolling(pid, appName, bundleID, title, url, tFn)
-// 		}
-
-// 		tFn(AxEvent{
-// 			Type:     axEventType,
-// 			PID:      pid,
-// 			AppName:  appName,
-// 			BundleID: bundleID,
-// 			Title:    title,
-// 			URL:      url,
-// 			AppIcon:  appIcon,
-// 		})
-// 	}()
-// }
-
-// func manageBrowserPolling(pid int, appName, bundleID, title, url string, fn func(AxEvent)) {
-// 	pollingMu.Lock()
-// 	defer pollingMu.Unlock()
-
-// 	// If we are already polling this browser, just update the last known values
-// 	if IsBrowser(bundleID) && bundleID == currentBundleID && stopPolling != nil {
-// 		lastTitle = title
-// 		lastURL = url
-// 		return
-// 	}
-
-// 	// Stop previous polling if exists
-// 	if stopPolling != nil {
-// 		close(stopPolling)
-// 		stopPolling = nil
-// 	}
-
-// 	// Start polling if it's a browser app
-// 	if IsBrowser(bundleID) {
-// 		currentBundleID = bundleID
-// 		stopPolling = make(chan struct{})
-// 		lastTitle = title
-// 		lastURL = url
-// 		stopChan := stopPolling
-
-// 		go func() {
-// 			ticker := time.NewTicker(1 * time.Second)
-// 			defer ticker.Stop()
-
-// 			for {
-// 				select {
-// 				case <-ticker.C:
-// 					updatedTitle := getProcessTitle(int32(pid))
-// 					updatedURL := getBrowserURL(bundleID)
-
-// 					pollingMu.Lock()
-// 					// Only notify if title or URL changed
-// 					if updatedTitle != lastTitle || updatedURL != lastURL {
-// 						lastTitle = updatedTitle
-// 						lastURL = updatedURL
-// 						pollingMu.Unlock()
-
-// 						fn(AxEvent{
-// 							Type:     AxEventTypeTitle,
-// 							PID:      pid,
-// 							AppName:  appName,
-// 							BundleID: bundleID,
-// 							Title:    updatedTitle,
-// 							URL:      updatedURL,
-// 						})
-
-// 						slog.Debug("Browser app update - values changed",
-// 							slog.String("app_name", appName),
-// 							slog.String("title", updatedTitle),
-// 							slog.String("url", updatedURL))
-// 					} else {
-// 						pollingMu.Unlock()
-// 					}
-
-// 				case <-stopChan:
-// 					return
-// 				}
-// 			}
-// 		}()
-
-// 		slog.Info("Started polling for browser app", slog.String("app_name", appName), slog.String("bundle_id", bundleID))
-// 	} else {
-// 		currentBundleID = ""
-// 		lastTitle = ""
-// 		lastURL = ""
-// 		slog.Info("Stopped polling - non-browser app active", slog.String("app_name", appName), slog.String("bundle_id", bundleID))
-// 	}
-// }
-
-// func OnTitleChangeCallback(ctx context.Context, fn func(AxEvent)) {
-// 	axCallbackMu.Lock()
-// 	titleCallback = fn
-// 	axCallbackMu.Unlock()
-// 	startObserverOnce()
-// }
-
-// func OnIdleChangeCallback(ctx context.Context, fn func(AxEvent)) {
-// 	axCallbackMu.Lock()
-// 	idleCallback = fn
-// 	axCallbackMu.Unlock()
-// 	startObserverOnce()
-// }
-
-// func startObserverOnce() {
-// 	observerOnce.Do(func() {
-// 		go func() {
-// 			runtime.LockOSThread()
-// 			app := appkit.Application_SharedApplication()
-// 			result := C.startObserverWithGoCallback()
-// 			if result == 0 {
-// 				log.Println("Failed to start AX observer - check accessibility permissions")
-// 				return
-// 			}
-// 			observerStarted = true
-// 			log.Println("Listening for active application, title and idle changes...")
-// 			app.Run()
-// 		}()
-// 	})
-// }
-
-// func OnActiveAppTitleChange(ctx context.Context, fn func(event AxEvent)) {
-// 	OnTitleChangeCallback(ctx, fn)
-// 	// For backward compatibility, we'll also hook idle if they use this
-// 	OnIdleChangeCallback(ctx, fn)
-
-// 	// Block as before
-// 	for {
-// 		time.Sleep(1 * time.Second)
-// 		if ctx.Err() != nil {
-// 			return
-// 		}
-// 	}
-// }
-
-// func StopObserver() {
-// 	C.AXObserverStop()
-
-// 	axCallbackMu.Lock()
-// 	titleCallback = nil
-// 	idleCallback = nil
-// 	axCallbackMu.Unlock()
-// }
-
-// func ShowWarningOverlay(appName, subtitle string, seconds int) {
-// 	cAppName := C.CString(appName)
-// 	defer C.free(unsafe.Pointer(cAppName))
-// 	cSubtitle := C.CString(subtitle)
-// 	defer C.free(unsafe.Pointer(cSubtitle))
-// 	C.ShowOverlay(cAppName, cSubtitle, C.int(seconds))
-// }
-
-// func UpdateWarningOverlay(seconds int) {
-// 	C.UpdateOverlay(C.int(seconds))
-// }
-
-// func HideWarningOverlay() {
-// 	C.HideOverlay()
-// }
-
-// func CloseApp(ctx context.Context, app AxEvent) error {
-// 	if IsBrowser(app.BundleID) {
-// 		slog.Info("Closing browser tab", slog.String("app_name", app.AppName), slog.String("bundle_id", app.BundleID))
-// 		return closeBrowserTab(app.BundleID)
-// 	}
-
-// 	slog.Info("Closing application", slog.String("app_name", app.AppName), slog.String("bundle_id", app.BundleID))
-// 	return closeApplication(app.BundleID)
-// }
-
-// func closeBrowserTab(bundleID string) error {
-// 	var script string
-
-// 	if slices.Contains(chromeBaseBundleIDs, bundleID) {
-// 		script = fmt.Sprintf(`tell app id "%s" to close active tab of front window`, bundleID)
-// 	} else if slices.Contains(safariBasedBundleIDs, bundleID) {
-// 		script = fmt.Sprintf(`tell app id "%s" to close current tab of front window`, bundleID)
-// 	} else {
-// 		return fmt.Errorf("unsupported browser: %s", bundleID)
-// 	}
-
-// 	cmd := exec.Command("osascript", "-e", script)
-// 	output, err := cmd.CombinedOutput()
-// 	if err != nil {
-// 		return fmt.Errorf("failed to close browser tab: %v\nOutput: %s", err, output)
-// 	}
-
-// 	return nil
-// }
-
-// func closeApplication(bundleID string) error {
-// 	script := fmt.Sprintf(`tell app id "%s" to quit`, bundleID)
-
-// 	cmd := exec.Command("osascript", "-e", script)
-// 	output, err := cmd.CombinedOutput()
-// 	if err != nil {
-// 		return fmt.Errorf("failed to close application: %v\nOutput: %s", err, output)
-// 	}
-
-// 	return nil
-// }
-
-// func TerminateApp(pid int) {
-// 	// For backward compatibility, just log
-// 	slog.Info("TERMINATING APP (DEPRECATED, use CloseApp)", "pid", pid)
-// }
-
-// func getProcessTitle(pid int32) string {
-// 	osascript := fmt.Sprintf(`tell application "System Events" to get the title of front window of (first process whose unix id is %d)`, pid)
-// 	cmd := exec.Command("osascript", "-e", osascript)
-
-// 	output, err := cmd.CombinedOutput()
-// 	if err != nil {
-// 		slog.Error("Failed to get process title", slog.String("error", err.Error()), slog.Int("pid", int(pid)))
-// 	}
-
-// 	return strings.TrimSpace(string(output))
-// }
-
-func getBrowserURL(bundleID string) string {
+func getBrowserURLAndTitle(bundleID string) (string, string) {
 	// Check if this is a supported browser first
 	if !IsBrowser(bundleID) {
-		return ""
+		return "", ""
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -600,7 +291,15 @@ func getBrowserURL(bundleID string) string {
 	var script string
 
 	if slices.Contains(safariBasedBundleIDs, bundleID) {
-		script = fmt.Sprintf(`tell app id "%s" to get URL of front document`, bundleID)
+		script = fmt.Sprintf(`tell app id "%s"
+	try
+		set docURL to URL of front document
+		set docTitle to name of front document
+		return docURL & "|||" & docTitle
+	on error
+		return ""
+	end try
+end tell`, bundleID)
 	} else {
 		// For Chromium-based browsers, use a more robust script that filters out
 		// automation/headless windows by checking visibility, mode, and dimensions
@@ -615,7 +314,9 @@ func getBrowserURL(bundleID string) string {
                 set wHeight to (item 4 of wBounds) - (item 2 of wBounds)
                 -- Filter out tiny windows (automation/headless often have small dimensions)
                 if wWidth > 200 and wHeight > 200 then
-                    return URL of active tab of w
+                    set tabURL to URL of active tab of w
+                    set tabTitle to title of active tab of w
+                    return tabURL & "|||" & tabTitle
                 end if
             end if
         end try
@@ -627,11 +328,23 @@ end tell`, bundleID)
 	cmd := exec.CommandContext(ctx, "osascript", "-e", script)
 	output, err := cmd.Output()
 	if err != nil {
-		slog.Error("failed to get browser URL", "bundleID", bundleID, "error", err)
-		return ""
+		slog.Error("failed to get browser URL and title", "bundleID", bundleID, "error", err)
+		return "", ""
 	}
 
-	return strings.TrimSpace(string(output))
+	res := strings.TrimSpace(string(output))
+	if res == "" {
+		return "", ""
+	}
+	parts := strings.Split(res, "|||")
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	// fallback if it just returned one thing or empty
+	if len(parts) == 1 {
+		return parts[0], ""
+	}
+	return "", ""
 }
 
 // // Suppress unused import warning

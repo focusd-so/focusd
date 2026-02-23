@@ -23,25 +23,23 @@ func (s *Service) IdleChanged(ctx context.Context, isIdle bool) error {
 		}
 
 		// check if there is a current idle period
-		var idlePeriod *IdlePeriod
+		var idlePeriod IdlePeriod
 		err := s.db.Where("ended_at IS NULL").Limit(1).Order("started_at desc").First(&idlePeriod).Error
 		if err != nil && err != gorm.ErrRecordNotFound {
-			if err != gorm.ErrRecordNotFound {
-				return fmt.Errorf("failed to find current idle period: %w", err)
-			}
+			return fmt.Errorf("failed to find current idle period: %w", err)
 		}
 
 		// if there is a current idle period, let it continue
-		if idlePeriod != nil && idlePeriod.ID > 0 {
+		if idlePeriod.ID > 0 {
 			return nil
 		}
 
 		// create a new idle period
-		idlePeriod = &IdlePeriod{
+		newIdlePeriod := &IdlePeriod{
 			StartedAt: time.Now().Unix(),
 			Reason:    "user_idle",
 		}
-		if err := s.db.Create(&idlePeriod).Error; err != nil {
+		if err := s.db.Create(&newIdlePeriod).Error; err != nil {
 			return fmt.Errorf("failed to create new idle period: %w", err)
 		}
 
@@ -343,18 +341,15 @@ func (s *Service) closeApplicationUsage(app *ApplicationUsage) error {
 
 func (s *Service) closeCurrentIdlePeriod() error {
 	var idlePeriod IdlePeriod
-	if err := s.db.Where("ended_at IS NULL").Limit(1).Order("started_at desc").First(&idlePeriod).Error; err != nil {
-		if err != gorm.ErrRecordNotFound {
-			return fmt.Errorf("failed to find current idle period: %w", err)
+	err := s.db.Where("ended_at IS NULL").Limit(1).Order("started_at desc").First(&idlePeriod).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil // Nothing to close
 		}
-	}
-
-	if idlePeriod.EndedAt != nil {
-		return nil
+		return fmt.Errorf("failed to find current idle period: %w", err)
 	}
 
 	now := time.Now().Unix()
-
 	idlePeriod.EndedAt = &now
 
 	durationInSeconds := int(now - idlePeriod.StartedAt)

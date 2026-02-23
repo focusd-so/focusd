@@ -237,7 +237,7 @@ func main() {
 		usageService.TitleChanged(ctx, event.ExecutablePath, event.Title, event.AppName, event.Icon, bundleID, urlPtr)
 	})
 	native.OnIdleChange(func(idleSeconds float64) {
-		// usageService.IdleChanged(ctx, idleSeconds > 120)
+		usageService.IdleChanged(ctx, idleSeconds > 120)
 	})
 	go native.StartObserver()
 
