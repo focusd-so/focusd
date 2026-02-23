@@ -61,21 +61,19 @@ export function AllowConfirmationDialog({
       >
         <DialogHeader className="pb-4">
           <div className="flex flex-col items-center gap-4 text-center">
-            <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-white shadow-sm ring-1 ring-black/5 overflow-hidden">
-              {appIcon ? (
-                <img
-                  src={
-                    appIcon.startsWith("data:")
-                      ? appIcon
-                      : `data:image/png;base64,${appIcon}`
-                  }
-                  alt={appName}
-                  className="w-10 h-10 object-contain"
-                />
-              ) : (
-                <IconShieldCheck className="w-7 h-7 text-yellow-500" />
-              )}
-            </div>
+            {appIcon ? (
+              <img
+                src={
+                  appIcon.startsWith("data:")
+                    ? appIcon
+                    : `data:image/png;base64,${appIcon}`
+                }
+                alt={appName}
+                className="w-14 h-14 object-contain"
+              />
+            ) : (
+              <IconShieldCheck className="w-10 h-10 text-yellow-500" />
+            )}
             <div className="space-y-1">
               <DialogTitle className="text-xl font-semibold">
                 Allow Temporarily?
