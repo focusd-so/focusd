@@ -69,7 +69,7 @@ export function AllowConfirmationDialog({
                     : `data:image/png;base64,${appIcon}`
                 }
                 alt={appName}
-                className="w-14 h-14 object-contain"
+                className="w-14 h-14 object-contain rounded-xl shadow-sm"
               />
             ) : (
               <IconShieldCheck className="w-10 h-10 text-yellow-500" />
