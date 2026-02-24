@@ -11,284 +11,6 @@ import (
 	v8 "rogchap.com/v8go"
 )
 
-// countryTimezones maps country codes to their primary timezone
-var countryTimezones = map[string]string{
-	// A
-	"AD": "Europe/Andorra",       // Andorra
-	"AE": "Asia/Dubai",           // United Arab Emirates
-	"AF": "Asia/Kabul",           // Afghanistan
-	"AG": "America/Antigua",      // Antigua and Barbuda
-	"AI": "America/Anguilla",     // Anguilla
-	"AL": "Europe/Tirane",        // Albania
-	"AM": "Asia/Yerevan",         // Armenia
-	"AO": "Africa/Luanda",        // Angola
-	"AQ": "Antarctica/McMurdo",   // Antarctica
-	"AR": "America/Buenos_Aires", // Argentina
-	"AS": "Pacific/Pago_Pago",    // American Samoa
-	"AT": "Europe/Vienna",        // Austria
-	"AU": "Australia/Sydney",     // Australia
-	"AW": "America/Aruba",        // Aruba
-	"AX": "Europe/Mariehamn",     // Åland Islands
-	"AZ": "Asia/Baku",            // Azerbaijan
-	// B
-	"BA": "Europe/Sarajevo",       // Bosnia and Herzegovina
-	"BB": "America/Barbados",      // Barbados
-	"BD": "Asia/Dhaka",            // Bangladesh
-	"BE": "Europe/Brussels",       // Belgium
-	"BF": "Africa/Ouagadougou",    // Burkina Faso
-	"BG": "Europe/Sofia",          // Bulgaria
-	"BH": "Asia/Bahrain",          // Bahrain
-	"BI": "Africa/Bujumbura",      // Burundi
-	"BJ": "Africa/Porto-Novo",     // Benin
-	"BL": "America/St_Barthelemy", // Saint Barthélemy
-	"BM": "Atlantic/Bermuda",      // Bermuda
-	"BN": "Asia/Brunei",           // Brunei
-	"BO": "America/La_Paz",        // Bolivia
-	"BQ": "America/Kralendijk",    // Caribbean Netherlands
-	"BR": "America/Sao_Paulo",     // Brazil
-	"BS": "America/Nassau",        // Bahamas
-	"BT": "Asia/Thimphu",          // Bhutan
-	"BV": "Europe/Oslo",           // Bouvet Island (uses Norway timezone)
-	"BW": "Africa/Gaborone",       // Botswana
-	"BY": "Europe/Minsk",          // Belarus
-	"BZ": "America/Belize",        // Belize
-	// C
-	"CA": "America/Toronto",     // Canada
-	"CC": "Indian/Cocos",        // Cocos (Keeling) Islands
-	"CD": "Africa/Kinshasa",     // Democratic Republic of the Congo
-	"CF": "Africa/Bangui",       // Central African Republic
-	"CG": "Africa/Brazzaville",  // Republic of the Congo
-	"CH": "Europe/Zurich",       // Switzerland
-	"CI": "Africa/Abidjan",      // Côte d'Ivoire
-	"CK": "Pacific/Rarotonga",   // Cook Islands
-	"CL": "America/Santiago",    // Chile
-	"CM": "Africa/Douala",       // Cameroon
-	"CN": "Asia/Shanghai",       // China
-	"CO": "America/Bogota",      // Colombia
-	"CR": "America/Costa_Rica",  // Costa Rica
-	"CU": "America/Havana",      // Cuba
-	"CV": "Atlantic/Cape_Verde", // Cape Verde
-	"CW": "America/Curacao",     // Curaçao
-	"CX": "Indian/Christmas",    // Christmas Island
-	"CY": "Asia/Nicosia",        // Cyprus
-	"CZ": "Europe/Prague",       // Czech Republic
-	// D
-	"DE": "Europe/Berlin",         // Germany
-	"DJ": "Africa/Djibouti",       // Djibouti
-	"DK": "Europe/Copenhagen",     // Denmark
-	"DM": "America/Dominica",      // Dominica
-	"DO": "America/Santo_Domingo", // Dominican Republic
-	"DZ": "Africa/Algiers",        // Algeria
-	// E
-	"EC": "America/Guayaquil",  // Ecuador
-	"EE": "Europe/Tallinn",     // Estonia
-	"EG": "Africa/Cairo",       // Egypt
-	"EH": "Africa/El_Aaiun",    // Western Sahara
-	"ER": "Africa/Asmara",      // Eritrea
-	"ES": "Europe/Madrid",      // Spain
-	"ET": "Africa/Addis_Ababa", // Ethiopia
-	// F
-	"FI": "Europe/Helsinki",  // Finland
-	"FJ": "Pacific/Fiji",     // Fiji
-	"FK": "Atlantic/Stanley", // Falkland Islands
-	"FM": "Pacific/Chuuk",    // Micronesia
-	"FO": "Atlantic/Faroe",   // Faroe Islands
-	"FR": "Europe/Paris",     // France
-	// G
-	"GA": "Africa/Libreville",      // Gabon
-	"GB": "Europe/London",          // United Kingdom
-	"GD": "America/Grenada",        // Grenada
-	"GE": "Asia/Tbilisi",           // Georgia
-	"GF": "America/Cayenne",        // French Guiana
-	"GG": "Europe/Guernsey",        // Guernsey
-	"GH": "Africa/Accra",           // Ghana
-	"GI": "Europe/Gibraltar",       // Gibraltar
-	"GL": "America/Godthab",        // Greenland
-	"GM": "Africa/Banjul",          // Gambia
-	"GN": "Africa/Conakry",         // Guinea
-	"GP": "America/Guadeloupe",     // Guadeloupe
-	"GQ": "Africa/Malabo",          // Equatorial Guinea
-	"GR": "Europe/Athens",          // Greece
-	"GS": "Atlantic/South_Georgia", // South Georgia and the South Sandwich Islands
-	"GT": "America/Guatemala",      // Guatemala
-	"GU": "Pacific/Guam",           // Guam
-	"GW": "Africa/Bissau",          // Guinea-Bissau
-	"GY": "America/Guyana",         // Guyana
-	// H
-	"HK": "Asia/Hong_Kong",         // Hong Kong
-	"HM": "Indian/Kerguelen",       // Heard Island and McDonald Islands
-	"HN": "America/Tegucigalpa",    // Honduras
-	"HR": "Europe/Zagreb",          // Croatia
-	"HT": "America/Port-au-Prince", // Haiti
-	"HU": "Europe/Budapest",        // Hungary
-	// I
-	"ID": "Asia/Jakarta",       // Indonesia
-	"IE": "Europe/Dublin",      // Ireland
-	"IL": "Asia/Jerusalem",     // Israel
-	"IM": "Europe/Isle_of_Man", // Isle of Man
-	"IN": "Asia/Kolkata",       // India
-	"IO": "Indian/Chagos",      // British Indian Ocean Territory
-	"IQ": "Asia/Baghdad",       // Iraq
-	"IR": "Asia/Tehran",        // Iran
-	"IS": "Atlantic/Reykjavik", // Iceland
-	"IT": "Europe/Rome",        // Italy
-	// J
-	"JE": "Europe/Jersey",   // Jersey
-	"JM": "America/Jamaica", // Jamaica
-	"JO": "Asia/Amman",      // Jordan
-	"JP": "Asia/Tokyo",      // Japan
-	// K
-	"KE": "Africa/Nairobi",   // Kenya
-	"KG": "Asia/Bishkek",     // Kyrgyzstan
-	"KH": "Asia/Phnom_Penh",  // Cambodia
-	"KI": "Pacific/Tarawa",   // Kiribati
-	"KM": "Indian/Comoro",    // Comoros
-	"KN": "America/St_Kitts", // Saint Kitts and Nevis
-	"KP": "Asia/Pyongyang",   // North Korea
-	"KR": "Asia/Seoul",       // South Korea
-	"KW": "Asia/Kuwait",      // Kuwait
-	"KY": "America/Cayman",   // Cayman Islands
-	"KZ": "Asia/Almaty",      // Kazakhstan
-	// L
-	"LA": "Asia/Vientiane",    // Laos
-	"LB": "Asia/Beirut",       // Lebanon
-	"LC": "America/St_Lucia",  // Saint Lucia
-	"LI": "Europe/Vaduz",      // Liechtenstein
-	"LK": "Asia/Colombo",      // Sri Lanka
-	"LR": "Africa/Monrovia",   // Liberia
-	"LS": "Africa/Maseru",     // Lesotho
-	"LT": "Europe/Vilnius",    // Lithuania
-	"LU": "Europe/Luxembourg", // Luxembourg
-	"LV": "Europe/Riga",       // Latvia
-	"LY": "Africa/Tripoli",    // Libya
-	// M
-	"MA": "Africa/Casablanca",   // Morocco
-	"MC": "Europe/Monaco",       // Monaco
-	"MD": "Europe/Chisinau",     // Moldova
-	"ME": "Europe/Podgorica",    // Montenegro
-	"MF": "America/Marigot",     // Saint Martin
-	"MG": "Indian/Antananarivo", // Madagascar
-	"MH": "Pacific/Majuro",      // Marshall Islands
-	"MK": "Europe/Skopje",       // North Macedonia
-	"ML": "Africa/Bamako",       // Mali
-	"MM": "Asia/Yangon",         // Myanmar
-	"MN": "Asia/Ulaanbaatar",    // Mongolia
-	"MO": "Asia/Macau",          // Macau
-	"MP": "Pacific/Saipan",      // Northern Mariana Islands
-	"MQ": "America/Martinique",  // Martinique
-	"MR": "Africa/Nouakchott",   // Mauritania
-	"MS": "America/Montserrat",  // Montserrat
-	"MT": "Europe/Malta",        // Malta
-	"MU": "Indian/Mauritius",    // Mauritius
-	"MV": "Indian/Maldives",     // Maldives
-	"MW": "Africa/Blantyre",     // Malawi
-	"MX": "America/Mexico_City", // Mexico
-	"MY": "Asia/Kuala_Lumpur",   // Malaysia
-	"MZ": "Africa/Maputo",       // Mozambique
-	// N
-	"NA": "Africa/Windhoek",  // Namibia
-	"NC": "Pacific/Noumea",   // New Caledonia
-	"NE": "Africa/Niamey",    // Niger
-	"NF": "Pacific/Norfolk",  // Norfolk Island
-	"NG": "Africa/Lagos",     // Nigeria
-	"NI": "America/Managua",  // Nicaragua
-	"NL": "Europe/Amsterdam", // Netherlands
-	"NO": "Europe/Oslo",      // Norway
-	"NP": "Asia/Kathmandu",   // Nepal
-	"NR": "Pacific/Nauru",    // Nauru
-	"NU": "Pacific/Niue",     // Niue
-	"NZ": "Pacific/Auckland", // New Zealand
-	// O
-	"OM": "Asia/Muscat", // Oman
-	// P
-	"PA": "America/Panama",       // Panama
-	"PE": "America/Lima",         // Peru
-	"PF": "Pacific/Tahiti",       // French Polynesia
-	"PG": "Pacific/Port_Moresby", // Papua New Guinea
-	"PH": "Asia/Manila",          // Philippines
-	"PK": "Asia/Karachi",         // Pakistan
-	"PL": "Europe/Warsaw",        // Poland
-	"PM": "America/Miquelon",     // Saint Pierre and Miquelon
-	"PN": "Pacific/Pitcairn",     // Pitcairn Islands
-	"PR": "America/Puerto_Rico",  // Puerto Rico
-	"PS": "Asia/Gaza",            // Palestine
-	"PT": "Europe/Lisbon",        // Portugal
-	"PW": "Pacific/Palau",        // Palau
-	"PY": "America/Asuncion",     // Paraguay
-	// Q
-	"QA": "Asia/Qatar", // Qatar
-	// R
-	"RE": "Indian/Reunion",   // Réunion
-	"RO": "Europe/Bucharest", // Romania
-	"RS": "Europe/Belgrade",  // Serbia
-	"RU": "Europe/Moscow",    // Russia
-	"RW": "Africa/Kigali",    // Rwanda
-	// S
-	"SA": "Asia/Riyadh",           // Saudi Arabia
-	"SB": "Pacific/Guadalcanal",   // Solomon Islands
-	"SC": "Indian/Mahe",           // Seychelles
-	"SD": "Africa/Khartoum",       // Sudan
-	"SE": "Europe/Stockholm",      // Sweden
-	"SG": "Asia/Singapore",        // Singapore
-	"SH": "Atlantic/St_Helena",    // Saint Helena
-	"SI": "Europe/Ljubljana",      // Slovenia
-	"SJ": "Arctic/Longyearbyen",   // Svalbard and Jan Mayen
-	"SK": "Europe/Bratislava",     // Slovakia
-	"SL": "Africa/Freetown",       // Sierra Leone
-	"SM": "Europe/San_Marino",     // San Marino
-	"SN": "Africa/Dakar",          // Senegal
-	"SO": "Africa/Mogadishu",      // Somalia
-	"SR": "America/Paramaribo",    // Suriname
-	"SS": "Africa/Juba",           // South Sudan
-	"ST": "Africa/Sao_Tome",       // São Tomé and Príncipe
-	"SV": "America/El_Salvador",   // El Salvador
-	"SX": "America/Lower_Princes", // Sint Maarten
-	"SY": "Asia/Damascus",         // Syria
-	"SZ": "Africa/Mbabane",        // Eswatini
-	// T
-	"TC": "America/Grand_Turk",    // Turks and Caicos Islands
-	"TD": "Africa/Ndjamena",       // Chad
-	"TF": "Indian/Kerguelen",      // French Southern and Antarctic Lands
-	"TG": "Africa/Lome",           // Togo
-	"TH": "Asia/Bangkok",          // Thailand
-	"TJ": "Asia/Dushanbe",         // Tajikistan
-	"TK": "Pacific/Fakaofo",       // Tokelau
-	"TL": "Asia/Dili",             // Timor-Leste
-	"TM": "Asia/Ashgabat",         // Turkmenistan
-	"TN": "Africa/Tunis",          // Tunisia
-	"TO": "Pacific/Tongatapu",     // Tonga
-	"TR": "Europe/Istanbul",       // Turkey
-	"TT": "America/Port_of_Spain", // Trinidad and Tobago
-	"TV": "Pacific/Funafuti",      // Tuvalu
-	"TW": "Asia/Taipei",           // Taiwan
-	"TZ": "Africa/Dar_es_Salaam",  // Tanzania
-	// U
-	"UA": "Europe/Kiev",        // Ukraine
-	"UG": "Africa/Kampala",     // Uganda
-	"UM": "Pacific/Wake",       // United States Minor Outlying Islands
-	"US": "America/New_York",   // United States
-	"UY": "America/Montevideo", // Uruguay
-	"UZ": "Asia/Tashkent",      // Uzbekistan
-	// V
-	"VA": "Europe/Vatican",     // Vatican City
-	"VC": "America/St_Vincent", // Saint Vincent and the Grenadines
-	"VE": "America/Caracas",    // Venezuela
-	"VG": "America/Tortola",    // British Virgin Islands
-	"VI": "America/St_Thomas",  // U.S. Virgin Islands
-	"VN": "Asia/Ho_Chi_Minh",   // Vietnam
-	"VU": "Pacific/Efate",      // Vanuatu
-	// W
-	"WF": "Pacific/Wallis", // Wallis and Futuna
-	"WS": "Pacific/Apia",   // Samoa
-	// Y
-	"YE": "Asia/Aden",      // Yemen
-	"YT": "Indian/Mayotte", // Mayotte
-	// Z
-	"ZA": "Africa/Johannesburg", // South Africa
-	"ZM": "Africa/Lusaka",       // Zambia
-	"ZW": "Africa/Harare",       // Zimbabwe
-}
-
 // classificationDecision is returned from the classify function
 type classificationDecision struct {
 	Classification          string   `json:"classification"`
@@ -385,6 +107,88 @@ var Classification = {
 	System: "system"
 };
 
+var Weekday = {
+	Sunday: "Sunday",
+	Monday: "Monday",
+	Tuesday: "Tuesday",
+	Wednesday: "Wednesday",
+	Thursday: "Thursday",
+	Friday: "Friday",
+	Saturday: "Saturday"
+};
+
+var Timezone = {
+	// Americas
+	America_New_York: "America/New_York",
+	America_Chicago: "America/Chicago",
+	America_Denver: "America/Denver",
+	America_Los_Angeles: "America/Los_Angeles",
+	America_Anchorage: "America/Anchorage",
+	America_Toronto: "America/Toronto",
+	America_Vancouver: "America/Vancouver",
+	America_Mexico_City: "America/Mexico_City",
+	America_Sao_Paulo: "America/Sao_Paulo",
+	America_Buenos_Aires: "America/Buenos_Aires",
+	America_Bogota: "America/Bogota",
+	America_Santiago: "America/Santiago",
+	// Europe
+	Europe_London: "Europe/London",
+	Europe_Paris: "Europe/Paris",
+	Europe_Berlin: "Europe/Berlin",
+	Europe_Madrid: "Europe/Madrid",
+	Europe_Rome: "Europe/Rome",
+	Europe_Amsterdam: "Europe/Amsterdam",
+	Europe_Zurich: "Europe/Zurich",
+	Europe_Brussels: "Europe/Brussels",
+	Europe_Stockholm: "Europe/Stockholm",
+	Europe_Oslo: "Europe/Oslo",
+	Europe_Helsinki: "Europe/Helsinki",
+	Europe_Warsaw: "Europe/Warsaw",
+	Europe_Prague: "Europe/Prague",
+	Europe_Vienna: "Europe/Vienna",
+	Europe_Athens: "Europe/Athens",
+	Europe_Bucharest: "Europe/Bucharest",
+	Europe_Istanbul: "Europe/Istanbul",
+	Europe_Moscow: "Europe/Moscow",
+	Europe_Dublin: "Europe/Dublin",
+	Europe_Lisbon: "Europe/Lisbon",
+	// Asia
+	Asia_Dubai: "Asia/Dubai",
+	Asia_Riyadh: "Asia/Riyadh",
+	Asia_Tehran: "Asia/Tehran",
+	Asia_Kolkata: "Asia/Kolkata",
+	Asia_Dhaka: "Asia/Dhaka",
+	Asia_Bangkok: "Asia/Bangkok",
+	Asia_Singapore: "Asia/Singapore",
+	Asia_Hong_Kong: "Asia/Hong_Kong",
+	Asia_Shanghai: "Asia/Shanghai",
+	Asia_Tokyo: "Asia/Tokyo",
+	Asia_Seoul: "Asia/Seoul",
+	Asia_Taipei: "Asia/Taipei",
+	Asia_Jakarta: "Asia/Jakarta",
+	Asia_Manila: "Asia/Manila",
+	Asia_Karachi: "Asia/Karachi",
+	Asia_Jerusalem: "Asia/Jerusalem",
+	Asia_Yerevan: "Asia/Yerevan",
+	Asia_Tbilisi: "Asia/Tbilisi",
+	Asia_Baku: "Asia/Baku",
+	// Africa
+	Africa_Cairo: "Africa/Cairo",
+	Africa_Lagos: "Africa/Lagos",
+	Africa_Johannesburg: "Africa/Johannesburg",
+	Africa_Nairobi: "Africa/Nairobi",
+	Africa_Casablanca: "Africa/Casablanca",
+	// Oceania
+	Australia_Sydney: "Australia/Sydney",
+	Australia_Melbourne: "Australia/Melbourne",
+	Australia_Perth: "Australia/Perth",
+	Australia_Brisbane: "Australia/Brisbane",
+	Pacific_Auckland: "Pacific/Auckland",
+	Pacific_Honolulu: "Pacific/Honolulu",
+	// UTC
+	UTC: "UTC"
+};
+
 var exports = {};
 var module = { exports: exports };
 
@@ -417,25 +221,37 @@ if (typeof console === 'undefined') {
 }
 
 /**
- * Returns a Date object shifted to the specified country's timezone.
- * If no country code is provided or found, uses local time.
- * @param {string} [countryCode] - 2-letter country code (e.g. 'US', 'JP')
+ * Returns a Date object for the current time in the specified IANA timezone.
+ * Use Timezone.* constants for autocomplete, or pass any valid IANA timezone string.
+ * If no timezone is provided or the string is invalid, uses local time.
+ * @param {string} [timezone] - IANA timezone (e.g. Timezone.Europe_London, 'America/New_York')
  * @returns {Date}
  */
-function now(countryCode) {
-    const ts = __getShiftedTimestamp(countryCode);
+function now(timezone) {
+    const ts = __getShiftedTimestamp(timezone);
     return new Date(ts);
 }
 
 /**
- * Returns the day of the week for the specified country's timezone.
- * @param {string} [countryCode] - 2-letter country code (e.g. 'US', 'JP')
+ * Returns the day of the week in the specified IANA timezone.
+ * @param {string} [timezone] - IANA timezone (e.g. Timezone.Asia_Tokyo)
  * @returns {string}
  */
-function dayOfWeek(countryCode) {
+function dayOfWeek(timezone) {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[now(countryCode).getDay()];
+    return days[now(timezone).getDay()];
 }
+
+var __currentDay = dayOfWeek();
+var IsMonday = __currentDay === "Monday";
+var IsTuesday = __currentDay === "Tuesday";
+var IsWednesday = __currentDay === "Wednesday";
+var IsThursday = __currentDay === "Thursday";
+var IsFriday = __currentDay === "Friday";
+var IsSaturday = __currentDay === "Saturday";
+var IsSunday = __currentDay === "Sunday";
+var IsWeekday = !IsSaturday && !IsSunday;
+var IsWeekend = IsSaturday || IsSunday;
 `, transpiledCode)
 
 	return preparedScript, nil
@@ -452,10 +268,7 @@ func (s *sandbox) setupContext(ctx sandboxContext, v8ctx *v8.Context) error {
 		var err error
 
 		if len(args) > 0 && args[0].IsString() {
-			cc := strings.ToUpper(args[0].String())
-			if tz, ok := countryTimezones[cc]; ok {
-				loc, err = time.LoadLocation(tz)
-			}
+			loc, err = time.LoadLocation(args[0].String())
 		}
 
 		// Default to local if not found or error or not provided
@@ -463,12 +276,17 @@ func (s *sandbox) setupContext(ctx sandboxContext, v8ctx *v8.Context) error {
 			loc = time.Local
 		}
 
-		now := ctx.Now(loc)
+		var t time.Time
+		if ctx.Now != nil {
+			t = ctx.Now(loc)
+		} else {
+			t = time.Now().In(loc)
+		}
 
 		// Shift time to appear as Local time but with target wall clock values
-		year, month, day := now.Date()
-		hour, min, sec := now.Clock()
-		nsec := now.Nanosecond()
+		year, month, day := t.Date()
+		hour, min, sec := t.Clock()
+		nsec := t.Nanosecond()
 
 		shifted := time.Date(year, month, day, hour, min, sec, nsec, time.Local)
 		ts := shifted.UnixMilli()

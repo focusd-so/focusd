@@ -11,10 +11,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { IconDeviceFloppy, IconHistory, IconFileText, IconTerminal } from "@tabler/icons-react";
+import { IconDeviceFloppy, IconHistory, IconFileText, IconTerminal, IconTestPipe } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ExecutionLogsSheet } from "@/components/execution-logs";
+import { TestRulesSheet } from "@/components/test-rules-sheet";
 
 const TYPES_FILE_PATH = "file:///focusd-types.d.ts";
 const SETTINGS_KEY = "custom_rules";
@@ -88,6 +89,8 @@ interface ClassificationDecision {
  * Provides context for the current rule execution including usage data.
  */
 interface Context {
+  /** The display name of the application (e.g., 'Safari', 'Slack'). */
+  readonly appName?: string;
   /** The application's bundle identifier (e.g., 'com.apple.Safari'). */
   readonly bundleID: string;
   /** The hostname if the activity is a website (e.g., 'www.github.com'). */
@@ -115,32 +118,151 @@ interface Context {
   minutesUsedInPeriod(minutes: number): number;
 }
 
+// ============ Timezone Constants ============
+
+/**
+ * Common IANA timezone constants for use with now() and dayOfWeek().
+ * Type Timezone. to see autocomplete suggestions.
+ * @example
+ * const londonTime = now(Timezone.Europe_London);
+ * const tokyoDay = dayOfWeek(Timezone.Asia_Tokyo);
+ */
+declare const Timezone: {
+  // Americas
+  readonly America_New_York: "America/New_York";
+  readonly America_Chicago: "America/Chicago";
+  readonly America_Denver: "America/Denver";
+  readonly America_Los_Angeles: "America/Los_Angeles";
+  readonly America_Anchorage: "America/Anchorage";
+  readonly America_Toronto: "America/Toronto";
+  readonly America_Vancouver: "America/Vancouver";
+  readonly America_Mexico_City: "America/Mexico_City";
+  readonly America_Sao_Paulo: "America/Sao_Paulo";
+  readonly America_Buenos_Aires: "America/Buenos_Aires";
+  readonly America_Bogota: "America/Bogota";
+  readonly America_Santiago: "America/Santiago";
+  // Europe
+  readonly Europe_London: "Europe/London";
+  readonly Europe_Paris: "Europe/Paris";
+  readonly Europe_Berlin: "Europe/Berlin";
+  readonly Europe_Madrid: "Europe/Madrid";
+  readonly Europe_Rome: "Europe/Rome";
+  readonly Europe_Amsterdam: "Europe/Amsterdam";
+  readonly Europe_Zurich: "Europe/Zurich";
+  readonly Europe_Brussels: "Europe/Brussels";
+  readonly Europe_Stockholm: "Europe/Stockholm";
+  readonly Europe_Oslo: "Europe/Oslo";
+  readonly Europe_Helsinki: "Europe/Helsinki";
+  readonly Europe_Warsaw: "Europe/Warsaw";
+  readonly Europe_Prague: "Europe/Prague";
+  readonly Europe_Vienna: "Europe/Vienna";
+  readonly Europe_Athens: "Europe/Athens";
+  readonly Europe_Bucharest: "Europe/Bucharest";
+  readonly Europe_Istanbul: "Europe/Istanbul";
+  readonly Europe_Moscow: "Europe/Moscow";
+  readonly Europe_Dublin: "Europe/Dublin";
+  readonly Europe_Lisbon: "Europe/Lisbon";
+  // Asia
+  readonly Asia_Dubai: "Asia/Dubai";
+  readonly Asia_Riyadh: "Asia/Riyadh";
+  readonly Asia_Tehran: "Asia/Tehran";
+  readonly Asia_Kolkata: "Asia/Kolkata";
+  readonly Asia_Dhaka: "Asia/Dhaka";
+  readonly Asia_Bangkok: "Asia/Bangkok";
+  readonly Asia_Singapore: "Asia/Singapore";
+  readonly Asia_Hong_Kong: "Asia/Hong_Kong";
+  readonly Asia_Shanghai: "Asia/Shanghai";
+  readonly Asia_Tokyo: "Asia/Tokyo";
+  readonly Asia_Seoul: "Asia/Seoul";
+  readonly Asia_Taipei: "Asia/Taipei";
+  readonly Asia_Jakarta: "Asia/Jakarta";
+  readonly Asia_Manila: "Asia/Manila";
+  readonly Asia_Karachi: "Asia/Karachi";
+  readonly Asia_Jerusalem: "Asia/Jerusalem";
+  readonly Asia_Yerevan: "Asia/Yerevan";
+  readonly Asia_Tbilisi: "Asia/Tbilisi";
+  readonly Asia_Baku: "Asia/Baku";
+  // Africa
+  readonly Africa_Cairo: "Africa/Cairo";
+  readonly Africa_Lagos: "Africa/Lagos";
+  readonly Africa_Johannesburg: "Africa/Johannesburg";
+  readonly Africa_Nairobi: "Africa/Nairobi";
+  readonly Africa_Casablanca: "Africa/Casablanca";
+  // Oceania
+  readonly Australia_Sydney: "Australia/Sydney";
+  readonly Australia_Melbourne: "Australia/Melbourne";
+  readonly Australia_Perth: "Australia/Perth";
+  readonly Australia_Brisbane: "Australia/Brisbane";
+  readonly Pacific_Auckland: "Pacific/Auckland";
+  readonly Pacific_Honolulu: "Pacific/Honolulu";
+  // UTC
+  readonly UTC: "UTC";
+};
+
+// ============ Weekday Constants ============
+
+/**
+ * Weekday enum values returned by dayOfWeek().
+ * Use Weekday.Monday, Weekday.Tuesday, etc. for comparisons.
+ * @example
+ * if (dayOfWeek() === Weekday.Friday) { ... }
+ */
+declare const Weekday: {
+  readonly Sunday: "Sunday";
+  readonly Monday: "Monday";
+  readonly Tuesday: "Tuesday";
+  readonly Wednesday: "Wednesday";
+  readonly Thursday: "Thursday";
+  readonly Friday: "Friday";
+  readonly Saturday: "Saturday";
+};
+
+type WeekdayType = "Sunday" | "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday";
+
+/**
+ * Boolean constants for the current day of the week (local timezone).
+ * For timezone-specific checks, use dayOfWeek(Timezone.X) === Weekday.Monday.
+ * @example
+ * if (IsMonday) { ... }
+ * if (IsWeekend) { ... }
+ */
+declare const IsMonday: boolean;
+declare const IsTuesday: boolean;
+declare const IsWednesday: boolean;
+declare const IsThursday: boolean;
+declare const IsFriday: boolean;
+declare const IsSaturday: boolean;
+declare const IsSunday: boolean;
+declare const IsWeekday: boolean;
+declare const IsWeekend: boolean;
+
 // ============ Global Helper Functions ============
 
 /**
- * Returns a Date object for the current time, optionally shifted to a specific country's timezone.
- * If no country code is provided or the code is invalid, uses local time.
- * @param countryCode - Optional 2-letter ISO country code (e.g., 'US', 'JP', 'GB')
+ * Returns a Date object for the current time in the specified IANA timezone.
+ * Use Timezone.* constants for autocomplete, or pass any valid IANA timezone string.
+ * If no timezone is provided or the string is invalid, uses local time.
+ * @param timezone - IANA timezone (e.g. Timezone.Europe_London, Timezone.Asia_Tokyo)
  * @returns A Date object representing the current time
  * @example
  * const currentTime = now();
- * const tokyoTime = now('JP');
- * if (now().getHours() >= 22) {
- *   // After 10 PM
+ * const londonTime = now(Timezone.Europe_London);
+ * if (now(Timezone.America_New_York).getHours() >= 22) {
+ *   // After 10 PM in New York
  * }
  */
-declare function now(countryCode?: string): Date;
+declare function now(timezone?: string): Date;
 
 /**
- * Returns the day of the week for the current time, optionally in a specific country's timezone.
- * @param countryCode - Optional 2-letter ISO country code (e.g., 'US', 'JP', 'GB')
+ * Returns the day of the week for the current time in the specified IANA timezone.
+ * @param timezone - IANA timezone (e.g. Timezone.Europe_London)
  * @returns The day name: 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', or 'Saturday'
  * @example
- * if (dayOfWeek() === 'Saturday' || dayOfWeek() === 'Sunday') {
- *   // Weekend logic
+ * if (dayOfWeek(Timezone.Europe_London) === 'Saturday' || dayOfWeek(Timezone.Europe_London) === 'Sunday') {
+ *   // Weekend in London
  * }
  */
-declare function dayOfWeek(countryCode?: string): "Sunday" | "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday";
+declare function dayOfWeek(timezone?: string): WeekdayType;
 
 /**
  * Console logging (output appears in application logs).
@@ -176,8 +298,8 @@ export function classify(ctx: Context): ClassificationDecision | undefined {
  * Return a TerminationDecision to override the default, or undefined to keep the default.
  *
  * @example
- * // Block social media after 10 PM
- * if (ctx.domain === 'twitter.com' && now().getHours() >= 22) {
+ * // Block social media after 10 PM in London
+ * if (ctx.domain === 'twitter.com' && now(Timezone.Europe_London).getHours() >= 22) {
  *   return {
  *     terminationMode: TerminationMode.Block,
  *     terminationReasoning: 'Social media blocked after 10 PM'
@@ -210,6 +332,7 @@ export function CustomRules() {
   // Track unsaved draft changes - null means no local changes (use store value)
   const [draft, setDraft] = useState<string | null>(null);
   const [logsOpen, setLogsOpen] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
   // Track whether to show the draft restoration banner
   const [showDraftBanner, setShowDraftBanner] = useState(false);
   const monacoRef = useRef<Monaco | null>(null);
@@ -396,6 +519,14 @@ export function CustomRules() {
             <span className="sr-only sm:not-sr-only">Exec Logs</span>
           </button>
 
+          <button
+            onClick={() => setTestOpen(true)}
+            className="inline-flex items-center gap-1.5 h-8 px-2 text-xs font-medium text-muted-foreground/60 hover:text-foreground hover:underline underline-offset-4 transition-colors"
+          >
+            <IconTestPipe className="w-3.5 h-3.5" />
+            <span className="sr-only sm:not-sr-only">Test</span>
+          </button>
+
           <Button
             size="sm"
             onClick={handleSave}
@@ -476,6 +607,7 @@ export function CustomRules() {
       </div>
 
       <ExecutionLogsSheet open={logsOpen} onOpenChange={setLogsOpen} />
+      <TestRulesSheet open={testOpen} onOpenChange={setTestOpen} />
     </div>
   );
 }

@@ -53,6 +53,7 @@ func init() {
 	// This is not required, but the binding generator will pick up registered events
 	// and provide a strongly typed JS/TS API for them.
 	application.RegisterEvent[usage.ApplicationUsage]("usage:update")
+	application.RegisterEvent[usage.ProtectionPause]("protection:status")
 }
 
 // main function serves as the application's entry point. It initializes the application, creates a window,
@@ -71,8 +72,7 @@ func main() {
 	defer cancel()
 
 	var (
-		db               = setupDB()
-		protectionPaused = make(chan bool)
+		db = setupDB()
 	)
 
 	mux, _, err := setUpWebServer(ctx)
@@ -116,16 +116,21 @@ func main() {
 		slog.Error("failed to create genai client: %w", err)
 	}
 
-	usageService, err := usage.NewService(
-		ctx, db, usage.WithProtectionPaused(func(pause usage.ProtectionPause) {
-			slog.Info("protection has been paused", "reason", pause.Reason)
+	var wailsAppPtr *application.App
 
-			protectionPaused <- true
+	usageService, err := usage.NewService(
+		ctx, db,
+		usage.WithProtectionPaused(func(pause usage.ProtectionPause) {
+			slog.Info("protection has been paused", "reason", pause.Reason)
+			if wailsAppPtr != nil {
+				wailsAppPtr.Event.Emit("protection:status", pause)
+			}
 		}),
 		usage.WithProtectionResumed(func(pause usage.ProtectionPause) {
 			slog.Info("protection has been resumed", "reason", pause.Reason)
-
-			protectionPaused <- false
+			if wailsAppPtr != nil {
+				wailsAppPtr.Event.Emit("protection:status", pause)
+			}
 		}),
 		usage.WithAppBlocker(func(appName, title, reason string, tags []string, browserURL *string) {
 			client := extension.HasClient(appName)
@@ -212,13 +217,17 @@ func main() {
 
 	wailsApp.OnShutdown(cancel)
 
+	wailsAppPtr = wailsApp
+
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case usage := <-usageService.UsageUpdates:
-				wailsApp.Event.Emit("usage:update", *usage)
+				if wailsAppPtr != nil {
+					wailsAppPtr.Event.Emit("usage:update", *usage)
+				}
 			}
 		}
 	}()
@@ -307,24 +316,7 @@ func main() {
 		window.Focus()
 	})
 
-	// Drain the protectionPaused channel without calling SetTitle.
-	// SetTitle triggers mac:WindowDidUpdate events which cause errors
-	// in Wails v3 alpha when the webview runtime isn't ready.
-	// The window is frameless with a hidden title bar, so the title
-	// isn't visible anyway.
-	go func() {
-		for {
-			select {
-			case <-protectionPaused:
-				// Protection state change received; no window title update needed
-				// since the window is frameless with a hidden title bar.
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	// Tray Menu
+	// Tray Click (Toggle)
 	menu := wailsApp.NewMenu()
 	if updaterService != nil {
 		menu.Add("Check for Updates...").OnClick(func(_ *application.Context) {
