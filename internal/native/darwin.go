@@ -450,6 +450,30 @@ func BlockApp(appName, title, reason string, tags []string) error {
 	return nil
 }
 
+// RequestAutomationPermission runs a harmless AppleScript to intentionally
+// trigger the macOS TCC prompt right away during your onboarding UI.
+func RequestAutomationPermission(bundleID string) bool {
+	// We ask for the 'version' property which exists on almost all macOS apps.
+	script := fmt.Sprintf(`tell application id "%s" to get version`, bundleID)
+	cmd := exec.Command("osascript", "-e", script)
+
+	err := cmd.Run()
+
+	// err == nil means the user clicked "OK" (or had already granted permission).
+	// err != nil means they clicked "Don't Allow" (or the app doesn't exist).
+	return err == nil
+}
+
+// OpenAutomationSettings opens the macOS System Settings directly to the Automation page
+func OpenAutomationSettings() {
+	// Opens System Settings -> Privacy & Security -> Automation
+	cmd := exec.Command("open", "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")
+	err := cmd.Run()
+	if err != nil {
+		slog.Error("Failed to open automation settings", "error", err)
+	}
+}
+
 var chromeBaseBundleIDs = []string{
 	"com.google.Chrome",
 	"com.google.Chrome.beta",
