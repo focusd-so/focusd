@@ -229,6 +229,13 @@ export class ApplicationUsage {
              */
             this["application"] = (new Application());
         }
+        if (!("execution_log_id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["execution_log_id"] = 0;
+        }
 
         Object.assign(this, $$source);
     }
@@ -684,6 +691,83 @@ export class ProtectionWhitelist {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new ProtectionWhitelist(/** @type {Partial<ProtectionWhitelist>} */($$parsedSource));
+    }
+}
+
+export class SandboxExecutionLog {
+    /**
+     * Creates a new SandboxExecutionLog instance.
+     * @param {Partial<SandboxExecutionLog>} [$$source = {}] - The source object to create the SandboxExecutionLog.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["id"] = 0;
+        }
+        if (!("context" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["context"] = "";
+        }
+        if (!("response" in $$source)) {
+            /**
+             * @member
+             * @type {string | null}
+             */
+            this["response"] = null;
+        }
+        if (!("logs" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["logs"] = "";
+        }
+        if (!("created_at" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["created_at"] = 0;
+        }
+        if (!("finished_at" in $$source)) {
+            /**
+             * @member
+             * @type {number | null}
+             */
+            this["finished_at"] = null;
+        }
+        if (!("error" in $$source)) {
+            /**
+             * @member
+             * @type {string | null}
+             */
+            this["error"] = null;
+        }
+        if (!("type" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["type"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SandboxExecutionLog instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SandboxExecutionLog}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SandboxExecutionLog(/** @type {Partial<SandboxExecutionLog>} */($$parsedSource));
     }
 }
 

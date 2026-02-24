@@ -18,6 +18,8 @@ func (s *Service) ClassifyCustomRules(ctx context.Context, appName string, execu
 		return nil, nil
 	}
 
+	slog.Info("classifying application usage with custom rules")
+
 	sandboxCtx := createSandboxContext(appName, executablePath, url)
 
 	return s.ClassifyCustomRulesWithSandbox(ctx, sandboxCtx)
@@ -34,6 +36,7 @@ func (s *Service) ClassifyCustomRulesWithSandbox(ctx context.Context, sandboxCtx
 	executionLog := SandboxExecutionLog{
 		Context:   string(contextJSON),
 		CreatedAt: time.Now().Unix(),
+		Type:      string(ExecutionLogTypeClassification),
 	}
 
 	if err := s.db.Create(&executionLog).Error; err != nil {
@@ -57,18 +60,20 @@ func (s *Service) ClassifyCustomRulesWithSandbox(ctx context.Context, sandboxCtx
 	if err != nil {
 		errMsg := fmt.Errorf("failed to classify sandbox: %w", err).Error()
 		executionLog.Error = &errMsg
-
-		return nil, err
 	}
 
 	if resp != nil {
 		respJSON, err := json.Marshal(resp)
 		if err != nil {
-			return nil, err
+			errMsg := fmt.Errorf("failed to marshal response: %w", err).Error()
+			executionLog.Error = &errMsg
+		} else {
+			respJSONStr := string(respJSON)
+			executionLog.Response = &respJSONStr
 		}
-
-		respJSONStr := string(respJSON)
-		executionLog.Response = &respJSONStr
+	} else {
+		txt := "no response"
+		executionLog.Response = &txt
 	}
 
 	finishedAt := time.Now().Unix()
@@ -91,11 +96,10 @@ func (s *Service) ClassifyCustomRulesWithSandbox(ctx context.Context, sandboxCtx
 	return &ClassificationResponse{
 		Classification:       Classification(resp.Classification),
 		ClassificationSource: ClassificationSourceCustomRules,
-		Reasoning:            resp.Reasoning,
+		Reasoning:            resp.ClassificationReasoning,
 		ConfidenceScore:      1.0,
 		Tags:                 resp.Tags,
 	}, nil
-
 }
 
 func (s *Service) classifySandbox(ctx context.Context, sandboxCtx sandboxContext) (desicion *classificationDecision, logs []string, err error) {

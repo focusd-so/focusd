@@ -4,6 +4,8 @@ import {
   IconWorld,
   IconAppWindow,
   IconPlayerPause,
+  IconRuler2,
+  IconLighter,
 } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -427,10 +429,20 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
             {usage.application?.hostname || usage.application?.name || "Unknown"}
           </TruncatedLabel>
           <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-[10px] font-medium uppercase tracking-tight">
+            <span className="text-[10px] font-medium uppercase tracking-widest opacity-70">
               {usage.classification ||
                 (isDistractingEvent ? "Distracting" : "Productive")}
             </span>
+            {usage.classification_source == "custom_rules" && (
+              <Link
+                to="/settings"
+                search={{ tab: "rules" }}
+                className="inline-flex items-center gap-0.5 text-[9px] font-medium px-1 py-px rounded bg-muted/40 text-muted-foreground/50 border border-muted-foreground/10 hover:bg-muted/70 hover:text-muted-foreground/80 hover:border-muted-foreground/25 transition-colors"
+                onClick={(e) => e.stopPropagation()}
+              >
+                ⚡️ custom rules
+              </Link>
+            )}
             <span className="text-muted-foreground/40 text-[10px]">—</span>
             <TruncatedLabel className="text-[10px] text-muted-foreground truncate max-w-[250px]">
               {usage.window_title || (isWeb ? "Browsing" : "Using app")}

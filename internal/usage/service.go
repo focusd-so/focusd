@@ -65,16 +65,16 @@ func (s *Service) scheduleJobs(ctx context.Context) {
 				return
 			case <-time.After(1 * time.Hour):
 				if err := s.removeOldSandboxExecutionLogs(ctx); err != nil {
-					slog.Error("failed to cleanup sandbox execution logs", "error", err)
+					slog.Error("failed to remove old sandbox execution logs", "error", err)
 				}
 			}
 		}
 	}()
 }
 
-// cleanupSandboxExecutionLogs deletes sandbox execution logs older than two weeks.
+// removeOldSandboxExecutionLogs deletes sandbox execution logs older than 7 days.
 func (s *Service) removeOldSandboxExecutionLogs(ctx context.Context) error {
-	twoWeeksAgo := time.Now().Add(-2 * 7 * 24 * time.Hour)
+	sevenDaysAgo := time.Now().Add(-7 * 24 * time.Hour)
 
-	return s.db.Where("created_at < ?", twoWeeksAgo).Delete(&SandboxExecutionLog{}).Error
+	return s.db.Where("created_at < ?", sevenDaysAgo).Delete(&SandboxExecutionLog{}).Error
 }
