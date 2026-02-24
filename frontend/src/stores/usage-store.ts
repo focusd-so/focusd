@@ -230,6 +230,11 @@ export const useUsageStore = create<UsageState>()((set, get) => ({
       get().addUsage(event.data);
     });
 
+    Events.On("protection:status", (event: { data: ProtectionPause }) => {
+      console.log("protection status update", event.data);
+      set({ currentPause: event.data.id > 0 ? event.data : null });
+    });
+
     set({ isSubscribed: true });
   },
 
@@ -398,6 +403,7 @@ export const useUsageStore = create<UsageState>()((set, get) => ({
 
 // Initialize event subscription and load recent usages on module load
 useUsageStore.getState().initSubscription();
+useUsageStore.getState().initProtectionStore();
 useUsageStore.getState().fetchRecentUsages();
 useUsageStore.getState().fetchWhitelist();
 

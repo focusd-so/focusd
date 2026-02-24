@@ -143,7 +143,7 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 
 func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage *ApplicationUsage) (*ClassificationResponse, error) {
 	// Do sandbox classification first, eg user defined custom rules
-	classification, err := s.ClassifyCustomRules(ctx, applicationUsage.Application.Name, applicationUsage.Application.ExecutablePath, applicationUsage.BrowserURL)
+	classification, err := s.ClassifyCustomRules(ctx, applicationUsage.Application.Name, applicationUsage.Application.ExecutablePath, applicationUsage.BrowserURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify application usage with custom rules: %w", err)
 	}
