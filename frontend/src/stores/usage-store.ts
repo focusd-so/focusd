@@ -246,7 +246,7 @@ export const useUsageStore = create<UsageState>()((set, get) => ({
   fetchRecentUsages: async () => {
     try {
       const recentUsagesOptions = new GetUsageListOptions({
-        Date: null,
+        Date: new Date(),
         Page: 0,
         PageSize: 100,
       });

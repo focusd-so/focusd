@@ -109,6 +109,10 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 				Tag: tag,
 			}
 		}
+
+		applicationUsage.SandboxContext = classification.SandboxContext
+		applicationUsage.SandboxResponse = classification.SandboxResponse
+		applicationUsage.SandboxLogs = classification.SandboxLogs
 	}
 
 	// calculate termination mode.

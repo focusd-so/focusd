@@ -19,6 +19,7 @@ export {
     ProductivityScore,
     ProtectionPause,
     ProtectionWhitelist,
+    SandboxExecutionLog,
     TerminationDecision,
     TerminationMode,
     TerminationModeSource

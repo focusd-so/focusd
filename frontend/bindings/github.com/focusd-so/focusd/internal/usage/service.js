@@ -132,6 +132,22 @@ export function GetProtectionStatus() {
 }
 
 /**
+ * GetSandboxExecutionLogs retrieves paginated sandbox execution logs from the database.
+ * It supports fuzzy search on context and response fields, and filtering by log type.
+ * Only returns logs from the last 7 days.
+ * @param {string} logType
+ * @param {string} search
+ * @param {number} page
+ * @param {number} pageSize
+ * @returns {$CancellablePromise<$models.SandboxExecutionLog[]>}
+ */
+export function GetSandboxExecutionLogs(logType, search, page, pageSize) {
+    return $Call.ByID(2542111835, logType, search, page, pageSize).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType7($result);
+    }));
+}
+
+/**
  * GetUsageList returns a list of application usages for the given date and pagination options
  * 
  * Parameters:
@@ -147,7 +163,7 @@ export function GetProtectionStatus() {
  */
 export function GetUsageList(options) {
     return $Call.ByID(3310698242, options).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType7($result);
+        return $$createType9($result);
     }));
 }
 
@@ -161,7 +177,7 @@ export function GetUsageList(options) {
  */
 export function GetWhitelist() {
     return $Call.ByID(1370636440).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType9($result);
+        return $$createType11($result);
     }));
 }
 
@@ -299,7 +315,9 @@ const $$createType2 = $Create.Nullable($$createType1);
 const $$createType3 = $models.DayInsights.createFrom;
 const $$createType4 = $models.ProtectionPause.createFrom;
 const $$createType5 = $Create.Array($$createType4);
-const $$createType6 = $models.ApplicationUsage.createFrom;
+const $$createType6 = $models.SandboxExecutionLog.createFrom;
 const $$createType7 = $Create.Array($$createType6);
-const $$createType8 = $models.ProtectionWhitelist.createFrom;
+const $$createType8 = $models.ApplicationUsage.createFrom;
 const $$createType9 = $Create.Array($$createType8);
+const $$createType10 = $models.ProtectionWhitelist.createFrom;
+const $$createType11 = $Create.Array($$createType10);

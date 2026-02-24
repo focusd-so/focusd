@@ -1,5 +1,14 @@
 package usage
 
+type (
+	ExecutionLogType string
+)
+
+const (
+	ExecutionLogTypeClassification  ExecutionLogType = "classification"
+	ExecutionLogTypeTerminationMode ExecutionLogType = "termination_mode"
+)
+
 type Application struct {
 	ID             int64  `gorm:"primaryKey;autoIncrement" json:"id"`
 	Name           string `json:"name"`
@@ -40,6 +49,10 @@ type ApplicationUsage struct {
 	Tags          []ApplicationUsageTags `gorm:"foreignKey:UsageID" json:"tags"`
 	ApplicationID int64                  `json:"application_id"`
 	Application   Application            `gorm:"foreignKey:ApplicationID" json:"application"`
+
+	SandboxContext  string  `json:"sandbox_context" gorm:"type:text;nullable"`
+	SandboxResponse *string `json:"sandbox_response" gorm:"type:text;nullable"`
+	SandboxLogs     string  `json:"sandbox_logs" gorm:"type:text;nullable"`
 }
 
 func (a *ApplicationUsage) TableName() string {
@@ -116,4 +129,5 @@ type SandboxExecutionLog struct {
 	CreatedAt  int64   `json:"created_at" gorm:"index:idx_created_at"`
 	FinishedAt *int64  `json:"finished_at" gorm:"index:idx_finished_at;nullable"`
 	Error      *string `json:"error" gorm:"type:text;nullable"`
+	Type       string  `json:"type" gorm:"index:idx_type"`
 }

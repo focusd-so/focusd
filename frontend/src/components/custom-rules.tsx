@@ -11,9 +11,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { IconDeviceFloppy, IconHistory, IconFileText } from "@tabler/icons-react";
+import { IconDeviceFloppy, IconHistory, IconFileText, IconTerminal } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ExecutionLogsSheet } from "@/components/execution-logs";
 
 const TYPES_FILE_PATH = "file:///focusd-types.d.ts";
 const SETTINGS_KEY = "custom_rules";
@@ -208,6 +209,7 @@ export function CustomRules() {
 
   // Track unsaved draft changes - null means no local changes (use store value)
   const [draft, setDraft] = useState<string | null>(null);
+  const [logsOpen, setLogsOpen] = useState(false);
   // Track whether to show the draft restoration banner
   const [showDraftBanner, setShowDraftBanner] = useState(false);
   const monacoRef = useRef<Monaco | null>(null);
@@ -353,14 +355,12 @@ export function CustomRules() {
         <div className="flex items-center gap-2">
           <DropdownMenu onOpenChange={handleHistoryOpen}>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2 text-muted-foreground hover:text-foreground transition-colors"
+              <button
+                className="inline-flex items-center gap-1.5 h-8 px-2 text-xs font-medium text-muted-foreground/60 hover:text-foreground hover:underline underline-offset-4 transition-colors"
               >
-                <IconHistory className="w-4 h-4" />
-                <span className="text-xs font-medium sr-only sm:not-sr-only ml-1.5">History</span>
-              </Button>
+                <IconHistory className="w-3.5 h-3.5" />
+                <span className="sr-only sm:not-sr-only">History</span>
+              </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64">
               <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Version History</DropdownMenuLabel>
@@ -387,6 +387,14 @@ export function CustomRules() {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <button
+            onClick={() => setLogsOpen(true)}
+            className="inline-flex items-center gap-1.5 h-8 px-2 text-xs font-medium text-muted-foreground/60 hover:text-foreground hover:underline underline-offset-4 transition-colors"
+          >
+            <IconTerminal className="w-3.5 h-3.5" />
+            <span className="sr-only sm:not-sr-only">Exec Logs</span>
+          </button>
 
           <Button
             size="sm"
@@ -455,6 +463,7 @@ export function CustomRules() {
             padding: { top: 10, bottom: 10 },
             overviewRulerBorder: false,
             hideCursorInOverviewRuler: true,
+            definitionLinkOpensInPeek: true,
             scrollbar: {
               vertical: 'visible',
               horizontal: 'visible',
@@ -465,6 +474,8 @@ export function CustomRules() {
           }}
         />
       </div>
+
+      <ExecutionLogsSheet open={logsOpen} onOpenChange={setLogsOpen} />
     </div>
   );
 }

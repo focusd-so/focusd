@@ -291,9 +291,9 @@ var countryTimezones = map[string]string{
 
 // classificationDecision is returned from the classify function
 type classificationDecision struct {
-	Classification string   `json:"classification"`
-	Reasoning      string   `json:"reasoning"`
-	Tags           []string `json:"tags"`
+	Classification          string   `json:"classification"`
+	ClassificationReasoning string   `json:"classificationReasoning"`
+	Tags                    []string `json:"tags"`
 }
 
 // terminationDecision is returned from the termination function
