@@ -99,6 +99,10 @@ func (s *Service) ClassifyCustomRulesWithSandbox(ctx context.Context, sandboxCtx
 		Reasoning:            resp.ClassificationReasoning,
 		ConfidenceScore:      1.0,
 		Tags:                 resp.Tags,
+
+		SandboxContext:  executionLog.Context,
+		SandboxResponse: executionLog.Response,
+		SandboxLogs:     executionLog.Logs,
 	}, nil
 }
 

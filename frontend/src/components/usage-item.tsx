@@ -6,6 +6,9 @@ import {
   IconPlayerPause,
   IconRuler2,
   IconLighter,
+  IconTerminal,
+  IconChevronDown,
+  IconChevronRight,
 } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -47,6 +50,28 @@ export function formatSmartDate(unixSeconds: number | null | undefined): string 
 
   // Short date: "Jan 15"
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function tryParseJSON(str: string | null | undefined): string {
+  if (!str) return "—";
+  try {
+    return JSON.stringify(JSON.parse(str), null, 2);
+  } catch {
+    return str;
+  }
+}
+
+function formatSandboxLogs(logsStr: string | null | undefined): string {
+  if (!logsStr) return "";
+  try {
+    const logs = JSON.parse(logsStr);
+    if (Array.isArray(logs)) {
+      return logs.join("\n");
+    }
+    return logsStr;
+  } catch {
+    return logsStr;
+  }
 }
 
 export function formatDuration(seconds: number): string {
@@ -361,6 +386,7 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
   const isDistractingEvent = isDistracting(usage.classification);
   const isGrayTheme = isNeutralOrSystem(usage.classification);
   const { resumeProtection, currentPause } = useUsageStore();
+  const [showLogs, setShowLogs] = useState(false);
 
   // Check if there's currently an active pause
   const isCurrentlyPaused = !!(currentPause && currentPause.id > 0);
@@ -452,7 +478,7 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
       </div>
 
       {/* Right Side Badge */}
-      <div className="flex flex-col items-end gap-0.5">
+      <div className="flex flex-col items-end gap-0.5 shrink-0">
         <div className="flex flex-row items-center gap-1">
           <span className="text-[9px] text-muted-foreground/40 font-mono">
             {formatSmartDate(usage.started_at)}
@@ -494,6 +520,61 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
           }
         />
       </div>
+
+      {/* Sandbox Logs Toggle */}
+      {(usage.sandbox_context || usage.sandbox_response || usage.sandbox_logs) && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowLogs(!showLogs);
+          }}
+          className={`ml-2 p-1 rounded hover:bg-muted/50 transition-colors ${showLogs ? "text-foreground" : "text-muted-foreground/30"
+            }`}
+          title="Show sandbox execution logs"
+        >
+          {showLogs ? (
+            <IconChevronDown className="w-4 h-4" />
+          ) : (
+            <IconChevronRight className="w-4 h-4" />
+          )}
+        </button>
+      )}
+
+      {/* Expanded Logs */}
+      {showLogs && (
+        <div className="w-full mt-2 pt-2 border-t border-border/20 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 mb-1 block">
+                Context
+              </span>
+              <pre className="text-[10px] text-muted-foreground/70 bg-background/30 rounded p-1.5 overflow-x-auto max-h-[150px] overflow-y-auto font-mono whitespace-pre-wrap break-all border border-border/10">
+                {tryParseJSON(usage.sandbox_context)}
+              </pre>
+            </div>
+            <div>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 mb-1 block">
+                Response
+              </span>
+              <pre className="text-[10px] text-green-400/60 bg-background/30 rounded p-1.5 overflow-x-auto max-h-[150px] overflow-y-auto font-mono whitespace-pre-wrap break-all border border-border/10">
+                {tryParseJSON(usage.sandbox_response)}
+              </pre>
+            </div>
+          </div>
+
+          {usage.sandbox_logs && usage.sandbox_logs !== "null" && (
+            <div>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 mb-1 flex items-center gap-1">
+                <IconTerminal className="w-3 h-3" />
+                Console Logs
+              </span>
+              <pre className="text-[10px] text-yellow-400/60 bg-background/30 rounded p-1.5 overflow-x-auto max-h-[150px] overflow-y-auto font-mono whitespace-pre-wrap break-all border border-border/10">
+                {formatSandboxLogs(usage.sandbox_logs)}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

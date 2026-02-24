@@ -50,7 +50,9 @@ type ApplicationUsage struct {
 	ApplicationID int64                  `json:"application_id"`
 	Application   Application            `gorm:"foreignKey:ApplicationID" json:"application"`
 
-	ExecutionLogID int64 `json:"execution_log_id"`
+	SandboxContext  string  `json:"sandbox_context" gorm:"type:text;nullable"`
+	SandboxResponse *string `json:"sandbox_response" gorm:"type:text;nullable"`
+	SandboxLogs     string  `json:"sandbox_logs" gorm:"type:text;nullable"`
 }
 
 func (a *ApplicationUsage) TableName() string {

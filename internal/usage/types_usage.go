@@ -44,6 +44,10 @@ type ClassificationResponse struct {
 	DetectedProject              string               `json:"detected_project"`
 	DetectedCommunicationChannel string               `json:"detected_communication_channel"`
 	Tags                         []string             `json:"tags"`
+
+	SandboxContext  string  `json:"sandbox_context"`
+	SandboxResponse *string `json:"sandbox_response"`
+	SandboxLogs     string  `json:"sandbox_logs"`
 }
 
 type ClassifyRequest struct {

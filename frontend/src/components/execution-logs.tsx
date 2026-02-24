@@ -33,12 +33,25 @@ function formatTimestamp(unixSeconds: number): string {
   });
 }
 
-function tryParseJSON(str: string | null): string {
+function tryParseJSON(str: string | null | undefined): string {
   if (!str) return "—";
   try {
     return JSON.stringify(JSON.parse(str), null, 2);
   } catch {
     return str;
+  }
+}
+
+function formatSandboxLogs(logsStr: string | null | undefined): string {
+  if (!logsStr) return "";
+  try {
+    const logs = JSON.parse(logsStr);
+    if (Array.isArray(logs)) {
+      return logs.join("\n");
+    }
+    return logsStr;
+  } catch {
+    return logsStr;
   }
 }
 
@@ -99,12 +112,19 @@ function LogEntry({ log }: { log: SandboxExecutionLog }) {
             <span className="text-[10px] text-muted-foreground/50 font-mono">
               {formatTimestamp(log.created_at)}
             </span>
-            <span className="text-[10px] text-muted-foreground/30">·</span>
             {log.response && log.response !== "no response" && (
               <>
                 <span className="text-[10px] text-muted-foreground/30">·</span>
-                <span className="text-[10px] text-green-400/70 truncate max-w-[200px]">
+                <span className="text-[10px] text-green-400/70 truncate max-w-[150px]">
                   {log.response}
+                </span>
+              </>
+            )}
+            {log.logs && log.logs !== "null" && !expanded && (
+              <>
+                <span className="text-[10px] text-muted-foreground/30">·</span>
+                <span className="text-[10px] text-yellow-400/50 truncate max-w-[200px]">
+                  {formatSandboxLogs(log.logs).replace(/\n/g, " ")}
                 </span>
               </>
             )}
@@ -142,7 +162,7 @@ function LogEntry({ log }: { log: SandboxExecutionLog }) {
                 Console Logs
               </span>
               <pre className="text-[11px] text-yellow-400/80 bg-background/50 rounded p-2 overflow-x-auto max-h-[100px] overflow-y-auto font-mono whitespace-pre-wrap break-all">
-                {tryParseJSON(log.logs)}
+                {formatSandboxLogs(log.logs)}
               </pre>
             </div>
           )}

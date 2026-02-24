@@ -229,12 +229,26 @@ export class ApplicationUsage {
              */
             this["application"] = (new Application());
         }
-        if (!("execution_log_id" in $$source)) {
+        if (!("sandbox_context" in $$source)) {
             /**
              * @member
-             * @type {number}
+             * @type {string}
              */
-            this["execution_log_id"] = 0;
+            this["sandbox_context"] = "";
+        }
+        if (!("sandbox_response" in $$source)) {
+            /**
+             * @member
+             * @type {string | null}
+             */
+            this["sandbox_response"] = null;
+        }
+        if (!("sandbox_logs" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["sandbox_logs"] = "";
         }
 
         Object.assign(this, $$source);
@@ -372,6 +386,27 @@ export class ClassificationResponse {
              * @type {string[]}
              */
             this["tags"] = [];
+        }
+        if (!("sandbox_context" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["sandbox_context"] = "";
+        }
+        if (!("sandbox_response" in $$source)) {
+            /**
+             * @member
+             * @type {string | null}
+             */
+            this["sandbox_response"] = null;
+        }
+        if (!("sandbox_logs" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["sandbox_logs"] = "";
         }
 
         Object.assign(this, $$source);

@@ -25,7 +25,7 @@ func (s *Service) GetSandboxExecutionLogs(logType string, search string, page, p
 
 	if search != "" {
 		likePattern := "%" + search + "%"
-		query = query.Where("context LIKE ? OR response LIKE ?", likePattern, likePattern)
+		query = query.Where("context LIKE ? OR response LIKE ? OR logs LIKE ?", likePattern, likePattern, likePattern)
 	}
 
 	var logs []SandboxExecutionLog
