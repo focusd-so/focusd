@@ -192,13 +192,13 @@ func main() {
 		updaterService = updater.NewService(Version, "focusd-so", "focusd")
 	}
 
-	permissionsService := native.NewPermissionsService()
+	nativeService := native.NewNativeService()
 
 	services := []application.Service{
 		application.NewService(usageService),
 		application.NewService(settingsService),
 		application.NewService(identityService),
-		application.NewService(permissionsService),
+		application.NewService(nativeService),
 	}
 	if updaterService != nil {
 		services = append(services, application.NewService(updaterService))
@@ -251,7 +251,7 @@ func main() {
 	native.OnIdleChange(func(idleSeconds float64) {
 		usageService.IdleChanged(ctx, idleSeconds > 120)
 	})
-	go native.StartObserver()
+	go nativeService.StartObserver()
 
 	if updaterService != nil {
 		go updaterService.Start(ctx)

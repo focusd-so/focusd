@@ -38,6 +38,6 @@ func OnIdleChange(callback func(idleSeconds float64)) {
 	onIdleChange = callback
 }
 
-func StartObserver() {
+func startObserver() {
 
 }

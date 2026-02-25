@@ -16,33 +16,37 @@ static Boolean checkAccessibility(Boolean prompt) {
 */
 import "C"
 
-// PermissionsService is a Wails-bound service for managing macOS permissions
+// NativeService is a Wails-bound service for managing macOS permissions
 // during the onboarding flow.
-type PermissionsService struct{}
+type NativeService struct{}
 
-func NewPermissionsService() *PermissionsService {
-	return &PermissionsService{}
+func NewNativeService() *NativeService {
+	return &NativeService{}
 }
 
 // CheckAccessibility returns whether Accessibility permission is currently granted,
 // without prompting the user.
-func (s *PermissionsService) CheckAccessibility() bool {
+func (s *NativeService) CheckAccessibility() bool {
 	return C.checkAccessibility(C.Boolean(0)) != 0
 }
 
 // RequestAccessibility prompts the user for Accessibility permission via the
 // macOS system dialog. Returns true if already granted or the user grants it.
-func (s *PermissionsService) RequestAccessibility() bool {
+func (s *NativeService) RequestAccessibility() bool {
 	return C.checkAccessibility(C.Boolean(1)) != 0
 }
 
 // RequestAutomation triggers the macOS TCC prompt for a specific app bundle ID.
 // Returns true if permission was granted (or was already granted).
-func (s *PermissionsService) RequestAutomation(bundleID string) bool {
+func (s *NativeService) RequestAutomation(bundleID string) bool {
 	return RequestAutomationPermission(bundleID)
 }
 
 // OpenSettings opens System Settings → Privacy & Security → Automation.
-func (s *PermissionsService) OpenSettings() {
+func (s *NativeService) OpenSettings() {
 	OpenAutomationSettings()
+}
+
+func (s *NativeService) StartObserver() {
+	startObserver()
 }

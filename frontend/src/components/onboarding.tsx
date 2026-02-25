@@ -4,9 +4,8 @@ import { Button } from "@/components/ui/button";
 import { useOnboardingStore } from "@/stores/onboarding-store";
 import { Step1 } from "@/components/onboarding/step1";
 import { Step2 } from "@/components/onboarding/step2";
-import { Step3 } from "@/components/onboarding/step3";
 
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 2;
 
 export function Onboarding() {
   const navigate = useNavigate();
@@ -63,8 +62,7 @@ export function Onboarding() {
         return <Step1 entered={entered} />;
       case 1:
         return <Step2 onAllGranted={handlePermissionsChange} />;
-      case 2:
-        return <Step3 />;
+
       default:
         return <Step1 entered={entered} />;
     }

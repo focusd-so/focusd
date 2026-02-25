@@ -203,7 +203,7 @@ func OnIdleChange(callback func(idleSeconds float64)) {
 	onIdleChange = callback
 }
 
-func StartObserver() {
+func startObserver() {
 	fmt.Println("--- Accessibility Title Watcher ---")
 	fmt.Println("Ensure this app has Accessibility permissions.")
 
