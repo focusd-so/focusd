@@ -61,7 +61,7 @@ export function Onboarding() {
       case 0:
         return <Step1 entered={entered} />;
       case 1:
-        return <Step2 onAllGranted={handlePermissionsChange} />;
+        return <Step2 onAllGranted={handlePermissionsChange} entered={entered} />;
 
       default:
         return <Step1 entered={entered} />;
@@ -70,8 +70,11 @@ export function Onboarding() {
 
   return (
     <div
-      className="flex flex-col h-screen text-foreground p-4 select-none relative overflow-hidden"
-      style={{ background: "#1c1c1c" }}
+      className="flex flex-col h-screen text-foreground select-none relative overflow-hidden"
+      style={{
+        background:
+          "radial-gradient(circle at 50% 120%, rgba(30, 30, 45, 1) 0%, rgba(9, 9, 11, 1) 100%)",
+      }}
     >
       <style>{`
         @keyframes shimmer {
@@ -86,40 +89,29 @@ export function Onboarding() {
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       />
 
-      {/* Animated step content */}
+      {/* step content */}
       <div
-        className="flex-grow flex flex-col items-center justify-center text-center px-8 relative z-10"
-        style={{
-          opacity: animating ? 0 : 1,
-          transform: animating
-            ? direction === "forward"
-              ? "translateY(12px)"
-              : "translateY(-12px)"
-            : "translateY(0)",
-          filter: animating ? "blur(4px)" : "blur(0)",
-          transition: animating
-            ? "none"
-            : "opacity 0.35s cubic-bezier(0.16,1,0.3,1), transform 0.35s cubic-bezier(0.16,1,0.3,1), filter 0.35s ease",
-        }}
+        className={`flex-grow flex flex-col items-center justify-center text-center px-12 relative z-10 transition-all duration-700 ease-in-out ${animating
+          ? "opacity-0 invisible blur-lg " +
+          (direction === "forward" ? "translate-y-3" : "-translate-y-3")
+          : "opacity-100 visible blur-0 translate-y-0"
+          }`}
       >
         {renderStep()}
       </div>
 
       {/* Bottom bar */}
-      <div className="flex items-center justify-between relative z-10">
+      <div className="flex items-center justify-between relative z-20 mt-auto w-full px-10 pb-4">
         {/* Step indicator dots */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
             <div
               key={i}
-              className="h-2 rounded-full transition-all duration-300 cursor-pointer"
+              className="h-1.5 rounded-full transition-all duration-700 ease-out cursor-pointer"
               onClick={() => goToStep(i)}
               style={{
-                width: i === step ? 28 : 8,
-                background:
-                  i === step
-                    ? "#d4d4d4"
-                    : "var(--color-secondary)",
+                width: i === step ? 32 : 6,
+                background: i === step ? "white" : "rgba(255,255,255,0.15)",
                 opacity: i < step ? 0.4 : 1,
               }}
             />
@@ -130,9 +122,13 @@ export function Onboarding() {
           variant="default"
           onClick={handleNext}
           disabled={isNextDisabled}
+          className="h-11 px-8 rounded-xl font-bold text-sm tracking-tight transition-all duration-500 ease-in-out"
           style={{
-            opacity: isNextDisabled ? 0.4 : 1,
+            background: isNextDisabled ? "rgba(255,255,255,0.06)" : "white",
+            color: isNextDisabled ? "rgba(255,255,255,0.2)" : "black",
+            opacity: isNextDisabled ? 0.5 : 1,
             cursor: isNextDisabled ? "not-allowed" : "pointer",
+            border: "none",
           }}
         >
           {step === 0

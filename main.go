@@ -251,7 +251,6 @@ func main() {
 	native.OnIdleChange(func(idleSeconds float64) {
 		usageService.IdleChanged(ctx, idleSeconds > 120)
 	})
-	go nativeService.StartObserver()
 
 	if updaterService != nil {
 		go updaterService.Start(ctx)

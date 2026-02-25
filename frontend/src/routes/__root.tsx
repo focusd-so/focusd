@@ -15,6 +15,8 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { AccountStatus } from "@/components/account-status";
 import { useAppVisibilityStore } from "@/stores/app-visibility-store";
 import { useOnboardingStore } from "@/stores/onboarding-store";
+import { useEffect } from "react";
+import { StartObserver } from "../../bindings/github.com/focusd-so/focusd/internal/native/nativeservice";
 
 const routeTitles: Record<string, string> = {
   "/activity": "Smart Blocking",
@@ -34,6 +36,13 @@ function RootLayout() {
 
   const { shouldRedirectToSmartBlocking, resetRedirectFlag } =
     useAppVisibilityStore();
+  const { completed } = useOnboardingStore();
+
+  useEffect(() => {
+    if (completed) {
+      StartObserver();
+    }
+  }, [completed]);
 
   // Handle redirect to smart blocking screen when window is reopened after timeout
   if (shouldRedirectToSmartBlocking && pathname !== "/activity") {
@@ -73,7 +82,6 @@ function RootLayout() {
           </div>
           <AccountStatus />
         </header>
-        <script src="https://cdn.jsdelivr.net/npm/@polar-sh/checkout@0.1/dist/embed.global.js" defer data-auto-init></script>
         <div className="flex flex-1 flex-col h-full overflow-hidden">
           <Outlet />
         </div>

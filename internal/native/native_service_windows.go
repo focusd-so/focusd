@@ -3,9 +3,14 @@
 
 package native
 
+import "sync"
+
 // NativeService is a Wails-bound service for managing OS permissions.
 // On Windows, these are unimplemented stubs.
-type NativeService struct{}
+type NativeService struct {
+	mu      sync.Mutex
+	started bool
+}
 
 func NewNativeService() *NativeService {
 	return &NativeService{}
@@ -27,5 +32,13 @@ func (s *NativeService) OpenSettings() {
 }
 
 func (s *NativeService) StartObserver() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.started {
+		return
+	}
+
+	s.started = true
 	startObserver()
 }

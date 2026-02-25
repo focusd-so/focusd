@@ -1,10 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  Eye,
+  MousePointer2,
+  Globe,
+  Settings,
+  CheckCircle2,
+} from "lucide-react";
+import {
   CheckAccessibility,
   RequestAccessibility,
   RequestAutomation,
   OpenSettings,
 } from "../../../bindings/github.com/focusd-so/focusd/internal/native/nativeservice";
+import { PrivacyNote } from "./privacy-note";
+import { OnboardingHeader } from "./onboarding-header";
+import { OnboardingCard } from "./onboarding-card";
 
 type PermissionStatus = "pending" | "granted" | "denied";
 
@@ -13,13 +23,16 @@ interface PermissionCard {
   title: string;
   description: string;
   status: PermissionStatus;
+  icon: React.ReactNode;
 }
 
 interface Step2Props {
   onAllGranted: (allGranted: boolean) => void;
+  entered: boolean;
 }
 
-export function Step2({ onAllGranted }: Step2Props) {
+export function Step2({ onAllGranted, entered }: Step2Props) {
+  const [isVisible, setIsVisible] = useState(false);
   const [accessibility, setAccessibility] =
     useState<PermissionStatus>("pending");
   const [systemEvents, setSystemEvents] =
@@ -28,9 +41,11 @@ export function Step2({ onAllGranted }: Step2Props) {
 
   // Check accessibility on mount
   useEffect(() => {
+    const t = setTimeout(() => setIsVisible(true), 50);
     CheckAccessibility().then((granted) => {
       if (granted) setAccessibility("granted");
     });
+    return () => clearTimeout(t);
   }, []);
 
   // Notify parent when all granted
@@ -69,130 +84,95 @@ export function Step2({ onAllGranted }: Step2Props) {
   const cards: PermissionCard[] = [
     {
       id: "accessibility",
-      title: "Accessibility",
+      title: "Screen Content",
       description:
-        "Lets Focusd see which app you're using so it can keep you on track.",
+        "Detects which application is active to help you stay focused on your work.",
       status: accessibility,
+      icon: <Eye className="w-5 h-5" />,
     },
     {
       id: "system-events",
-      title: "System Events",
+      title: "System Control",
       description:
-        "Allows Focusd to minimize distracting apps when you're in a focus session.",
+        "Automatically minimizes distracting applications during your focus sessions.",
       status: systemEvents,
+      icon: <MousePointer2 className="w-5 h-5" />,
     },
     {
       id: "browsers",
-      title: "Browsers",
+      title: "Web Browsing",
       description:
-        "Enables Focusd to detect distracting websites and redirect you back to work.",
+        "Detects distracting websites in your browser and redirects you to productivity.",
       status: browsers,
+      icon: <Globe className="w-5 h-5" />,
     },
   ];
 
   return (
-    <div className="flex flex-col items-center w-full max-w-lg">
-      <h1
-        className="text-4xl font-bold mb-2 tracking-tight"
-        style={{ color: "#e0e0e0" }}
-      >
-        Set up permissions
-      </h1>
-      <p
-        className="text-base mb-8 text-center leading-relaxed"
-        style={{ color: "#999" }}
-      >
-        Focusd needs a few permissions to work properly.
-      </p>
+    <div className="flex flex-col items-center w-full max-w-4xl">
+      <OnboardingHeader
+        title="Perfect your workspace"
+        subtitle="Grant a few permissions so Focusd can protect your focus."
+        entered={entered}
+      />
 
-      <div className="flex flex-col gap-3 w-full">
-        {cards.map((card) => (
-          <div
-            key={card.id}
-            className="flex items-center gap-4 rounded-xl px-5 py-4"
-            style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.07)",
-            }}
-          >
-            {/* Status dot */}
-            <div
-              className="shrink-0 w-2.5 h-2.5 rounded-full transition-colors duration-300"
-              style={{
-                background:
-                  card.status === "granted"
-                    ? "#4ade80"
-                    : card.status === "denied"
-                      ? "#f87171"
-                      : "#555",
-              }}
+      <div className="w-full max-w-lg flex flex-col items-center">
+        <div
+          className="flex flex-col gap-4 w-full mb-10"
+          style={{
+            opacity: isVisible ? 1 : 0,
+            transform: isVisible ? "translateY(0)" : "translateY(8px)",
+            transition: "opacity 0.7s ease 0.4s, transform 0.7s ease 0.4s",
+          }}
+        >
+          {cards.map((card) => (
+            <OnboardingCard
+              key={card.id}
+              status={card.status}
+              icon={
+                card.status === "granted" ? (
+                  <CheckCircle2 className="w-5 h-5 animate-in zoom-in duration-500" />
+                ) : (
+                  card.icon
+                )
+              }
+              title={card.title}
+              description={card.description}
+              action={
+                card.status === "granted" ? (
+                  <div className="flex items-center gap-1.5 text-green-400 text-sm font-medium animate-in fade-in zoom-in duration-500">
+                    Granted
+                  </div>
+                ) : card.status === "denied" ? (
+                  <button
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-red-400 text-sm font-medium transition-all duration-300 border border-red-500/20"
+                    onClick={() => OpenSettings()}
+                  >
+                    <Settings className="w-4 h-4" />
+                    Fix in Settings
+                  </button>
+                ) : (
+                  <button
+                    className="px-4 py-1.5 rounded-lg bg-white hover:bg-zinc-200 active:scale-95 text-black text-xs font-bold shadow-lg shadow-white/5 transition-all duration-300"
+                    onClick={() => handleGrant(card.id)}
+                  >
+                    Allow
+                  </button>
+                )
+              }
             />
+          ))}
+        </div>
 
-            {/* Text */}
-            <div className="flex-1 min-w-0">
-              <div
-                className="text-sm font-semibold mb-0.5"
-                style={{ color: "#d4d4d4" }}
-              >
-                {card.title}
-              </div>
-              <div className="text-xs leading-snug" style={{ color: "#888" }}>
-                {card.description}
-              </div>
-            </div>
-
-            {/* Action */}
-            {card.status === "granted" ? (
-              <span
-                className="text-xs font-medium shrink-0"
-                style={{ color: "#4ade80" }}
-              >
-                Granted
-              </span>
-            ) : card.status === "denied" ? (
-              <button
-                className="text-xs font-medium shrink-0 cursor-pointer hover:underline"
-                style={{
-                  color: "#f87171",
-                  background: "none",
-                  border: "none",
-                  padding: 0,
-                }}
-                onClick={() => OpenSettings()}
-              >
-                Open Settings
-              </button>
-            ) : (
-              <button
-                className="text-xs font-medium px-3 py-1.5 rounded-lg shrink-0 cursor-pointer transition-colors"
-                style={{
-                  background: "rgba(255,255,255,0.08)",
-                  color: "#d4d4d4",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "rgba(255,255,255,0.14)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "rgba(255,255,255,0.08)";
-                }}
-                onClick={() => handleGrant(card.id)}
-              >
-                Grant
-              </button>
-            )}
-          </div>
-        ))}
+        {/* Privacy note */}
+        <PrivacyNote
+          style={{
+            opacity: isVisible ? 1 : 0,
+            transform: isVisible ? "translateY(0)" : "translateY(8px)",
+            transition: "opacity 0.7s ease 0.55s, transform 0.7s ease 0.55s",
+          }}
+        />
       </div>
-
-      {/* Privacy note */}
-      <p
-        className="text-xs mt-6 text-center leading-relaxed max-w-sm"
-        style={{ color: "#666" }}
-      >
-        Your data is never stored, shared, sold, or used for training. It's
-        processed through foundational AI models and immediately discarded.
-      </p>
     </div>
   );
 }
