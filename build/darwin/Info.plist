@@ -24,6 +24,8 @@
 		<true/>
 		<key>NSHighResolutionCapable</key>
 		<string>true</string>
+		<key>NSAppleEventsUsageDescription</key>
+		<string>Focusd uses this to detect distracting websites and minimize apps during focus sessions. Your data is never stored, shared, or sold.</string>
 		<key>NSHumanReadableCopyright</key>
 		<string>(c) 2025, Focusd</string>
 		<key>CFBundleURLTypes</key>

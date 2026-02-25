@@ -3,6 +3,7 @@ import {
   createRootRoute,
   useNavigate,
   useRouterState,
+  redirect,
 } from "@tanstack/react-router";
 import {
   SidebarInset,
@@ -13,6 +14,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AccountStatus } from "@/components/account-status";
 import { useAppVisibilityStore } from "@/stores/app-visibility-store";
+import { useOnboardingStore } from "@/stores/onboarding-store";
 
 const routeTitles: Record<string, string> = {
   "/activity": "Smart Blocking",
@@ -34,18 +36,25 @@ function RootLayout() {
     useAppVisibilityStore();
 
   // Handle redirect to smart blocking screen when window is reopened after timeout
-  // This runs during render when the flag is set, navigates, and resets
   if (shouldRedirectToSmartBlocking && pathname !== "/activity") {
-    // Use queueMicrotask to avoid navigation during render
     queueMicrotask(() => {
       navigate({ to: "/activity" });
       resetRedirectFlag();
     });
   } else if (shouldRedirectToSmartBlocking && pathname === "/activity") {
-    // Already on activity page, just reset the flag
     queueMicrotask(() => {
       resetRedirectFlag();
     });
+  }
+
+  // Render onboarding without sidebar/header
+  if (pathname === "/onboarding") {
+    return (
+      <>
+        <Toaster />
+        <Outlet />
+      </>
+    );
   }
 
   return (
@@ -74,5 +83,14 @@ function RootLayout() {
 }
 
 export const Route = createRootRoute({
+  beforeLoad: ({ location }) => {
+    // Skip guard when already on the onboarding page
+    if (location.pathname === "/onboarding") return;
+
+    const { completed } = useOnboardingStore.getState();
+    if (!completed) {
+      throw redirect({ to: "/onboarding" });
+    }
+  },
   component: RootLayout,
 });

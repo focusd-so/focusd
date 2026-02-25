@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ScreenTimeRouteImport } from './routes/screen-time'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as InsightsRouteImport } from './routes/insights'
 import { Route as ActivityRouteImport } from './routes/activity'
 import { Route as IndexRouteImport } from './routes/index'
@@ -29,6 +30,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const ScreenTimeRoute = ScreenTimeRouteImport.update({
   id: '/screen-time',
   path: '/screen-time',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InsightsRoute = InsightsRouteImport.update({
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/activity': typeof ActivityRoute
   '/insights': typeof InsightsRouteWithChildren
+  '/onboarding': typeof OnboardingRoute
   '/screen-time': typeof ScreenTimeRouteWithChildren
   '/settings': typeof SettingsRoute
   '/insights/deep-work': typeof InsightsDeepWorkRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/activity': typeof ActivityRoute
   '/insights': typeof InsightsRouteWithChildren
+  '/onboarding': typeof OnboardingRoute
   '/screen-time': typeof ScreenTimeRouteWithChildren
   '/settings': typeof SettingsRoute
   '/insights/deep-work': typeof InsightsDeepWorkRoute
@@ -108,6 +116,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/activity': typeof ActivityRoute
   '/insights': typeof InsightsRouteWithChildren
+  '/onboarding': typeof OnboardingRoute
   '/screen-time': typeof ScreenTimeRouteWithChildren
   '/settings': typeof SettingsRoute
   '/insights/deep-work': typeof InsightsDeepWorkRoute
@@ -123,6 +132,7 @@ export interface FileRouteTypes {
     | '/'
     | '/activity'
     | '/insights'
+    | '/onboarding'
     | '/screen-time'
     | '/settings'
     | '/insights/deep-work'
@@ -136,6 +146,7 @@ export interface FileRouteTypes {
     | '/'
     | '/activity'
     | '/insights'
+    | '/onboarding'
     | '/screen-time'
     | '/settings'
     | '/insights/deep-work'
@@ -149,6 +160,7 @@ export interface FileRouteTypes {
     | '/'
     | '/activity'
     | '/insights'
+    | '/onboarding'
     | '/screen-time'
     | '/settings'
     | '/insights/deep-work'
@@ -163,6 +175,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ActivityRoute: typeof ActivityRoute
   InsightsRoute: typeof InsightsRouteWithChildren
+  OnboardingRoute: typeof OnboardingRoute
   ScreenTimeRoute: typeof ScreenTimeRouteWithChildren
   SettingsRoute: typeof SettingsRoute
 }
@@ -181,6 +194,13 @@ declare module '@tanstack/react-router' {
       path: '/screen-time'
       fullPath: '/screen-time'
       preLoaderRoute: typeof ScreenTimeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/insights': {
@@ -285,6 +305,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ActivityRoute: ActivityRoute,
   InsightsRoute: InsightsRouteWithChildren,
+  OnboardingRoute: OnboardingRoute,
   ScreenTimeRoute: ScreenTimeRouteWithChildren,
   SettingsRoute: SettingsRoute,
 }

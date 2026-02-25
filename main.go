@@ -192,10 +192,13 @@ func main() {
 		updaterService = updater.NewService(Version, "focusd-so", "focusd")
 	}
 
+	permissionsService := native.NewPermissionsService()
+
 	services := []application.Service{
 		application.NewService(usageService),
 		application.NewService(settingsService),
 		application.NewService(identityService),
+		application.NewService(permissionsService),
 	}
 	if updaterService != nil {
 		services = append(services, application.NewService(updaterService))
