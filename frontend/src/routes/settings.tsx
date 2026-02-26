@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import { createFileRoute } from "@tanstack/react-router"
 import { CustomRules } from "@/components/custom-rules";
 import { useSettingsStore } from "@/stores/settings-store";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -20,10 +20,10 @@ export const Route = createFileRoute("/settings")({
 
 function SettingsPage() {
   const { tab } = Route.useSearch();
-  const navigate = useNavigate();
+  const navigate = Route.useNavigate();
 
   const handleTabChange = (value: string) => {
-    navigate({ search: { tab: value as any } });
+    navigate({ search: (prev) => ({ ...prev, tab: value as any }) });
   };
 
   return (
