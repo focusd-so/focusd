@@ -42,3 +42,15 @@ func (s *NativeService) StartObserver() {
 	s.started = true
 	startObserver()
 }
+
+func (s *NativeService) EnableLoginItem() error {
+	return nil
+}
+
+func (s *NativeService) DisableLoginItem() error {
+	return nil
+}
+
+func (s *NativeService) LoginItemEnabled() bool {
+	return false
+}

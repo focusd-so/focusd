@@ -221,7 +221,7 @@ func (s *Service) getOrCreateApplication(ctx context.Context, executablePath, na
 		// Web apps are uniquely identified by hostname, so all tabs from the same
 		// site (e.g., multiple Google tabs) share the same Application record.
 		var application Application
-		if err := s.db.Where("hostname = ?", hostname).First(&application).Error; err != nil {
+		if err := s.db.Where("hostname = ? AND name = ?", hostname, name).First(&application).Error; err != nil {
 			slog.Warn("failed to find application by hostname", "error", err)
 		}
 

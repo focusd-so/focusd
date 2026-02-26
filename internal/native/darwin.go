@@ -418,9 +418,11 @@ func BlockURL(targetURL, title, reason string, tags []string, appName string) er
     end repeat
 end tell`, appName, targetURL, encodedData)
 
+	slog.Info("block url", "script", appleScript)
+
 	cmd := exec.Command("osascript", "-e", appleScript)
 	if err := cmd.Run(); err != nil {
-		slog.Error("Failed to block URL", "appName", appName, "error", err)
+		slog.Error("permissionsservice", "appName", appName, "error", err)
 	}
 
 	return nil

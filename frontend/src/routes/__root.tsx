@@ -16,7 +16,7 @@ import { AccountStatus } from "@/components/account-status";
 import { useAppVisibilityStore } from "@/stores/app-visibility-store";
 import { useOnboardingStore } from "@/stores/onboarding-store";
 import { useEffect } from "react";
-import { StartObserver } from "../../bindings/github.com/focusd-so/focusd/internal/native/nativeservice";
+import { StartObserver, EnableLoginItem } from "../../bindings/github.com/focusd-so/focusd/internal/native/nativeservice";
 
 const routeTitles: Record<string, string> = {
   "/activity": "Smart Blocking",
@@ -41,6 +41,7 @@ function RootLayout() {
   useEffect(() => {
     if (completed) {
       StartObserver();
+      EnableLoginItem();
     }
   }, [completed]);
 
