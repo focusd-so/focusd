@@ -86,6 +86,9 @@ function generateMockUsageData(count = 180): ApplicationUsage[] {
         domain: app.hostname ? app.hostname : null,
         bundle_id: app.bundle_id,
       },
+      sandbox_context: "",
+      sandbox_response: null,
+      sandbox_logs: "",
     });
   }
 
