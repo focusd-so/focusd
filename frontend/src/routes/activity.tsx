@@ -390,9 +390,9 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
                   variant="outline"
                   size="sm"
                   onClick={handleUnallow}
-                  className="h-6 px-2 text-[10px] font-medium border-yellow-500/20 text-yellow-500/70 hover:bg-yellow-500/10 hover:border-yellow-500/40 hover:text-yellow-500 transition-all gap-1"
+                  className="h-7 px-3 text-xs font-semibold bg-yellow-500/10 border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/20 hover:border-yellow-500/50 transition-all gap-1.5"
                 >
-                  <IconShield className="w-3 h-3" />
+                  <IconShield className="w-3.5 h-3.5" />
                   Resume Protection
                 </Button>
               </>
