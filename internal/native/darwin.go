@@ -203,7 +203,7 @@ func OnIdleChange(callback func(idleSeconds float64)) {
 	onIdleChange = callback
 }
 
-func StartObserver() {
+func startObserver() {
 	fmt.Println("--- Accessibility Title Watcher ---")
 	fmt.Println("Ensure this app has Accessibility permissions.")
 
@@ -418,9 +418,11 @@ func BlockURL(targetURL, title, reason string, tags []string, appName string) er
     end repeat
 end tell`, appName, targetURL, encodedData)
 
+	slog.Info("block url", "script", appleScript)
+
 	cmd := exec.Command("osascript", "-e", appleScript)
 	if err := cmd.Run(); err != nil {
-		slog.Error("Failed to block URL", "appName", appName, "error", err)
+		slog.Error("permissionsservice", "appName", appName, "error", err)
 	}
 
 	return nil

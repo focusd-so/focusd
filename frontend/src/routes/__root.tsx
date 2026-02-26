@@ -3,6 +3,7 @@ import {
   createRootRoute,
   useNavigate,
   useRouterState,
+  redirect,
 } from "@tanstack/react-router";
 import {
   SidebarInset,
@@ -13,6 +14,9 @@ import { Toaster } from "@/components/ui/sonner";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AccountStatus } from "@/components/account-status";
 import { useAppVisibilityStore } from "@/stores/app-visibility-store";
+import { useOnboardingStore } from "@/stores/onboarding-store";
+import { useEffect } from "react";
+import { StartObserver, EnableLoginItem } from "../../bindings/github.com/focusd-so/focusd/internal/native/nativeservice";
 
 const routeTitles: Record<string, string> = {
   "/activity": "Smart Blocking",
@@ -32,20 +36,35 @@ function RootLayout() {
 
   const { shouldRedirectToSmartBlocking, resetRedirectFlag } =
     useAppVisibilityStore();
+  const { completed } = useOnboardingStore();
+
+  useEffect(() => {
+    if (completed) {
+      StartObserver();
+      EnableLoginItem();
+    }
+  }, [completed]);
 
   // Handle redirect to smart blocking screen when window is reopened after timeout
-  // This runs during render when the flag is set, navigates, and resets
   if (shouldRedirectToSmartBlocking && pathname !== "/activity") {
-    // Use queueMicrotask to avoid navigation during render
     queueMicrotask(() => {
       navigate({ to: "/activity" });
       resetRedirectFlag();
     });
   } else if (shouldRedirectToSmartBlocking && pathname === "/activity") {
-    // Already on activity page, just reset the flag
     queueMicrotask(() => {
       resetRedirectFlag();
     });
+  }
+
+  // Render onboarding without sidebar/header
+  if (pathname === "/onboarding") {
+    return (
+      <>
+        <Toaster />
+        <Outlet />
+      </>
+    );
   }
 
   return (
@@ -64,7 +83,6 @@ function RootLayout() {
           </div>
           <AccountStatus />
         </header>
-        <script src="https://cdn.jsdelivr.net/npm/@polar-sh/checkout@0.1/dist/embed.global.js" defer data-auto-init></script>
         <div className="flex flex-1 flex-col h-full overflow-hidden">
           <Outlet />
         </div>
@@ -74,5 +92,14 @@ function RootLayout() {
 }
 
 export const Route = createRootRoute({
+  beforeLoad: ({ location }) => {
+    // Skip guard when already on the onboarding page
+    if (location.pathname === "/onboarding") return;
+
+    const { completed } = useOnboardingStore.getState();
+    if (!completed) {
+      throw redirect({ to: "/onboarding" });
+    }
+  },
   component: RootLayout,
 });

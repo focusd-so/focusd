@@ -3,10 +3,13 @@ import { CustomRules } from "@/components/custom-rules";
 import { useSettingsStore } from "@/stores/settings-store";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GeneralSettings } from "@/components/settings/general-settings";
+import { DevSettings } from "@/components/settings/dev-settings";
 import { z } from "zod";
 
+const tabValues = ["general", "rules", ...(import.meta.env.DEV ? ["dev"] : [])] as const;
+
 const settingsSearchSchema = z.object({
-  tab: z.enum(["general", "rules"]).optional().catch("general"),
+  tab: z.enum(tabValues as unknown as [string, ...string[]]).optional().catch("general"),
 });
 
 export const Route = createFileRoute("/settings")({
@@ -33,6 +36,9 @@ function SettingsPage() {
         <TabsList className="mb-2">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="rules">Custom Rules</TabsTrigger>
+          {import.meta.env.DEV && (
+            <TabsTrigger value="dev">Development</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="general" className="flex-1 mt-0 overflow-auto">
@@ -42,6 +48,12 @@ function SettingsPage() {
         <TabsContent value="rules" className="flex-1 mt-0 min-h-0">
           <CustomRules />
         </TabsContent>
+
+        {import.meta.env.DEV && (
+          <TabsContent value="dev" className="flex-1 mt-0 overflow-auto">
+            <DevSettings />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

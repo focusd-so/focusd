@@ -13,14 +13,31 @@ func GetIdentity() (string, error) {
 	return "", nil
 }
 
-func BlockURL(url string, title string, reason string, tags string, bundleID string) error {
+func BlockURL(targetURL, title, reason string, tags []string, appName string) error {
 	return nil
 }
 
-func BlockApp(name string) error {
+func BlockApp(appName, title, reason string, tags []string) error {
 	return nil
 }
 
 func MinimiseApp(bundleID string) error {
 	return nil
+}
+
+var (
+	onTitleChange func(event NativeEvent)
+	onIdleChange  func(idleSeconds float64)
+)
+
+func OnTitleChange(callback func(event NativeEvent)) {
+	onTitleChange = callback
+}
+
+func OnIdleChange(callback func(idleSeconds float64)) {
+	onIdleChange = callback
+}
+
+func startObserver() {
+
 }

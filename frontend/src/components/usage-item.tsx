@@ -4,8 +4,6 @@ import {
   IconWorld,
   IconAppWindow,
   IconPlayerPause,
-  IconRuler2,
-  IconLighter,
   IconTerminal,
   IconChevronDown,
   IconChevronRight,
