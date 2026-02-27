@@ -1,13 +1,12 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { GetVersion } from "../../../bindings/github.com/focusd-so/focusd/internal/settings/service";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function AboutSettings() {
-  const [version, setVersion] = useState<string>("");
-
-  useEffect(() => {
-    GetVersion().then(setVersion).catch(console.error);
-  }, []);
+  const { data: version } = useQuery({
+    queryKey: ["app-version"],
+    queryFn: GetVersion,
+  });
 
   return (
     <div className="space-y-6">

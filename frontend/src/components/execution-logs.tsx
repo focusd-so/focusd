@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState, useMemo } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import {
   Sheet,
   SheetContent,
@@ -19,6 +20,7 @@ import {
 } from "@tabler/icons-react";
 import { GetSandboxExecutionLogs } from "../../bindings/github.com/focusd-so/focusd/internal/usage/service";
 import type { SandboxExecutionLog } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
+import { useDeferredValue } from "react";
 
 const PAGE_SIZE = 30;
 
@@ -191,72 +193,36 @@ export function ExecutionLogsSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [logs, setLogs] = useState<SandboxExecutionLog[]>([]);
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
   const [typeFilter, setTypeFilter] = useState("");
-  const [page, setPage] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchLogs = useCallback(
-    async (reset = false) => {
-      setIsLoading(true);
-      try {
-        const currentPage = reset ? 0 : page;
-        const results = await GetSandboxExecutionLogs(
-          typeFilter,
-          search,
-          currentPage,
-          PAGE_SIZE
-        );
-        if (reset) {
-          setLogs(results || []);
-          setPage(0);
-        } else {
-          setLogs((prev) => [...prev, ...(results || [])]);
-        }
-        setHasMore((results || []).length === PAGE_SIZE);
-      } catch (err) {
-        console.error("Failed to fetch execution logs:", err);
-      } finally {
-        setIsLoading(false);
-      }
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+  } = useInfiniteQuery({
+    queryKey: ["sandbox-logs", typeFilter, deferredSearch],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      GetSandboxExecutionLogs(typeFilter, deferredSearch, pageParam as number, PAGE_SIZE),
+    getNextPageParam: (lastPage: SandboxExecutionLog[], allPages) => {
+      return lastPage.length === PAGE_SIZE ? allPages.length : undefined;
     },
-    [page, typeFilter, search]
-  );
+    enabled: open,
+  });
 
-  // Fetch on open and when filters change
-  useEffect(() => {
-    if (!open) return;
-    fetchLogs(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, typeFilter]);
-
-  // Debounced search
-  useEffect(() => {
-    if (!open) return;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      fetchLogs(true);
-    }, 300);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  const logs = useMemo(() => {
+    return data?.pages.flat() || [];
+  }, [data]);
 
   const loadMore = () => {
-    setPage((p) => p + 1);
-  };
-
-  // Fetch more when page increments
-  useEffect(() => {
-    if (page > 0 && open) {
-      fetchLogs(false);
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -325,15 +291,15 @@ export function ExecutionLogsSheet({
                 {logs.map((log) => (
                   <LogEntry key={log.id} log={log} />
                 ))}
-                {hasMore && (
+                {hasNextPage && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={loadMore}
-                    disabled={isLoading}
+                    disabled={isFetchingNextPage}
                     className="w-full h-8 text-xs text-muted-foreground/50 hover:text-muted-foreground"
                   >
-                    {isLoading ? "Loading..." : "Load more"}
+                    {isFetchingNextPage ? "Loading..." : "Load more"}
                   </Button>
                 )}
               </>

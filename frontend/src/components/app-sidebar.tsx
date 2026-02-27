@@ -3,7 +3,7 @@ import {
   IconShield,
 } from "@tabler/icons-react";
 import { Link, useMatchRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { GetVersion } from "../../bindings/github.com/focusd-so/focusd/internal/settings/service";
 
@@ -42,11 +42,10 @@ const applicationItems: MenuItem[] = [
 
 export function AppSidebar() {
   const matchRoute = useMatchRoute();
-  const [version, setVersion] = useState<string>("");
-
-  useEffect(() => {
-    GetVersion().then(setVersion).catch(console.error);
-  }, []);
+  const { data: version } = useQuery({
+    queryKey: ["app-version"],
+    queryFn: GetVersion,
+  });
 
   return (
     <Sidebar variant="floating">
