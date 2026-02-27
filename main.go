@@ -29,6 +29,7 @@ import (
 	"github.com/focusd-so/focusd/internal/extension"
 	"github.com/focusd-so/focusd/internal/identity"
 	"github.com/focusd-so/focusd/internal/native"
+	"github.com/focusd-so/focusd/internal/nativemessaging"
 	"github.com/focusd-so/focusd/internal/settings"
 	"github.com/focusd-so/focusd/internal/updater"
 	"github.com/focusd-so/focusd/internal/usage"
@@ -54,6 +55,7 @@ func init() {
 	// and provide a strongly typed JS/TS API for them.
 	application.RegisterEvent[usage.ApplicationUsage]("usage:update")
 	application.RegisterEvent[usage.ProtectionPause]("protection:status")
+	application.RegisterEvent[any]("authctx:updated")
 }
 
 // main function serves as the application's entry point. It initializes the application, creates a window,
@@ -70,6 +72,10 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	if err := nativemessaging.EnsureHostManifests(); err != nil {
+		slog.Error("failed to ensure native messaging manifests", "error", err)
+	}
 
 	var (
 		db = setupDB()
@@ -310,7 +316,7 @@ func main() {
 				return
 			}
 
-			wailsApp.Event.Emit("identity:changed", nil)
+			wailsApp.Event.Emit("authctx:updated", nil)
 		}
 
 		// toggle window open

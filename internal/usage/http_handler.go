@@ -3,6 +3,7 @@ package usage
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -14,6 +15,16 @@ type PauseRequets struct {
 
 type UnpauseRequest struct {
 	Reason string `json:"reason"`
+}
+
+type WhitelistRequest struct {
+	ExecutablePath  string `json:"executable_path"`
+	Hostname        string `json:"hostname"`
+	DurationSeconds int    `json:"duration_seconds"`
+}
+
+type UnwhitelistRequest struct {
+	ID int64 `json:"id"`
 }
 
 func (s *Service) RegisterHTTPHandlers(r *chi.Mux) {
@@ -53,6 +64,42 @@ func (s *Service) RegisterHTTPHandlers(r *chi.Mux) {
 			return
 		}
 		json.NewEncoder(w).Encode(protectionPause)
+		w.WriteHeader(http.StatusOK)
+	})
+
+	r.Post("/whitelist", func(w http.ResponseWriter, r *http.Request) {
+		var req WhitelistRequest
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if req.DurationSeconds <= 0 {
+			req.DurationSeconds = 60 * 60 // 1 hour
+		}
+
+		if err := s.Whitelist(req.ExecutablePath, req.Hostname, time.Duration(req.DurationSeconds)*time.Second); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	})
+
+	r.Post("/unwhitelist", func(w http.ResponseWriter, r *http.Request) {
+		var req UnwhitelistRequest
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if err := s.RemoveWhitelist(req.ID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		w.WriteHeader(http.StatusOK)
 	})
 }

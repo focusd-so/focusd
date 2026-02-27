@@ -12,6 +12,7 @@ import type * as usage$0 from "../../../../focusd-so/focusd/internal/usage/model
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
+            "authctx:updated": any;
             "protection:status": usage$0.ProtectionPause;
             "usage:update": usage$0.ApplicationUsage;
         }
