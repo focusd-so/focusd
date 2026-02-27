@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/focusd-so/focusd/internal/settings"
 )
 
 type PauseRequets struct {
@@ -27,79 +29,104 @@ type UnwhitelistRequest struct {
 	ID int64 `json:"id"`
 }
 
-func (s *Service) RegisterHTTPHandlers(r *chi.Mux) {
-	r.Post("/pause", func(w http.ResponseWriter, r *http.Request) {
-		var pauseRequest PauseRequets
+// apiKeyAuth is a middleware that validates the Authorization header against the stored API key.
+func apiKeyAuth(settingsService *settings.Service) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			apiKey, err := settingsService.GetAPIKey()
+			if err != nil || apiKey == "" {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
 
-		if err := json.NewDecoder(r.Body).Decode(&pauseRequest); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" || authHeader != "Bearer "+apiKey {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
 
-		if pauseRequest.DurationSeconds <= 0 {
-			pauseRequest.DurationSeconds = 60 * 60 // 1 hour
-		}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
 
-		protectionPause, err := s.PauseProtection(pauseRequest.DurationSeconds, pauseRequest.Reason)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+func (s *Service) RegisterHTTPHandlers(r *chi.Mux, settingsService *settings.Service) {
+	r.Group(func(r chi.Router) {
+		r.Use(apiKeyAuth(settingsService))
 
-		json.NewEncoder(w).Encode(protectionPause)
-		w.WriteHeader(http.StatusOK)
-	})
+		r.Post("/pause", func(w http.ResponseWriter, r *http.Request) {
+			var pauseRequest PauseRequets
 
-	r.Post("/unpause", func(w http.ResponseWriter, r *http.Request) {
-		var unpauseRequest UnpauseRequest
+			if err := json.NewDecoder(r.Body).Decode(&pauseRequest); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
 
-		if err := json.NewDecoder(r.Body).Decode(&unpauseRequest); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
+			if pauseRequest.DurationSeconds <= 0 {
+				pauseRequest.DurationSeconds = 60 * 60 // 1 hour
+			}
 
-		protectionPause, err := s.ResumeProtection(unpauseRequest.Reason)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		json.NewEncoder(w).Encode(protectionPause)
-		w.WriteHeader(http.StatusOK)
-	})
+			protectionPause, err := s.PauseProtection(pauseRequest.DurationSeconds, pauseRequest.Reason)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 
-	r.Post("/whitelist", func(w http.ResponseWriter, r *http.Request) {
-		var req WhitelistRequest
+			json.NewEncoder(w).Encode(protectionPause)
+			w.WriteHeader(http.StatusOK)
+		})
 
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
+		r.Post("/unpause", func(w http.ResponseWriter, r *http.Request) {
+			var unpauseRequest UnpauseRequest
 
-		if req.DurationSeconds <= 0 {
-			req.DurationSeconds = 60 * 60 // 1 hour
-		}
+			if err := json.NewDecoder(r.Body).Decode(&unpauseRequest); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
 
-		if err := s.Whitelist(req.ExecutablePath, req.Hostname, time.Duration(req.DurationSeconds)*time.Second); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+			protectionPause, err := s.ResumeProtection(unpauseRequest.Reason)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			json.NewEncoder(w).Encode(protectionPause)
+			w.WriteHeader(http.StatusOK)
+		})
 
-		w.WriteHeader(http.StatusOK)
-	})
+		r.Post("/whitelist", func(w http.ResponseWriter, r *http.Request) {
+			var req WhitelistRequest
 
-	r.Post("/unwhitelist", func(w http.ResponseWriter, r *http.Request) {
-		var req UnwhitelistRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
 
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
+			if req.DurationSeconds <= 0 {
+				req.DurationSeconds = 60 * 60 // 1 hour
+			}
 
-		if err := s.RemoveWhitelist(req.ID); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+			if err := s.Whitelist(req.ExecutablePath, req.Hostname, time.Duration(req.DurationSeconds)*time.Second); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 
-		w.WriteHeader(http.StatusOK)
+			w.WriteHeader(http.StatusOK)
+		})
+
+		r.Post("/unwhitelist", func(w http.ResponseWriter, r *http.Request) {
+			var req UnwhitelistRequest
+
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			if err := s.RemoveWhitelist(req.ID); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			w.WriteHeader(http.StatusOK)
+		})
 	})
 }

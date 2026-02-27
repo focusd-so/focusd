@@ -4,22 +4,29 @@ import { Button } from "@/components/ui/button";
 import { useAccountStore } from "@/stores/account-store";
 import { DeviceHandshakeResponse_AccountTier } from "../../bindings/github.com/focusd-so/focusd/gen/api/v1/models";
 import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 export function AccountStatus() {
   const { checkoutLink, fetchAccountTier, isLoadingAccountTier: isStoreLoading } = useAccountStore();
+  const queryClient = useQueryClient();
 
-  const { data: accountTier, isLoading: isQueryLoading, refetch } = useQuery({
+  const { data: accountTier, isLoading: isQueryLoading } = useQuery({
     queryKey: ['accountTier'],
     queryFn: () => fetchAccountTier()
   });
 
-  // Re-fetch when the backend signals identity has changed (e.g. after checkout)
+  // When the backend signals identity has changed (e.g. after checkout),
+  // update the query cache directly with the tier from the event payload.
   useEffect(() => {
-    const handler = () => refetch();
+    const handler = (e: Event) => {
+      const tier = (e as CustomEvent).detail;
+      if (tier != null) {
+        queryClient.setQueryData(['accountTier'], tier);
+      }
+    };
     window.addEventListener("authctx:updated", handler);
     return () => window.removeEventListener("authctx:updated", handler);
-  }, [refetch]);
+  }, [queryClient]);
 
   useEffect(() => {
     console.log("accountTier", accountTier)

@@ -68,8 +68,8 @@ export const useAccountStore = create<AccountState>()((set, get) => ({
     });
 
     // Fired after a successful checkout handshake (deep-link callback)
-    Events.On("authctx:updated", () => {
-      window.dispatchEvent(new Event("authctx:updated"));
+    Events.On("authctx:updated", (event: { data: any }) => {
+      window.dispatchEvent(new CustomEvent("authctx:updated", { detail: event.data }));
     });
 
     Events.On("window:shown", () => {

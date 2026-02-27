@@ -9,7 +9,6 @@ import (
 	"io"
 	"log"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -91,6 +90,10 @@ func main() {
 		log.Fatal("failed to create settings service: %w", err)
 	}
 
+	if _, err := settingsService.EnsureAPIKey(); err != nil {
+		slog.Error("failed to ensure API key", "error", err)
+	}
+
 	// Resolve the API base URL based on build type.
 	apiBaseURL := "http://localhost:8089"
 	if isProductionBuild {
@@ -169,7 +172,7 @@ func main() {
 		log.Fatal("failed to create usage service: %w", err)
 	}
 
-	usageService.RegisterHTTPHandlers(mux)
+	usageService.RegisterHTTPHandlers(mux, settingsService)
 
 	native.OnTitleChange(func(event native.NativeEvent) {
 		hasClient := extension.HasClient(event.AppName)
@@ -316,7 +319,7 @@ func main() {
 				return
 			}
 
-			wailsApp.Event.Emit("authctx:updated", nil)
+			wailsApp.Event.Emit("authctx:updated", identity.GetAccountTier())
 		}
 
 		// toggle window open
@@ -445,17 +448,11 @@ func setupDB() *gorm.DB {
 }
 
 func setUpWebServer(ctx context.Context) (*chi.Mux, int, error) {
+	const port = 50533
+
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
-	// run on a random available port
-	listener, err := net.Listen("tcp", ":0")
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to listen: %w", err)
-	}
-	defer listener.Close()
-
-	port := listener.Addr().(*net.TCPAddr).Port
 	slog.Info("web server running on port", "port", port)
 
 	server := &http.Server{
@@ -465,6 +462,7 @@ func setUpWebServer(ctx context.Context) (*chi.Mux, int, error) {
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("web server failed", "error", err)
 			return
 		}
 	}()
@@ -472,6 +470,7 @@ func setUpWebServer(ctx context.Context) (*chi.Mux, int, error) {
 	go func() {
 		<-ctx.Done()
 		if err := server.Shutdown(ctx); err != nil {
+			slog.Error("web server shutdown failed", "error", err)
 			return
 		}
 	}()

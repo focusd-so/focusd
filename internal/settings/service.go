@@ -1,6 +1,8 @@
 package settings
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -11,6 +13,7 @@ type SettingsKey string
 
 const (
 	SettingsKeyCustomRules SettingsKey = "custom_rules"
+	SettingsKeyAPIKey      SettingsKey = "api_key"
 )
 
 type Settings struct {
@@ -123,4 +126,39 @@ func (s *Service) GetVersionHistory(key SettingsKey, limit int) ([]Settings, err
 		return nil, fmt.Errorf("failed to get version history: %w", err)
 	}
 	return settings, nil
+}
+
+// EnsureAPIKey creates a persistent API key if one does not already exist.
+// Returns the API key (existing or newly created).
+func (s *Service) EnsureAPIKey() (string, error) {
+	existing, err := s.GetLatest(SettingsKeyAPIKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to check for existing API key: %w", err)
+	}
+	if existing != nil && existing.Value != "" {
+		return existing.Value, nil
+	}
+
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate API key: %w", err)
+	}
+	key := hex.EncodeToString(b)
+
+	if err := s.Save(SettingsKeyAPIKey, key); err != nil {
+		return "", fmt.Errorf("failed to save API key: %w", err)
+	}
+	return key, nil
+}
+
+// GetAPIKey returns the stored API key, or empty string if none exists.
+func (s *Service) GetAPIKey() (string, error) {
+	setting, err := s.GetLatest(SettingsKeyAPIKey)
+	if err != nil {
+		return "", err
+	}
+	if setting == nil {
+		return "", nil
+	}
+	return setting.Value, nil
 }
