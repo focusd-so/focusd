@@ -4,10 +4,12 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GeneralSettings } from "@/components/settings/general-settings";
 import { ExtensionsSettings } from "@/components/settings/extensions-settings";
+import { AboutSettings } from "@/components/settings/about-settings";
 import { DevSettings } from "@/components/settings/dev-settings";
+import { AccountSettings } from "@/components/settings/account-settings";
 import { z } from "zod";
 
-const tabValues = ["general", "rules", "extensions", ...(import.meta.env.DEV ? ["dev"] : [])] as const;
+const tabValues = ["general", "account", "rules", "extensions", "about", ...(import.meta.env.DEV ? ["dev"] : [])] as const;
 
 const settingsSearchSchema = z.object({
   tab: z.enum(tabValues as unknown as [string, ...string[]]).optional().catch("general"),
@@ -36,8 +38,10 @@ function SettingsPage() {
       >
         <TabsList className="mb-2">
           <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="account">Account</TabsTrigger>
           <TabsTrigger value="rules">Custom Rules</TabsTrigger>
           <TabsTrigger value="extensions">Extensions</TabsTrigger>
+          <TabsTrigger value="about">About</TabsTrigger>
           {import.meta.env.DEV && (
             <TabsTrigger value="dev">Development</TabsTrigger>
           )}
@@ -45,6 +49,10 @@ function SettingsPage() {
 
         <TabsContent value="general" className="flex-1 mt-0 overflow-auto">
           <GeneralSettings />
+        </TabsContent>
+
+        <TabsContent value="account" className="flex-1 mt-0 overflow-auto">
+          <AccountSettings />
         </TabsContent>
 
         <TabsContent value="rules" className="flex-1 mt-0 min-h-0">
@@ -55,12 +63,17 @@ function SettingsPage() {
           <ExtensionsSettings />
         </TabsContent>
 
+        <TabsContent value="about" className="flex-1 mt-0 overflow-auto">
+          <AboutSettings />
+        </TabsContent>
+
         {import.meta.env.DEV && (
           <TabsContent value="dev" className="flex-1 mt-0 overflow-auto">
             <DevSettings />
           </TabsContent>
         )}
       </Tabs>
+
     </div>
   );
 }

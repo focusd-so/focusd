@@ -4,7 +4,6 @@ import {
 } from "@tabler/icons-react";
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-
 import { GetVersion } from "../../bindings/github.com/focusd-so/focusd/internal/settings/service";
 
 import {

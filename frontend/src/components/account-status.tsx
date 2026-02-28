@@ -1,4 +1,4 @@
-import { IconFlame, IconAlertCircle } from "@tabler/icons-react";
+import { IconFlame, IconAlertCircle, IconStar, IconCrown } from "@tabler/icons-react";
 import { Browser } from "@wailsio/runtime";
 import { Button } from "@/components/ui/button";
 import { useAccountStore } from "@/stores/account-store";
@@ -78,25 +78,25 @@ export function AccountStatus() {
     );
   }
 
-  // // BASIC tier - compact badge
-  // if (accountTier === DeviceHandshakeResponse_AccountTier.DeviceHandshakeResponse_ACCOUNT_TIER_BASIC) {
-  //   return (
-  //     <div className="flex items-center gap-1 h-7 px-2.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-  //       <IconCrown className="w-3.5 h-3.5 text-emerald-500" />
-  //       <span className="text-xs font-medium text-emerald-500">Basic</span>
-  //     </div>
-  //   );
-  // }
+  // BASIC tier - compact badge
+  if (accountTier === DeviceHandshakeResponse_AccountTier.DeviceHandshakeResponse_ACCOUNT_TIER_BASIC) {
+    return (
+      <div className="flex items-center gap-1.5 h-7 px-3 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+        <IconStar className="w-3.5 h-3.5 fill-emerald-400/20" />
+        <span className="text-xs font-semibold tracking-wide">Basic</span>
+      </div>
+    );
+  }
 
-  // // PRO tier - compact badge
-  // if (accountTier === DeviceHandshakeResponse_AccountTier.DeviceHandshakeResponse_ACCOUNT_TIER_PRO) {
-  //   return (
-  //     <div className="flex items-center gap-1 h-7 px-2.5 rounded-full bg-violet-500/10 border border-violet-500/20">
-  //       <IconCrown className="w-3.5 h-3.5 text-violet-500" />
-  //       <span className="text-xs font-medium text-violet-500">Pro</span>
-  //     </div>
-  //   );
-  // }
+  // PRO tier - compact badge
+  if (accountTier === DeviceHandshakeResponse_AccountTier.DeviceHandshakeResponse_ACCOUNT_TIER_PRO) {
+    return (
+      <div className="flex items-center gap-1.5 h-7 px-3 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 shadow-[0_0_10px_rgba(139,92,246,0.1)]">
+        <IconCrown className="w-3.5 h-3.5 fill-violet-400/20" />
+        <span className="text-xs font-semibold tracking-wide uppercase">Pro</span>
+      </div>
+    );
+  }
 
   // UNSPECIFIED or unknown - compact debug badge
   return <></>;

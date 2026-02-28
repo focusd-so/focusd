@@ -3,6 +3,7 @@ package nativemessaging
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -89,6 +90,8 @@ func EnsureHostManifests() error {
 		"NativeMessagingHosts",
 		hostName+".json",
 	)
+
+	slog.Info("installing native messaging host manifests", "chromePath", chromePath, "firefoxPath", firefoxPath)
 
 	if err := writeManifest(chromePath, chromeManifest); err != nil {
 		return fmt.Errorf("write chrome native messaging manifest: %w", err)

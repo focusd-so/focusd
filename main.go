@@ -90,10 +90,6 @@ func main() {
 		log.Fatal("failed to create settings service: %w", err)
 	}
 
-	if _, err := settingsService.EnsureAPIKey(); err != nil {
-		slog.Error("failed to ensure API key", "error", err)
-	}
-
 	// Resolve the API base URL based on build type.
 	apiBaseURL := "http://localhost:8089"
 	if isProductionBuild {
@@ -172,7 +168,7 @@ func main() {
 		log.Fatal("failed to create usage service: %w", err)
 	}
 
-	usageService.RegisterHTTPHandlers(mux, settingsService)
+	usageService.RegisterHTTPHandlers(mux)
 
 	native.OnTitleChange(func(event native.NativeEvent) {
 		hasClient := extension.HasClient(event.AppName)

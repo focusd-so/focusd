@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-
-	"github.com/focusd-so/focusd/internal/settings"
 )
 
 type PauseRequets struct {
@@ -29,31 +27,8 @@ type UnwhitelistRequest struct {
 	ID int64 `json:"id"`
 }
 
-// apiKeyAuth is a middleware that validates the Authorization header against the stored API key.
-func apiKeyAuth(settingsService *settings.Service) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			apiKey, err := settingsService.GetAPIKey()
-			if err != nil || apiKey == "" {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
-
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" || authHeader != "Bearer "+apiKey {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
-
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-func (s *Service) RegisterHTTPHandlers(r *chi.Mux, settingsService *settings.Service) {
+func (s *Service) RegisterHTTPHandlers(r *chi.Mux) {
 	r.Group(func(r chi.Router) {
-		r.Use(apiKeyAuth(settingsService))
-
 		r.Post("/pause", func(w http.ResponseWriter, r *http.Request) {
 			var pauseRequest PauseRequets
 

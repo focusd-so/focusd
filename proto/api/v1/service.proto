@@ -18,6 +18,7 @@ service ApiService {
     // Checkout & Subscription Management
     // ---------------------------------------------------------
     rpc CheckoutGetLink(CheckoutGetLinkRequest) returns (CheckoutGetLinkResponse);
+    rpc CheckoutCustomerPortal(CheckoutCustomerPortalRequest) returns (CheckoutCustomerPortalResponse);
 }
 
 // ---------------------------------------------------------
@@ -82,4 +83,10 @@ message CheckoutGetLinkRequest {
 
 message CheckoutGetLinkResponse {
     string link = 1;
+}
+
+message CheckoutCustomerPortalRequest {}
+
+message CheckoutCustomerPortalResponse {
+    string url = 1;
 }

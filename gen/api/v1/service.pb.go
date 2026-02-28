@@ -520,6 +520,86 @@ func (x *CheckoutGetLinkResponse) GetLink() string {
 	return ""
 }
 
+type CheckoutCustomerPortalRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckoutCustomerPortalRequest) Reset() {
+	*x = CheckoutCustomerPortalRequest{}
+	mi := &file_api_v1_service_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckoutCustomerPortalRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckoutCustomerPortalRequest) ProtoMessage() {}
+
+func (x *CheckoutCustomerPortalRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_v1_service_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckoutCustomerPortalRequest.ProtoReflect.Descriptor instead.
+func (*CheckoutCustomerPortalRequest) Descriptor() ([]byte, []int) {
+	return file_api_v1_service_proto_rawDescGZIP(), []int{6}
+}
+
+type CheckoutCustomerPortalResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckoutCustomerPortalResponse) Reset() {
+	*x = CheckoutCustomerPortalResponse{}
+	mi := &file_api_v1_service_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckoutCustomerPortalResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckoutCustomerPortalResponse) ProtoMessage() {}
+
+func (x *CheckoutCustomerPortalResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_v1_service_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckoutCustomerPortalResponse.ProtoReflect.Descriptor instead.
+func (*CheckoutCustomerPortalResponse) Descriptor() ([]byte, []int) {
+	return file_api_v1_service_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *CheckoutCustomerPortalResponse) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
 var File_api_v1_service_proto protoreflect.FileDescriptor
 
 const file_api_v1_service_proto_rawDesc = "" +
@@ -562,15 +642,19 @@ const file_api_v1_service_proto_rawDesc = "" +
 	"\x16CheckoutGetLinkRequest\x121\n" +
 	"\aproduct\x18\x01 \x01(\x0e2\x17.api.v1.CheckoutProductR\aproduct\"-\n" +
 	"\x17CheckoutGetLinkResponse\x12\x12\n" +
-	"\x04link\x18\x01 \x01(\tR\x04link*i\n" +
+	"\x04link\x18\x01 \x01(\tR\x04link\"\x1f\n" +
+	"\x1dCheckoutCustomerPortalRequest\"2\n" +
+	"\x1eCheckoutCustomerPortalResponse\x12\x10\n" +
+	"\x03url\x18\x01 \x01(\tR\x03url*i\n" +
 	"\x0fCheckoutProduct\x12 \n" +
 	"\x1cCHECKOUT_PRODUCT_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16CHECKOUT_PRODUCT_BASIC\x10\x01\x12\x18\n" +
-	"\x14CHECKOUT_PRODUCT_PRO\x10\x022\xb4\x01\n" +
+	"\x14CHECKOUT_PRODUCT_PRO\x10\x022\x9d\x02\n" +
 	"\n" +
 	"ApiService\x12R\n" +
 	"\x0fDeviceHandshake\x12\x1e.api.v1.DeviceHandshakeRequest\x1a\x1f.api.v1.DeviceHandshakeResponse\x12R\n" +
-	"\x0fCheckoutGetLink\x12\x1e.api.v1.CheckoutGetLinkRequest\x1a\x1f.api.v1.CheckoutGetLinkResponseB.Z,github.com/focusd-so/focusd/gen/api/v1;apiv1b\x06proto3"
+	"\x0fCheckoutGetLink\x12\x1e.api.v1.CheckoutGetLinkRequest\x1a\x1f.api.v1.CheckoutGetLinkResponse\x12g\n" +
+	"\x16CheckoutCustomerPortal\x12%.api.v1.CheckoutCustomerPortalRequest\x1a&.api.v1.CheckoutCustomerPortalResponseB.Z,github.com/focusd-so/focusd/gen/api/v1;apiv1b\x06proto3"
 
 var (
 	file_api_v1_service_proto_rawDescOnce sync.Once
@@ -585,7 +669,7 @@ func file_api_v1_service_proto_rawDescGZIP() []byte {
 }
 
 var file_api_v1_service_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_api_v1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_api_v1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_api_v1_service_proto_goTypes = []any{
 	(CheckoutProduct)(0),                     // 0: api.v1.CheckoutProduct
 	(DeviceHandshakeResponse_AccountTier)(0), // 1: api.v1.DeviceHandshakeResponse.AccountTier
@@ -595,16 +679,20 @@ var file_api_v1_service_proto_goTypes = []any{
 	(*LLMClassifyResponse)(nil),              // 5: api.v1.LLMClassifyResponse
 	(*CheckoutGetLinkRequest)(nil),           // 6: api.v1.CheckoutGetLinkRequest
 	(*CheckoutGetLinkResponse)(nil),          // 7: api.v1.CheckoutGetLinkResponse
+	(*CheckoutCustomerPortalRequest)(nil),    // 8: api.v1.CheckoutCustomerPortalRequest
+	(*CheckoutCustomerPortalResponse)(nil),   // 9: api.v1.CheckoutCustomerPortalResponse
 }
 var file_api_v1_service_proto_depIdxs = []int32{
 	1, // 0: api.v1.DeviceHandshakeResponse.account_tier:type_name -> api.v1.DeviceHandshakeResponse.AccountTier
 	0, // 1: api.v1.CheckoutGetLinkRequest.product:type_name -> api.v1.CheckoutProduct
 	2, // 2: api.v1.ApiService.DeviceHandshake:input_type -> api.v1.DeviceHandshakeRequest
 	6, // 3: api.v1.ApiService.CheckoutGetLink:input_type -> api.v1.CheckoutGetLinkRequest
-	3, // 4: api.v1.ApiService.DeviceHandshake:output_type -> api.v1.DeviceHandshakeResponse
-	7, // 5: api.v1.ApiService.CheckoutGetLink:output_type -> api.v1.CheckoutGetLinkResponse
-	4, // [4:6] is the sub-list for method output_type
-	2, // [2:4] is the sub-list for method input_type
+	8, // 4: api.v1.ApiService.CheckoutCustomerPortal:input_type -> api.v1.CheckoutCustomerPortalRequest
+	3, // 5: api.v1.ApiService.DeviceHandshake:output_type -> api.v1.DeviceHandshakeResponse
+	7, // 6: api.v1.ApiService.CheckoutGetLink:output_type -> api.v1.CheckoutGetLinkResponse
+	9, // 7: api.v1.ApiService.CheckoutCustomerPortal:output_type -> api.v1.CheckoutCustomerPortalResponse
+	5, // [5:8] is the sub-list for method output_type
+	2, // [2:5] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
 	2, // [2:2] is the sub-list for extension extendee
 	0, // [0:2] is the sub-list for field type_name
@@ -621,7 +709,7 @@ func file_api_v1_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_v1_service_proto_rawDesc), len(file_api_v1_service_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   6,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

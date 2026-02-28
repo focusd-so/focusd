@@ -15,6 +15,7 @@ import (
 	"connectrpc.com/connect"
 	polargo "github.com/polarsource/polar-go"
 	"github.com/polarsource/polar-go/models/components"
+	"github.com/polarsource/polar-go/models/operations"
 	standardwebhooks "github.com/standard-webhooks/standard-webhooks/libraries/go"
 
 	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
@@ -167,6 +168,54 @@ func (s *ServiceImpl) CheckoutGetLink(ctx context.Context, req *connect.Request[
 
 	return connect.NewResponse(&apiv1.CheckoutGetLinkResponse{
 		Link: res.CheckoutLink.URL,
+	}), nil
+}
+
+func (s *ServiceImpl) CheckoutCustomerPortal(ctx context.Context, req *connect.Request[apiv1.CheckoutCustomerPortalRequest]) (*connect.Response[apiv1.CheckoutCustomerPortalResponse], error) {
+	claims, err := GetClaims(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get claims: %w", err))
+	}
+
+	user := User{}
+	if err := s.gormDB.Where("id = ?", claims.UserID).First(&user).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get user: %w", err))
+	}
+
+	if user.PolarCustomerID == "" {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("user does not have a polar customer id"))
+	}
+
+	accessToken := os.Getenv("POLAR_ACCESS_TOKEN")
+	if accessToken == "" {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("POLAR_ACCESS_TOKEN environment variable not set"))
+	}
+
+	polarOpts := []polargo.SDKOption{
+		polargo.WithSecurity(accessToken),
+	}
+
+	polarServer := os.Getenv("POLAR_SERVER")
+	if polarServer != "" {
+		polarOpts = append(polarOpts, polargo.WithServer(polarServer))
+	}
+
+	polarClient := polargo.New(polarOpts...)
+
+	slog.Info("creating customer portal session", "customer_id", user.PolarCustomerID)
+	res, err := polarClient.CustomerSessions.Create(ctx, operations.CreateCustomerSessionsCreateCustomerSessionCreateCustomerSessionCustomerIDCreate(
+		components.CustomerSessionCustomerIDCreate{
+			CustomerID: user.PolarCustomerID,
+		},
+	))
+	if err != nil {
+		slog.Error("err", err.Error())
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create customer portal session: %w", err))
+	}
+
+	slog.Info("res.CustomerSession.CustomerPortalURL", res.CustomerSession.CustomerPortalURL)
+	return connect.NewResponse(&apiv1.CheckoutCustomerPortalResponse{
+		Url: res.CustomerSession.CustomerPortalURL,
 	}), nil
 }
 

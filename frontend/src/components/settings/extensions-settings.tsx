@@ -1,5 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
-import { GetAPIKey } from "../../../bindings/github.com/focusd-so/focusd/internal/settings/service";
 import {
   Card,
   CardContent,
@@ -13,12 +11,6 @@ import { useState } from "react";
 const PORT = 50533;
 
 export function ExtensionsSettings() {
-  const { data: apiKey } = useQuery({
-    queryKey: ["api-key"],
-    queryFn: GetAPIKey,
-  });
-
-  const [keyVisible, setKeyVisible] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
   const baseUrl = `http://localhost:${PORT}`;
@@ -29,8 +21,6 @@ export function ExtensionsSettings() {
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const maskedKey = apiKey ? "•".repeat(apiKey.length) : "";
-
   return (
     <div className="space-y-6">
       <Card>
@@ -38,11 +28,7 @@ export function ExtensionsSettings() {
           <CardTitle>Local API</CardTitle>
           <CardDescription>
             Use this API to integrate third-party tools like Claude Code or
-            Cursor with Focusd. All requests require the{" "}
-            <code className="text-xs bg-muted px-1 py-0.5 rounded">
-              Authorization
-            </code>{" "}
-            header.
+            Cursor with Focusd.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -63,29 +49,6 @@ export function ExtensionsSettings() {
             </div>
           </div>
 
-          {/* API Key */}
-          <div className="space-y-1.5">
-            <div className="text-sm font-medium">API Key</div>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 text-sm bg-muted px-3 py-2 rounded font-mono select-all">
-                {keyVisible ? apiKey : maskedKey}
-              </code>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setKeyVisible(!keyVisible)}
-              >
-                {keyVisible ? "Hide" : "Show"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => apiKey && copyToClipboard(apiKey, "key")}
-              >
-                {copied === "key" ? "Copied!" : "Copy"}
-              </Button>
-            </div>
-          </div>
         </CardContent>
       </Card>
 
@@ -103,7 +66,6 @@ export function ExtensionsSettings() {
             </div>
             <pre className="text-xs bg-muted p-3 rounded overflow-x-auto font-mono whitespace-pre-wrap break-all">
               {`curl -X POST ${baseUrl}/whitelist \\
-  -H "Authorization: Bearer ${apiKey || "<your-api-key>"}" \\
   -H "Content-Type: application/json" \\
   -d '{"hostname":"x.com","duration_seconds":3600}'`}
             </pre>
@@ -112,7 +74,7 @@ export function ExtensionsSettings() {
               size="sm"
               onClick={() =>
                 copyToClipboard(
-                  `curl -X POST ${baseUrl}/whitelist -H "Authorization: Bearer ${apiKey || "<your-api-key>"}" -H "Content-Type: application/json" -d '{"hostname":"x.com","duration_seconds":3600}'`,
+                  `curl -X POST ${baseUrl}/whitelist -H "Content-Type: application/json" -d '{"hostname":"x.com","duration_seconds":3600}'`,
                   "curl-whitelist"
                 )
               }
@@ -127,7 +89,6 @@ export function ExtensionsSettings() {
             </div>
             <pre className="text-xs bg-muted p-3 rounded overflow-x-auto font-mono whitespace-pre-wrap break-all">
               {`curl -X POST ${baseUrl}/unwhitelist \\
-  -H "Authorization: Bearer ${apiKey || "<your-api-key>"}" \\
   -H "Content-Type: application/json" \\
   -d '{"id":1}'`}
             </pre>

@@ -39,6 +39,9 @@ const (
 	// ApiServiceCheckoutGetLinkProcedure is the fully-qualified name of the ApiService's
 	// CheckoutGetLink RPC.
 	ApiServiceCheckoutGetLinkProcedure = "/api.v1.ApiService/CheckoutGetLink"
+	// ApiServiceCheckoutCustomerPortalProcedure is the fully-qualified name of the ApiService's
+	// CheckoutCustomerPortal RPC.
+	ApiServiceCheckoutCustomerPortalProcedure = "/api.v1.ApiService/CheckoutCustomerPortal"
 )
 
 // ApiServiceClient is a client for the api.v1.ApiService service.
@@ -53,6 +56,7 @@ type ApiServiceClient interface {
 	// Checkout & Subscription Management
 	// ---------------------------------------------------------
 	CheckoutGetLink(context.Context, *connect.Request[v1.CheckoutGetLinkRequest]) (*connect.Response[v1.CheckoutGetLinkResponse], error)
+	CheckoutCustomerPortal(context.Context, *connect.Request[v1.CheckoutCustomerPortalRequest]) (*connect.Response[v1.CheckoutCustomerPortalResponse], error)
 }
 
 // NewApiServiceClient constructs a client for the api.v1.ApiService service. By default, it uses
@@ -78,13 +82,20 @@ func NewApiServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithSchema(apiServiceMethods.ByName("CheckoutGetLink")),
 			connect.WithClientOptions(opts...),
 		),
+		checkoutCustomerPortal: connect.NewClient[v1.CheckoutCustomerPortalRequest, v1.CheckoutCustomerPortalResponse](
+			httpClient,
+			baseURL+ApiServiceCheckoutCustomerPortalProcedure,
+			connect.WithSchema(apiServiceMethods.ByName("CheckoutCustomerPortal")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // apiServiceClient implements ApiServiceClient.
 type apiServiceClient struct {
-	deviceHandshake *connect.Client[v1.DeviceHandshakeRequest, v1.DeviceHandshakeResponse]
-	checkoutGetLink *connect.Client[v1.CheckoutGetLinkRequest, v1.CheckoutGetLinkResponse]
+	deviceHandshake        *connect.Client[v1.DeviceHandshakeRequest, v1.DeviceHandshakeResponse]
+	checkoutGetLink        *connect.Client[v1.CheckoutGetLinkRequest, v1.CheckoutGetLinkResponse]
+	checkoutCustomerPortal *connect.Client[v1.CheckoutCustomerPortalRequest, v1.CheckoutCustomerPortalResponse]
 }
 
 // DeviceHandshake calls api.v1.ApiService.DeviceHandshake.
@@ -95,6 +106,11 @@ func (c *apiServiceClient) DeviceHandshake(ctx context.Context, req *connect.Req
 // CheckoutGetLink calls api.v1.ApiService.CheckoutGetLink.
 func (c *apiServiceClient) CheckoutGetLink(ctx context.Context, req *connect.Request[v1.CheckoutGetLinkRequest]) (*connect.Response[v1.CheckoutGetLinkResponse], error) {
 	return c.checkoutGetLink.CallUnary(ctx, req)
+}
+
+// CheckoutCustomerPortal calls api.v1.ApiService.CheckoutCustomerPortal.
+func (c *apiServiceClient) CheckoutCustomerPortal(ctx context.Context, req *connect.Request[v1.CheckoutCustomerPortalRequest]) (*connect.Response[v1.CheckoutCustomerPortalResponse], error) {
+	return c.checkoutCustomerPortal.CallUnary(ctx, req)
 }
 
 // ApiServiceHandler is an implementation of the api.v1.ApiService service.
@@ -109,6 +125,7 @@ type ApiServiceHandler interface {
 	// Checkout & Subscription Management
 	// ---------------------------------------------------------
 	CheckoutGetLink(context.Context, *connect.Request[v1.CheckoutGetLinkRequest]) (*connect.Response[v1.CheckoutGetLinkResponse], error)
+	CheckoutCustomerPortal(context.Context, *connect.Request[v1.CheckoutCustomerPortalRequest]) (*connect.Response[v1.CheckoutCustomerPortalResponse], error)
 }
 
 // NewApiServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -130,12 +147,20 @@ func NewApiServiceHandler(svc ApiServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(apiServiceMethods.ByName("CheckoutGetLink")),
 		connect.WithHandlerOptions(opts...),
 	)
+	apiServiceCheckoutCustomerPortalHandler := connect.NewUnaryHandler(
+		ApiServiceCheckoutCustomerPortalProcedure,
+		svc.CheckoutCustomerPortal,
+		connect.WithSchema(apiServiceMethods.ByName("CheckoutCustomerPortal")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/api.v1.ApiService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ApiServiceDeviceHandshakeProcedure:
 			apiServiceDeviceHandshakeHandler.ServeHTTP(w, r)
 		case ApiServiceCheckoutGetLinkProcedure:
 			apiServiceCheckoutGetLinkHandler.ServeHTTP(w, r)
+		case ApiServiceCheckoutCustomerPortalProcedure:
+			apiServiceCheckoutCustomerPortalHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -151,4 +176,8 @@ func (UnimplementedApiServiceHandler) DeviceHandshake(context.Context, *connect.
 
 func (UnimplementedApiServiceHandler) CheckoutGetLink(context.Context, *connect.Request[v1.CheckoutGetLinkRequest]) (*connect.Response[v1.CheckoutGetLinkResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v1.ApiService.CheckoutGetLink is not implemented"))
+}
+
+func (UnimplementedApiServiceHandler) CheckoutCustomerPortal(context.Context, *connect.Request[v1.CheckoutCustomerPortalRequest]) (*connect.Response[v1.CheckoutCustomerPortalResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v1.ApiService.CheckoutCustomerPortal is not implemented"))
 }
