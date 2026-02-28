@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 
+	"net/http"
+
 	"connectrpc.com/connect"
 
 	"github.com/focusd-so/focusd/internal/identity"
@@ -14,9 +16,36 @@ type SigningInterceptor struct {
 }
 
 // NewSigningInterceptor creates a new signing interceptor.
-// It attempts to load an existing token from the system keychain.
 func NewSigningInterceptor() *SigningInterceptor {
 	return &SigningInterceptor{}
+}
+
+// SigningRoundTripper is an http.RoundTripper that attaches authentication
+// tokens to outgoing requests.
+type SigningRoundTripper struct {
+	Base http.RoundTripper
+}
+
+// NewSigningRoundTripper creates a new signing round tripper.
+func NewSigningRoundTripper(base http.RoundTripper) *SigningRoundTripper {
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	return &SigningRoundTripper{Base: base}
+}
+
+// RoundTrip implements http.RoundTripper.
+func (s *SigningRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	token, err := identity.GetToken(req.Context())
+	if err != nil {
+		return nil, err
+	}
+
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	return s.Base.RoundTrip(req)
 }
 
 // WrapUnary implements connect.Interceptor for unary RPCs.

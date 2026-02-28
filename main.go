@@ -112,7 +112,9 @@ func main() {
 		HTTPOptions: genai.HTTPOptions{
 			BaseURL: apiBaseURL + "/api/v1/gemini",
 		},
-		// TODO: this will be used for BYOK.
+		HTTPClient: &http.Client{
+			Transport: api.NewSigningRoundTripper(nil),
+		},
 		// Since this is required to create the client, we are stubbing it for now.
 		// All the request will be going through api.focusd.so proxy.
 		APIKey: "stubbed",
