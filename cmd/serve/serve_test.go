@@ -100,9 +100,9 @@ func TestLLMProxyHandler_RateLimiting(t *testing.T) {
 	}
 
 	// 7. Test Free User Rate Limiting (5 allowed, 6th denied)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		res := makeRequest(freeToken)
-		assert.Equal(t, http.StatusOK, res.Code, "Expected OK for request %d", i+1)
+		assert.Equal(t, http.StatusOK, res.Code, "Expected OK for request to Free User")
 	}
 
 	// 8. Verify the 6th Request is Rate Limited
@@ -116,9 +116,9 @@ func TestLLMProxyHandler_RateLimiting(t *testing.T) {
 	assert.Equal(t, int64(5), logsCount, "Free User should have exactly 5 distracting usage logs")
 
 	// 9. Test Pro User (Should be allowed beyond 5)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		res := makeRequest(proToken)
-		assert.Equal(t, http.StatusOK, res.Code, "Expected OK for request %d to Pro User", i+1)
+		assert.Equal(t, http.StatusOK, res.Code, "Expected OK for request to Pro User")
 	}
 
 	var proLogsCount int64
@@ -174,7 +174,7 @@ func TestLLMProxyHandler_NeutralClassification(t *testing.T) {
 	handler := llmProxyHandler(db, "gemini")
 
 	// Free user can make 10 requests since they are productive and thus not rate limited
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/gemini/generateContent", nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		recorder := httptest.NewRecorder()
