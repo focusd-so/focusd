@@ -48,3 +48,15 @@ type UserDevice struct {
 func (u *UserDevice) TableName() string {
 	return "user_device"
 }
+
+type LLMUsageLog struct {
+	ID        int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID    int64  `gorm:"index;not null" json:"user_id"`
+	Provider  string `gorm:"index;not null" json:"provider"` // e.g. "gemini"
+	CreatedAt int64  `gorm:"index;not null" json:"created_at"`
+	User      User   `gorm:"foreignKey:UserID" json:"-"`
+}
+
+func (l *LLMUsageLog) TableName() string {
+	return "llm_usage_log"
+}

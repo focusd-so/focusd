@@ -87,7 +87,7 @@ var Command = &cli.Command{
 
 		// Gemini API proxy endpoint
 		geminiProxyPath := "/api/v1/gemini/"
-		mux.HandleFunc(geminiProxyPath, geminiProxyHandler)
+		mux.HandleFunc(geminiProxyPath, llmProxyHandler(gormDB, "gemini"))
 		slog.Info("serving gemini proxy handler", "path", geminiProxyPath)
 
 		slog.Info("serving rpc handler for api v1 service", "path", apiPath)
@@ -150,87 +150,152 @@ func setupDatabase(url, token string) (*gorm.DB, error) {
 	return gormDB, nil
 }
 
-// geminiProxyHandler proxies requests to Google's Generative Language API
-// Requests to /api/v1/gemini/* are forwarded to https://generativelanguage.googleapis.com/*
-func geminiProxyHandler(w http.ResponseWriter, r *http.Request) {
-	const geminiBaseURL = "https://generativelanguage.googleapis.com"
+// llmProxyHandler proxies requests to LLM APIs (e.g. Gemini) and enforces free-tier limits.
+func llmProxyHandler(gormDB *gorm.DB, provider string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// 1. Authenticate Request
+		token := r.Header.Get("Authorization")
+		token = strings.TrimPrefix(token, "Bearer ")
+		token = strings.TrimSpace(token)
 
-	// Strip the proxy prefix to get the target path
-	targetPath := strings.TrimPrefix(r.URL.Path, "/api/v1/gemini")
-	if targetPath == "" {
-		targetPath = "/"
-	}
-
-	// Build the target URL
-	targetURL, err := url.Parse(geminiBaseURL + targetPath)
-	if err != nil {
-		slog.Error("failed to parse target URL", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	// Preserve query parameters and append API key
-	query := targetURL.Query()
-	if r.URL.RawQuery != "" {
-		query, _ = url.ParseQuery(r.URL.RawQuery)
-	}
-	query.Set("key", os.Getenv("GEMINI_API_KEY"))
-	targetURL.RawQuery = query.Encode()
-
-	slog.Info("proxying request to Gemini API", "method", r.Method, "target", targetURL.String())
-
-	// Create the proxy request
-	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL.String(), r.Body)
-	if err != nil {
-		slog.Error("failed to create proxy request", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	// Copy headers from original request
-	for key, values := range r.Header {
-		for _, value := range values {
-			proxyReq.Header.Add(key, value)
+		if token == "" {
+			http.Error(w, "missing token", http.StatusUnauthorized)
+			return
 		}
-	}
 
-	// Remove hop-by-hop headers
-	proxyReq.Header.Del("Connection")
-	proxyReq.Header.Del("Keep-Alive")
-	proxyReq.Header.Del("Proxy-Authenticate")
-	proxyReq.Header.Del("Proxy-Authorization")
-	proxyReq.Header.Del("Te")
-	proxyReq.Header.Del("Trailers")
-	proxyReq.Header.Del("Transfer-Encoding")
-	proxyReq.Header.Del("Upgrade")
-
-	// Execute the proxy request
-	client := &http.Client{Timeout: 120 * time.Second}
-	resp, err := client.Do(proxyReq)
-	if err != nil {
-		slog.Error("failed to execute proxy request", "error", err)
-		http.Error(w, "Bad Gateway", http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
-
-	// Copy response headers
-	for key, values := range resp.Header {
-		for _, value := range values {
-			w.Header().Add(key, value)
+		claims, err := api.ValidateToken(token)
+		if err != nil {
+			http.Error(w, "invalid or expired session", http.StatusUnauthorized)
+			return
 		}
-	}
 
-	// if the status code is anything >= 400, print an error
-	if resp.StatusCode >= 400 {
-		slog.Error("proxy request failed", "status code", resp.StatusCode)
-	}
+		var user api.User
+		if err := gormDB.Where("id = ?", claims.UserID).First(&user).Error; err != nil {
+			http.Error(w, "user not found", http.StatusUnauthorized)
+			return
+		}
 
-	// Set the status code
-	w.WriteHeader(resp.StatusCode)
+		// 2. Enforce Free Tier Limits (5 distractions per hour)
+		if user.Tier == string(api.TierFree) {
+			var count int64
+			oneHourAgo := time.Now().Add(-1 * time.Hour).Unix()
 
-	// Copy the response body
-	if _, err := io.Copy(w, resp.Body); err != nil {
-		slog.Error("failed to copy response body", "error", err)
+			err := gormDB.Model(&api.LLMUsageLog{}).
+				Where("user_id = ? AND provider = ? AND created_at >= ?", user.ID, provider, oneHourAgo).
+				Count(&count).Error
+
+			if err != nil {
+				slog.Error("failed to check llm limit", "error", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+
+			if count >= 5 {
+				slog.Info("llm limit reached for free tier user", "user_id", user.ID, "count", count)
+				http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+				return
+			}
+		}
+
+		// 3. Build Target URL
+		var targetURLStr string
+		if provider == "gemini" {
+			const geminiBaseURL = "https://generativelanguage.googleapis.com"
+			targetPath := strings.TrimPrefix(r.URL.Path, "/api/v1/gemini")
+			if targetPath == "" {
+				targetPath = "/"
+			}
+			tURL, err := url.Parse(geminiBaseURL + targetPath)
+			if err != nil {
+				slog.Error("failed to parse target URL", "error", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+
+			// Preserve query parameters and append API key
+			query := tURL.Query()
+			if r.URL.RawQuery != "" {
+				query, _ = url.ParseQuery(r.URL.RawQuery)
+			}
+			query.Set("key", os.Getenv("GEMINI_API_KEY"))
+			tURL.RawQuery = query.Encode()
+			targetURLStr = tURL.String()
+		} else {
+			http.Error(w, "unsupported provider", http.StatusBadRequest)
+			return
+		}
+
+		slog.Info("proxying req to LLM", "provider", provider, "method", r.Method, "target", targetURLStr)
+
+		proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURLStr, r.Body)
+		if err != nil {
+			slog.Error("failed to create proxy request", "error", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		for key, values := range r.Header {
+			for _, value := range values {
+				proxyReq.Header.Add(key, value)
+			}
+		}
+
+		proxyReq.Header.Del("Connection")
+		proxyReq.Header.Del("Keep-Alive")
+		proxyReq.Header.Del("Proxy-Authenticate")
+		proxyReq.Header.Del("Proxy-Authorization")
+		proxyReq.Header.Del("Te")
+		proxyReq.Header.Del("Trailers")
+		proxyReq.Header.Del("Transfer-Encoding")
+		proxyReq.Header.Del("Upgrade")
+
+		// Execute proxy request
+		client := &http.Client{Timeout: 120 * time.Second}
+		resp, err := client.Do(proxyReq)
+		if err != nil {
+			slog.Error("failed to execute proxy request", "error", err)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+
+		for key, values := range resp.Header {
+			for _, value := range values {
+				w.Header().Add(key, value)
+			}
+		}
+
+		if resp.StatusCode >= 400 {
+			slog.Error("proxy request failed", "status code", resp.StatusCode)
+			w.WriteHeader(resp.StatusCode)
+			if _, err := io.Copy(w, resp.Body); err != nil {
+				slog.Error("failed to copy response body", "error", err)
+			}
+			return
+		}
+
+		// 4. Capture & Inspect Response Body
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			slog.Error("failed to read response body", "error", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		// Check if it's a distracting classification
+		if user.Tier == string(api.TierFree) && strings.Contains(string(bodyBytes), `"classification": "distracting"`) || strings.Contains(string(bodyBytes), `"classification":"distracting"`) {
+			logEntry := api.LLMUsageLog{
+				UserID:    user.ID,
+				Provider:  provider,
+				CreatedAt: time.Now().Unix(),
+			}
+			if err := gormDB.Create(&logEntry).Error; err != nil {
+				slog.Error("failed to insert llm usage log", "error", err)
+				// Don't fail the request just because logging failed
+			}
+		}
+
+		w.WriteHeader(resp.StatusCode)
+		w.Write(bodyBytes)
 	}
 }
