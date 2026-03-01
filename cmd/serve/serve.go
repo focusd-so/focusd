@@ -248,7 +248,8 @@ func llmProxyHandler(gormDB *gorm.DB, provider string) http.HandlerFunc {
 		proxyReq.Header.Del("Keep-Alive")
 		proxyReq.Header.Del("Proxy-Authenticate")
 		proxyReq.Header.Del("Proxy-Authorization")
-		proxyReq.Header.Del("Authorization") // Prevent sending our app token to Gemini
+		proxyReq.Header.Del("Authorization")   // Prevent sending our app token to Gemini
+		proxyReq.Header.Del("Accept-Encoding") // Strip this so http.Transport auto-decompresses the response for us to parse
 		proxyReq.Header.Del("Te")
 		proxyReq.Header.Del("Trailers")
 		proxyReq.Header.Del("Transfer-Encoding")
