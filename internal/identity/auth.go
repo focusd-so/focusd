@@ -55,6 +55,10 @@ func GetToken(ctx context.Context) (string, error) {
 	return token, nil
 }
 
+func GetAccountTier() apiv1.DeviceHandshakeResponse_AccountTier {
+	return accountTier
+}
+
 func PerformHandshake(ctx context.Context, client apiv1connect.ApiServiceClient) error {
 	deviceFingerPrint, err := native.GetIdentity()
 	if err != nil {

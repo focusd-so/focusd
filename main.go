@@ -9,7 +9,6 @@ import (
 	"io"
 	"log"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -29,6 +28,7 @@ import (
 	"github.com/focusd-so/focusd/internal/extension"
 	"github.com/focusd-so/focusd/internal/identity"
 	"github.com/focusd-so/focusd/internal/native"
+	"github.com/focusd-so/focusd/internal/nativemessaging"
 	"github.com/focusd-so/focusd/internal/settings"
 	"github.com/focusd-so/focusd/internal/updater"
 	"github.com/focusd-so/focusd/internal/usage"
@@ -54,6 +54,7 @@ func init() {
 	// and provide a strongly typed JS/TS API for them.
 	application.RegisterEvent[usage.ApplicationUsage]("usage:update")
 	application.RegisterEvent[usage.ProtectionPause]("protection:status")
+	application.RegisterEvent[any]("authctx:updated")
 }
 
 // main function serves as the application's entry point. It initializes the application, creates a window,
@@ -70,6 +71,10 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	if err := nativemessaging.EnsureHostManifests(); err != nil {
+		slog.Error("failed to ensure native messaging manifests", "error", err)
+	}
 
 	var (
 		db = setupDB()
@@ -107,7 +112,9 @@ func main() {
 		HTTPOptions: genai.HTTPOptions{
 			BaseURL: apiBaseURL + "/api/v1/gemini",
 		},
-		// TODO: this will be used for BYOK.
+		HTTPClient: &http.Client{
+			Transport: api.NewSigningRoundTripper(nil),
+		},
 		// Since this is required to create the client, we are stubbing it for now.
 		// All the request will be going through api.focusd.so proxy.
 		APIKey: "stubbed",
@@ -310,7 +317,7 @@ func main() {
 				return
 			}
 
-			wailsApp.Event.Emit("identity:changed", nil)
+			wailsApp.Event.Emit("authctx:updated", identity.GetAccountTier())
 		}
 
 		// toggle window open
@@ -439,17 +446,11 @@ func setupDB() *gorm.DB {
 }
 
 func setUpWebServer(ctx context.Context) (*chi.Mux, int, error) {
+	const port = 50533
+
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
-	// run on a random available port
-	listener, err := net.Listen("tcp", ":0")
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to listen: %w", err)
-	}
-	defer listener.Close()
-
-	port := listener.Addr().(*net.TCPAddr).Port
 	slog.Info("web server running on port", "port", port)
 
 	server := &http.Server{
@@ -459,6 +460,7 @@ func setUpWebServer(ctx context.Context) (*chi.Mux, int, error) {
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("web server failed", "error", err)
 			return
 		}
 	}()
@@ -466,6 +468,7 @@ func setUpWebServer(ctx context.Context) (*chi.Mux, int, error) {
 	go func() {
 		<-ctx.Done()
 		if err := server.Shutdown(ctx); err != nil {
+			slog.Error("web server shutdown failed", "error", err)
 			return
 		}
 	}()

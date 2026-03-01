@@ -38,3 +38,14 @@ func (s *Service) CheckoutLink(ctx context.Context) (string, error) {
 
 	return res.Msg.Link, nil
 }
+
+func (s *Service) CustomerPortal(ctx context.Context) (string, error) {
+	res, err := s.apiClient.CheckoutCustomerPortal(ctx, &connect.Request[apiv1.CheckoutCustomerPortalRequest]{
+		Msg: &apiv1.CheckoutCustomerPortalRequest{},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return res.Msg.Url, nil
+}

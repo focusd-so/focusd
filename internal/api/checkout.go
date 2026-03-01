@@ -15,6 +15,7 @@ import (
 	"connectrpc.com/connect"
 	polargo "github.com/polarsource/polar-go"
 	"github.com/polarsource/polar-go/models/components"
+	"github.com/polarsource/polar-go/models/operations"
 	standardwebhooks "github.com/standard-webhooks/standard-webhooks/libraries/go"
 
 	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
@@ -149,6 +150,8 @@ func (s *ServiceImpl) CheckoutGetLink(ctx context.Context, req *connect.Request[
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get claims: %w", err))
 	}
 
+	successURL := "https://focusd.so/checkout/success/$checkoutId"
+
 	slog.Info("creating checkout link", "product_id", productID)
 	res, err := polarClient.CheckoutLinks.Create(ctx, components.CreateCheckoutLinkCreateCheckoutLinkCreateProducts(
 		components.CheckoutLinkCreateProducts{
@@ -156,6 +159,7 @@ func (s *ServiceImpl) CheckoutGetLink(ctx context.Context, req *connect.Request[
 			Metadata: map[string]components.CheckoutLinkCreateProductsMetadata{
 				"user_id": components.CreateCheckoutLinkCreateProductsMetadataStr(strconv.FormatInt(claims.UserID, 10)),
 			},
+			SuccessURL: &successURL,
 		},
 	))
 	if err != nil {
@@ -164,6 +168,54 @@ func (s *ServiceImpl) CheckoutGetLink(ctx context.Context, req *connect.Request[
 
 	return connect.NewResponse(&apiv1.CheckoutGetLinkResponse{
 		Link: res.CheckoutLink.URL,
+	}), nil
+}
+
+func (s *ServiceImpl) CheckoutCustomerPortal(ctx context.Context, req *connect.Request[apiv1.CheckoutCustomerPortalRequest]) (*connect.Response[apiv1.CheckoutCustomerPortalResponse], error) {
+	claims, err := GetClaims(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get claims: %w", err))
+	}
+
+	user := User{}
+	if err := s.gormDB.Where("id = ?", claims.UserID).First(&user).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get user: %w", err))
+	}
+
+	if user.PolarCustomerID == "" {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("user does not have a polar customer id"))
+	}
+
+	accessToken := os.Getenv("POLAR_ACCESS_TOKEN")
+	if accessToken == "" {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("POLAR_ACCESS_TOKEN environment variable not set"))
+	}
+
+	polarOpts := []polargo.SDKOption{
+		polargo.WithSecurity(accessToken),
+	}
+
+	polarServer := os.Getenv("POLAR_SERVER")
+	if polarServer != "" {
+		polarOpts = append(polarOpts, polargo.WithServer(polarServer))
+	}
+
+	polarClient := polargo.New(polarOpts...)
+
+	slog.Info("creating customer portal session", "customer_id", user.PolarCustomerID)
+	res, err := polarClient.CustomerSessions.Create(ctx, operations.CreateCustomerSessionsCreateCustomerSessionCreateCustomerSessionCustomerIDCreate(
+		components.CustomerSessionCustomerIDCreate{
+			CustomerID: user.PolarCustomerID,
+		},
+	))
+	if err != nil {
+		slog.Error("err", err.Error())
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create customer portal session: %w", err))
+	}
+
+	slog.Info("res.CustomerSession.CustomerPortalURL", res.CustomerSession.CustomerPortalURL)
+	return connect.NewResponse(&apiv1.CheckoutCustomerPortalResponse{
+		Url: res.CustomerSession.CustomerPortalURL,
 	}), nil
 }
 
@@ -184,7 +236,10 @@ func (s *ServiceImpl) CheckoutGetLink(ctx context.Context, req *connect.Request[
 //	  -d '{"type":"checkout.created","data":{"id":"checkout_123","status":"open"}}'
 func NewPolarWebhookHandler(s *ServiceImpl) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		slog.Info("[POLAR_WEBHOOK] webhook request received")
+
 		if r.Method != http.MethodPost {
+			slog.Warn("[POLAR_WEBHOOK] invalid method", "method", r.Method)
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -194,7 +249,7 @@ func NewPolarWebhookHandler(s *ServiceImpl) http.HandlerFunc {
 		// before passing to the standard-webhooks library which expects base64-encoded data
 		webhookSecret := os.Getenv("POLAR_WEBHOOK_SECRET")
 		if webhookSecret == "" {
-			slog.Error("POLAR_WEBHOOK_SECRET environment variable not set")
+			slog.Error("[POLAR_WEBHOOK] POLAR_WEBHOOK_SECRET environment variable not set")
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -202,7 +257,7 @@ func NewPolarWebhookHandler(s *ServiceImpl) http.HandlerFunc {
 		// Read the request body
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			slog.Error("failed to read webhook body", "error", err)
+			slog.Error("[POLAR_WEBHOOK] failed to read webhook body", "error", err)
 			http.Error(w, "Failed to read request body", http.StatusBadRequest)
 			return
 		}
@@ -215,31 +270,35 @@ func NewPolarWebhookHandler(s *ServiceImpl) http.HandlerFunc {
 		// Headers used: webhook-id, webhook-signature, webhook-timestamp
 		wh, err := standardwebhooks.NewWebhook(base64Secret)
 		if err != nil {
-			slog.Error("failed to create webhook verifier", "error", err)
+			slog.Error("[POLAR_WEBHOOK] failed to create webhook verifier", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 
 		if err := wh.Verify(body, r.Header); err != nil {
-			slog.Warn("webhook signature verification failed", "error", err)
+			slog.Warn("[POLAR_WEBHOOK] webhook signature verification failed", "error", err)
 			http.Error(w, "Invalid signature", http.StatusForbidden)
 			return
 		}
 
-		slog.Info("webhook received", "event", string(body))
+		slog.Info("[POLAR_WEBHOOK] webhook received", "event", string(body))
 
 		var event PolarWebhookEvent
 		if err := json.Unmarshal(body, &event); err != nil {
-			slog.Error("failed to unmarshal webhook event", "error", err)
+			slog.Error("[POLAR_WEBHOOK] failed to unmarshal webhook event", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 
+		slog.Info("[POLAR_WEBHOOK] handling webhook event", "type", event.Type)
+
 		if err := s.handlePolarWebhookEvent(r.Context(), event); err != nil {
-			slog.Error("failed to handle webhook event", "error", err)
+			slog.Error("[POLAR_WEBHOOK] failed to handle webhook event", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
+
+		slog.Info("[POLAR_WEBHOOK] webhook processed successfully")
 
 		// Return 202 Accepted as per Polar.sh recommendation
 		w.WriteHeader(http.StatusAccepted)

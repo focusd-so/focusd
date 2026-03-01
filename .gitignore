@@ -8,3 +8,4 @@ focusd.db
 focusd*
 .env
 internal/identity/hmac.prod.go
+.gocache

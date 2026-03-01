@@ -314,9 +314,9 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
 
   return (
     <div
-      className={`flex items-center justify-between p-3 rounded-xl border ${borderColor} ${bgColor} transition-all group`}
+      className={`flex items-start justify-between p-3 rounded-xl border ${borderColor} ${bgColor} transition-all group gap-4`}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-start gap-3 min-w-0">
         <div
           className={`relative w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0 ${iconBgColor} ring-1 transition-all`}
         >
@@ -337,7 +337,7 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
           )}
         </div>
 
-        <div className="flex flex-col">
+        <div className="flex flex-col min-w-0 pt-0.5">
           <TruncatedLabel
             className={`text-sm font-bold text-foreground/90 truncate leading-tight ${textColor} transition-colors`}
           >
@@ -409,7 +409,7 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
         </div>
       </div>
 
-      <div className="flex flex-col items-end gap-1.5">
+      <div className="flex flex-col items-end gap-2 shrink-0 max-w-[50%] pt-0.5">
         <div className="flex items-center gap-2">
           <span className="text-[9px] text-muted-foreground/40 font-mono">
             {formatSmartDate(usage.started_at)}

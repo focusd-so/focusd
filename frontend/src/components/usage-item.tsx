@@ -288,13 +288,13 @@ export function ClassificationReasoningLabel({
       return usage.classification_reasoning!;
     }
     if (isAllowedDistraction) {
-      return "user allowed distraction";
+      return usage.termination_reasoning || "user allowed distraction";
     }
     return description;
   };
 
   // Determine if it should be a link
-  const shouldBeLink = isCustomRulesAllow || isCustomRulesClassification || isAllowedDistraction || isLink;
+  const shouldBeLink = isCustomRulesAllow || isCustomRulesClassification || isLink;
 
   const labelText = getLabelText();
   const prefixLabel = terminationSource?.label;
@@ -397,7 +397,7 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
   const isAllowedDistraction =
     isDistractingEvent &&
     usage.termination_mode === TerminationMode.TerminationModeAllow &&
-    usage.termination_mode_source === "custom_rules";
+    (usage.termination_mode_source === "custom_rules" || usage.termination_mode_source === "whitelist");
 
   // Combined flag for yellow styling
   const isYellowTheme = isPausedDistraction || isAllowedDistraction;
@@ -423,120 +423,126 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
 
   return (
     <div
-      className={`flex items-center justify-between p-1.5 rounded-lg border transition-all ${theme.container}`}
+      className={`flex flex-col p-1.5 rounded-lg border transition-all ${theme.container}`}
     >
-      <div className="flex items-center gap-2">
-        {/* Icon Container */}
-        <div
-          className={`w-8 h-8 rounded-md flex items-center justify-center overflow-hidden shrink-0 ${theme.iconBg}`}
-        >
-          {usage.application?.icon ? (
-            <img
-              src={
-                usage.application.icon.startsWith("data:")
-                  ? usage.application.icon
-                  : `data:image/png;base64,${usage.application.icon}`
-              }
-              alt={usage.application?.hostname || usage.application?.name}
-              className="w-8 h-8 object-contain"
-            />
-          ) : isWeb ? (
-            <IconWorld className="w-8 h-8" />
-          ) : (
-            <IconAppWindow className="w-8 h-8" />
-          )}
-        </div>
-
-        {/* Text Content */}
-        <div className="flex flex-col truncate">
-          <TruncatedLabel className="text-xs font-semibold text-foreground truncate leading-tight">
-            {usage.application?.hostname || usage.application?.name || "Unknown"}
-          </TruncatedLabel>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-[10px] font-medium uppercase tracking-widest opacity-70">
-              {usage.classification ||
-                (isDistractingEvent ? "Distracting" : "Productive")}
-            </span>
-            {usage.classification_source == "custom_rules" && (
-              <Link
-                to="/settings"
-                search={{ tab: "rules" }}
-                className="inline-flex items-center gap-0.5 text-[9px] font-medium px-1 py-px rounded bg-muted/40 text-muted-foreground/50 border border-muted-foreground/10 hover:bg-muted/70 hover:text-muted-foreground/80 hover:border-muted-foreground/25 transition-colors"
-                onClick={(e) => e.stopPropagation()}
-              >
-                ⚡️ custom rules
-              </Link>
+      <div className="flex items-center justify-between w-full">
+        <div className="flex items-center gap-2 truncate">
+          {/* Icon Container */}
+          <div
+            className={`w-8 h-8 rounded-md flex items-center justify-center overflow-hidden shrink-0 ${theme.iconBg}`}
+          >
+            {usage.application?.icon ? (
+              <img
+                src={
+                  usage.application.icon.startsWith("data:")
+                    ? usage.application.icon
+                    : `data:image/png;base64,${usage.application.icon}`
+                }
+                alt={usage.application?.hostname || usage.application?.name}
+                className="w-8 h-8 object-contain"
+              />
+            ) : isWeb ? (
+              <IconWorld className="w-8 h-8" />
+            ) : (
+              <IconAppWindow className="w-8 h-8" />
             )}
-            <span className="text-muted-foreground/40 text-[10px]">—</span>
-            <TruncatedLabel className="text-[10px] text-muted-foreground truncate max-w-[250px]">
-              {usage.window_title || (isWeb ? "Browsing" : "Using app")}
+          </div>
+
+          {/* Text Content */}
+          <div className="flex flex-col truncate">
+            <TruncatedLabel className="text-xs font-semibold text-foreground truncate leading-tight">
+              {usage.application?.hostname || usage.application?.name || "Unknown"}
             </TruncatedLabel>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-[10px] font-medium uppercase tracking-widest opacity-70">
+                {usage.classification ||
+                  (isDistractingEvent ? "Distracting" : "Productive")}
+              </span>
+              {usage.classification_source == "custom_rules" && (
+                <Link
+                  to="/settings"
+                  search={{ tab: "rules" }}
+                  className="inline-flex items-center gap-0.5 text-[9px] font-medium px-1 py-px rounded bg-muted/40 text-muted-foreground/50 border border-muted-foreground/10 hover:bg-muted/70 hover:text-muted-foreground/80 hover:border-muted-foreground/25 transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  ⚡️ custom rules
+                </Link>
+              )}
+              <span className="text-muted-foreground/40 text-[10px]">—</span>
+              <TruncatedLabel className="text-[10px] text-muted-foreground truncate max-w-[250px]">
+                {usage.window_title || (isWeb ? "Browsing" : "Using app")}
+              </TruncatedLabel>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Right Side Badge */}
-      <div className="flex flex-col items-end gap-0.5 shrink-0">
-        <div className="flex flex-row items-center gap-1">
-          <span className="text-[9px] text-muted-foreground/40 font-mono">
-            {formatSmartDate(usage.started_at)}
-            {durationSeconds != null && durationSeconds > 0 && (
-              <>
-                <span className="mx-0.5">·</span>
-                {formatDuration(durationSeconds)}
-              </>
-            )}
-          </span>
-          <Badge
-            variant="outline"
-            className={`px-1.5 py-0 text-[9px] font-bold rounded-full ${theme.badge}`}
-          >
-            {isWeb ? "web" : "app"}
-          </Badge>
+        {/* Right Side Group */}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-col items-end gap-0.5">
+            <div className="flex flex-row items-center gap-1">
+              <span className="text-[9px] text-muted-foreground/40 font-mono">
+                {formatSmartDate(usage.started_at)}
+                {durationSeconds != null && durationSeconds > 0 && (
+                  <>
+                    <span className="mx-0.5">·</span>
+                    {formatDuration(durationSeconds)}
+                  </>
+                )}
+              </span>
+              <Badge
+                variant="outline"
+                className={`px-1.5 py-0 text-[9px] font-bold rounded-full ${theme.badge}`}
+              >
+                {isWeb ? "web" : "app"}
+              </Badge>
 
-          {usage.tags?.map((usageTag) => (
-            <Badge
-              key={usageTag.tag}
-              variant="outline"
-              className={`px-1.5 py-0 text-[9px] font-bold rounded-full ${theme.badge}`}
+              {usage.tags?.map((usageTag) => (
+                <Badge
+                  key={usageTag.tag}
+                  variant="outline"
+                  className={`px-1.5 py-0 text-[9px] font-bold rounded-full ${theme.badge}`}
+                >
+                  {usageTag.tag}
+                </Badge>
+              ))}
+            </div>
+            <ClassificationReasoningLabel
+              usage={usage}
+              icon={icon}
+              description={description}
+              isLink={isLink}
+              isAllowedDistraction={isAllowedDistraction}
+              isPausedDistraction={isPausedDistraction}
+              isCurrentlyPaused={isCurrentlyPaused}
+              onResume={resumeProtection}
+              terminationSource={
+                termSource?.label === "custom rules" ? termSource : null
+              }
+            />
+          </div>
+
+          {/* Sandbox Logs Toggle */}
+          {(usage.sandbox_context || usage.sandbox_response || usage.sandbox_logs) && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowLogs(!showLogs);
+              }}
+              className={`p-1 rounded-md border transition-all flex items-center justify-center ${showLogs
+                ? "bg-muted/40 border-border/60 text-foreground"
+                : "bg-muted/10 border-border/30 text-muted-foreground/60 hover:bg-muted/30 hover:border-border/60 hover:text-foreground"
+                }`}
+              title="Show sandbox execution logs"
             >
-              {usageTag.tag}
-            </Badge>
-          ))}
-        </div>
-        <ClassificationReasoningLabel
-          usage={usage}
-          icon={icon}
-          description={description}
-          isLink={isLink}
-          isAllowedDistraction={isAllowedDistraction}
-          isPausedDistraction={isPausedDistraction}
-          isCurrentlyPaused={isCurrentlyPaused}
-          onResume={resumeProtection}
-          terminationSource={
-            termSource?.label === "custom rules" ? termSource : null
-          }
-        />
-      </div>
-
-      {/* Sandbox Logs Toggle */}
-      {(usage.sandbox_context || usage.sandbox_response || usage.sandbox_logs) && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowLogs(!showLogs);
-          }}
-          className={`ml-2 p-1 rounded hover:bg-muted/50 transition-colors ${showLogs ? "text-foreground" : "text-muted-foreground/30"
-            }`}
-          title="Show sandbox execution logs"
-        >
-          {showLogs ? (
-            <IconChevronDown className="w-4 h-4" />
-          ) : (
-            <IconChevronRight className="w-4 h-4" />
+              {showLogs ? (
+                <IconChevronDown className="w-4 h-4" />
+              ) : (
+                <IconChevronRight className="w-4 h-4" />
+              )}
+            </button>
           )}
-        </button>
-      )}
+        </div>
+      </div>
 
       {/* Expanded Logs */}
       {showLogs && (

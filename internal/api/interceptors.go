@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 
 	"connectrpc.com/connect"
@@ -45,7 +46,9 @@ func (i *authInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 			return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("user not found"))
 		}
 
-		if user.Tier == string(TierFree) {
+		slog.Info("req.Spec().Procedure", "procedure", req.Spec().Procedure)
+
+		if user.Tier == string(TierFree) && req.Spec().Procedure != apiv1connect.ApiServiceCheckoutGetLinkProcedure {
 			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("user does not have a valid subscription"))
 		}
 

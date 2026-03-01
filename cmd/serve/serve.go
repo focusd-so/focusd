@@ -131,7 +131,9 @@ var Command = &cli.Command{
 
 func setupDatabase(url, token string) (*gorm.DB, error) {
 	connStr := url
-	if token != "" {
+	if url == "" && token == "" {
+		connStr = "file:focusd-api.db"
+	} else if token != "" {
 		connStr = fmt.Sprintf("%s?authToken=%s", url, token)
 	}
 

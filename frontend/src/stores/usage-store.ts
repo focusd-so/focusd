@@ -203,7 +203,8 @@ export const useUsageStore = create<UsageState>()((set, get) => ({
 
   addUsage: (usage) => {
     set((state) => {
-      const updated = [usage, ...state.recentUsages].slice(0, 100);
+      const filtered = state.recentUsages.filter((u) => u.id !== usage.id);
+      const updated = [usage, ...filtered].slice(0, 100);
 
       const blocked = new Map(state.blockedItems);
       if (usage.termination_mode === TerminationMode.TerminationModeBlock) {
