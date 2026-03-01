@@ -200,7 +200,10 @@ func llmProxyHandler(gormDB *gorm.DB, provider string) http.HandlerFunc {
 		// 3. Build Target URL
 		var targetURLStr string
 		if provider == "gemini" {
-			const geminiBaseURL = "https://generativelanguage.googleapis.com"
+			geminiBaseURL := os.Getenv("GEMINI_BASE_URL")
+			if geminiBaseURL == "" {
+				geminiBaseURL = "https://generativelanguage.googleapis.com"
+			}
 			targetPath := strings.TrimPrefix(r.URL.Path, "/api/v1/gemini")
 			if targetPath == "" {
 				targetPath = "/"
