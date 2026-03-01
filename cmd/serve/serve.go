@@ -3,6 +3,7 @@ package serve
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -181,7 +182,7 @@ func llmProxyHandler(gormDB *gorm.DB, provider string) http.HandlerFunc {
 			oneHourAgo := time.Now().Add(-1 * time.Hour).Unix()
 
 			err := gormDB.Model(&api.LLMUsageLog{}).
-				Where("user_id = ? AND provider = ? AND created_at >= ?", user.ID, provider, oneHourAgo).
+				Where("user_id = ? AND provider = ? AND classification = ? AND created_at >= ?", user.ID, provider, "distracting", oneHourAgo).
 				Count(&count).Error
 
 			if err != nil {
@@ -285,17 +286,71 @@ func llmProxyHandler(gormDB *gorm.DB, provider string) http.HandlerFunc {
 			return
 		}
 
-		// Check if it's a distracting classification
-		if user.Tier == string(api.TierFree) && strings.Contains(string(bodyBytes), `"classification": "distracting"`) || strings.Contains(string(bodyBytes), `"classification":"distracting"`) {
-			logEntry := api.LLMUsageLog{
-				UserID:    user.ID,
-				Provider:  provider,
-				CreatedAt: time.Now().Unix(),
+		// Parse the Gemini Response JSON
+		var classification string = "unknown"
+		var inputTokens, outputTokens int
+
+		var geminiResp struct {
+			Candidates []struct {
+				Content struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				} `json:"content"`
+			} `json:"candidates"`
+			UsageMetadata struct {
+				PromptTokenCount     int `json:"promptTokenCount"`
+				CandidatesTokenCount int `json:"candidatesTokenCount"`
+				TotalTokenCount      int `json:"totalTokenCount"`
+			} `json:"usageMetadata"`
+		}
+
+		if err := json.Unmarshal(bodyBytes, &geminiResp); err == nil {
+			// Extract token counts
+			inputTokens = geminiResp.UsageMetadata.PromptTokenCount
+			outputTokens = geminiResp.UsageMetadata.CandidatesTokenCount
+
+			// Try to extract classification from the generated text
+			if len(geminiResp.Candidates) > 0 && len(geminiResp.Candidates[0].Content.Parts) > 0 {
+				genText := geminiResp.Candidates[0].Content.Parts[0].Text
+
+				// The text itself is a JSON string block like `{"classification": "distracting"}`
+				var block struct {
+					Classification string `json:"classification"`
+				}
+				if jsonErr := json.Unmarshal([]byte(genText), &block); jsonErr == nil {
+					classification = block.Classification
+				} else {
+					// Fallback to simple string match if unmarshal fails on the sub-string
+					if strings.Contains(genText, `"classification": "distracting"`) || strings.Contains(genText, `"classification":"distracting"`) {
+						classification = "distracting"
+					} else if strings.Contains(genText, `"classification": "productive"`) || strings.Contains(genText, `"classification":"productive"`) {
+						classification = "productive"
+					}
+				}
 			}
-			if err := gormDB.Create(&logEntry).Error; err != nil {
-				slog.Error("failed to insert llm usage log", "error", err)
-				// Don't fail the request just because logging failed
+		} else {
+			// Fallback: If we can't parse the outer Gemini structure natively for some reason, doing a raw string check
+			// just to ensure we catch strings for our rate limit.
+			if strings.Contains(string(bodyBytes), `"classification": "distracting"`) || strings.Contains(string(bodyBytes), `"classification":"distracting"`) {
+				classification = "distracting"
+			} else if strings.Contains(string(bodyBytes), `"classification": "productive"`) || strings.Contains(string(bodyBytes), `"classification":"productive"`) {
+				classification = "productive"
 			}
+		}
+
+		// Insert Telemetry Log for ALL users and ALL classifications
+		logEntry := api.LLMUsageLog{
+			UserID:         user.ID,
+			Provider:       provider,
+			CreatedAt:      time.Now().Unix(),
+			Classification: classification,
+			InputTokens:    inputTokens,
+			OutputTokens:   outputTokens,
+		}
+		if err := gormDB.Create(&logEntry).Error; err != nil {
+			slog.Error("failed to insert llm usage log", "error", err)
+			// Don't fail the request just because logging failed
 		}
 
 		w.WriteHeader(resp.StatusCode)

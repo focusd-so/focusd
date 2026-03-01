@@ -50,11 +50,14 @@ func (u *UserDevice) TableName() string {
 }
 
 type LLMUsageLog struct {
-	ID        int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	UserID    int64  `gorm:"index;not null" json:"user_id"`
-	Provider  string `gorm:"index;not null" json:"provider"` // e.g. "gemini"
-	CreatedAt int64  `gorm:"index;not null" json:"created_at"`
-	User      User   `gorm:"foreignKey:UserID" json:"-"`
+	ID             int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID         int64  `gorm:"index;not null" json:"user_id"`
+	Provider       string `gorm:"index;not null" json:"provider"`   // e.g. "gemini"
+	CreatedAt      int64  `gorm:"index;not null" json:"created_at"` // Unix timestamp
+	Classification string `gorm:"index;not null" json:"classification"`
+	InputTokens    int    `gorm:"not null;default:0" json:"input_tokens"`
+	OutputTokens   int    `gorm:"not null;default:0" json:"output_tokens"`
+	User           User   `gorm:"foreignKey:UserID" json:"-"`
 }
 
 func (l *LLMUsageLog) TableName() string {

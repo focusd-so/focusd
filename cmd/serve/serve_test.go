@@ -19,7 +19,24 @@ func TestLLMProxyHandler_RateLimiting(t *testing.T) {
 	// 1. Setup Mock Gemini Server
 	mockGemini := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"classification": "distracting"}`))
+		w.Write([]byte(`{
+			"candidates": [
+				{
+					"content": {
+						"parts": [
+							{
+								"text": "{\"classification\": \"distracting\"}"
+							}
+						]
+					}
+				}
+			],
+			"usageMetadata": {
+				"promptTokenCount": 100,
+				"candidatesTokenCount": 10,
+				"totalTokenCount": 110
+			}
+		}`))
 	}))
 	defer mockGemini.Close()
 
@@ -92,7 +109,8 @@ func TestLLMProxyHandler_RateLimiting(t *testing.T) {
 	resLimit := makeRequest(freeToken)
 	assert.Equal(t, http.StatusTooManyRequests, resLimit.Code, "Expected Too Many Requests (429) for the 6th request")
 
-	// Verify database state: User should have exactly 5 LLM items logged
+	// Verify database state: User should have exactly 6 LLM items logged (5 allowed, 1 denied ... wait no, denied shouldn't make to LLM right?)
+	// Actually, the 6th request is denied BEFORE it hits the LLM, so no log is generated. So the count should still be 5.
 	var logsCount int64
 	db.Model(&api.LLMUsageLog{}).Where("user_id = ?", freeUser.ID).Count(&logsCount)
 	assert.Equal(t, int64(5), logsCount, "Free User should have exactly 5 distracting usage logs")
@@ -106,15 +124,31 @@ func TestLLMProxyHandler_RateLimiting(t *testing.T) {
 	var proLogsCount int64
 	db.Model(&api.LLMUsageLog{}).Where("user_id = ?", proUser.ID).Count(&proLogsCount)
 	// Pro user responses are inspected and logs ARE created even for pro users in our logic
-	// (this might change, but right now the log check is currently conditional on TierFree in serve.go, let's verify)
-	assert.Equal(t, int64(0), proLogsCount, "Pro User should have NO usage logs since the check is bypassed")
+	assert.Equal(t, int64(10), proLogsCount, "Pro User should have 10 usage logs since the check is bypassed but logs are kept")
 }
 
 func TestLLMProxyHandler_NeutralClassification(t *testing.T) {
 	// Neutral/productive classifications shouldn't increment the distracting count.
 	mockGemini := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"classification": "productive"}`))
+		w.Write([]byte(`{
+			"candidates": [
+				{
+					"content": {
+						"parts": [
+							{
+								"text": "{\"classification\": \"productive\"}"
+							}
+						]
+					}
+				}
+			],
+			"usageMetadata": {
+				"promptTokenCount": 100,
+				"candidatesTokenCount": 10,
+				"totalTokenCount": 110
+			}
+		}`))
 	}))
 	defer mockGemini.Close()
 
@@ -151,5 +185,5 @@ func TestLLMProxyHandler_NeutralClassification(t *testing.T) {
 
 	var logsCount int64
 	db.Model(&api.LLMUsageLog{}).Count(&logsCount)
-	assert.Equal(t, int64(0), logsCount, "No usage logs should be created for productive/neutral classifications")
+	assert.Equal(t, int64(10), logsCount, "10 usage logs should be created for productive classifications (but rate limits ignored)")
 }
