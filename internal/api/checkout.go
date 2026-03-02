@@ -209,11 +209,11 @@ func (s *ServiceImpl) CheckoutCustomerPortal(ctx context.Context, req *connect.R
 		},
 	))
 	if err != nil {
-		slog.Error("err", err.Error())
+		slog.Error("failed to create customer portal session", "error", err)
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create customer portal session: %w", err))
 	}
 
-	slog.Info("res.CustomerSession.CustomerPortalURL", res.CustomerSession.CustomerPortalURL)
+	slog.Info("customer portal session created", "url", res.CustomerSession.CustomerPortalURL)
 	return connect.NewResponse(&apiv1.CheckoutCustomerPortalResponse{
 		Url: res.CustomerSession.CustomerPortalURL,
 	}), nil

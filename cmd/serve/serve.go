@@ -1,8 +1,11 @@
 package serve
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -87,7 +90,9 @@ var Command = &cli.Command{
 
 		// Gemini API proxy endpoint
 		geminiProxyPath := "/api/v1/gemini/"
-		mux.HandleFunc(geminiProxyPath, geminiProxyHandler)
+		mux.HandleFunc(geminiProxyPath, func(w http.ResponseWriter, r *http.Request) {
+			geminiProxyHandler(w, r, gormDB)
+		})
 		slog.Info("serving gemini proxy handler", "path", geminiProxyPath)
 
 		slog.Info("serving rpc handler for api v1 service", "path", apiPath)
@@ -150,10 +155,65 @@ func setupDatabase(url, token string) (*gorm.DB, error) {
 	return gormDB, nil
 }
 
+// flushCopy copies from r to w, flushing w if it's an http.Flusher
+func flushCopy(w io.Writer, r io.Reader) ([]byte, error) {
+	flusher, canFlush := w.(http.Flusher)
+	var buf bytes.Buffer
+	chunk := make([]byte, 32*1024)
+	for {
+		n, err := r.Read(chunk)
+		if n > 0 {
+			buf.Write(chunk[:n])
+			if _, wErr := w.Write(chunk[:n]); wErr != nil {
+				return buf.Bytes(), wErr
+			}
+			if canFlush {
+				flusher.Flush()
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return buf.Bytes(), err
+		}
+	}
+	return buf.Bytes(), nil
+}
+
 // geminiProxyHandler proxies requests to Google's Generative Language API
 // Requests to /api/v1/gemini/* are forwarded to https://generativelanguage.googleapis.com/*
-func geminiProxyHandler(w http.ResponseWriter, r *http.Request) {
+func geminiProxyHandler(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	const geminiBaseURL = "https://generativelanguage.googleapis.com"
+
+	// Fast-fail: Authenticate
+	authHeader := r.Header.Get("Authorization")
+	token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+	if token == "" {
+		http.Error(w, "Unauthorized: missing token", http.StatusUnauthorized)
+		return
+	}
+
+	claims, err := api.ValidateToken(token)
+	if err != nil {
+		http.Error(w, "Unauthorized: invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	// Rate Limiting
+	var requestCount int64
+	todayUnix := time.Now().Add(-24 * time.Hour).Unix()
+	if err := db.Model(&api.LLMProxyUsage{}).Where("user_id = ? AND created_at >= ?", claims.UserID, todayUnix).Count(&requestCount).Error; err != nil {
+		slog.Error("failed to query proxy usage count", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	if requestCount >= 5000 {
+		slog.Warn("user exceeded daily proxy limit", "user_id", claims.UserID)
+		http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+		return
+	}
 
 	// Strip the proxy prefix to get the target path
 	targetPath := strings.TrimPrefix(r.URL.Path, "/api/v1/gemini")
@@ -229,8 +289,71 @@ func geminiProxyHandler(w http.ResponseWriter, r *http.Request) {
 	// Set the status code
 	w.WriteHeader(resp.StatusCode)
 
-	// Copy the response body
-	if _, err := io.Copy(w, resp.Body); err != nil {
+	// Copy the response body and flush
+	capturedBody, err := flushCopy(w, resp.Body)
+	if err != nil {
 		slog.Error("failed to copy response body", "error", err)
 	}
+
+	// Asynchronously parse tokens and save usage
+	go func(body []byte, userID int64) {
+		inputTokens, outputTokens, totalTokens := extractUsageMetadata(body)
+
+		usage := api.LLMProxyUsage{
+			UserID:       userID,
+			CreatedAt:    time.Now().Unix(),
+			Provider:     "gemini",
+			InputTokens:  inputTokens,
+			OutputTokens: outputTokens,
+			TotalTokens:  totalTokens,
+		}
+
+		if err := db.Create(&usage).Error; err != nil {
+			slog.Error("failed to save LLM proxy usage log", "error", err)
+		}
+	}(capturedBody, claims.UserID)
+}
+
+func extractUsageMetadata(body []byte) (input int, output int, total int) {
+	type geminiResponse struct {
+		UsageMetadata struct {
+			PromptTokenCount     int `json:"promptTokenCount"`
+			CandidatesTokenCount int `json:"candidatesTokenCount"`
+			TotalTokenCount      int `json:"totalTokenCount"`
+		} `json:"usageMetadata"`
+	}
+
+	// Try to parse the whole body as a single JSON object (non-streaming)
+	var resp geminiResponse
+	if err := json.Unmarshal(body, &resp); err == nil && resp.UsageMetadata.TotalTokenCount > 0 {
+		return resp.UsageMetadata.PromptTokenCount, resp.UsageMetadata.CandidatesTokenCount, resp.UsageMetadata.TotalTokenCount
+	}
+
+	// If it failed or has 0 tokens, it might be an SSE stream.
+	// SSE chunks start with "data: " and end with "\n\n"
+	scanner := bufio.NewScanner(bytes.NewReader(body))
+	// Some chunks might be large, so we expand the scanner buffer if needed
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "data: ") {
+			jsonStr := strings.TrimSpace(strings.TrimPrefix(line, "data: "))
+			if jsonStr == "" || jsonStr == "[DONE]" {
+				continue
+			}
+			var streamResp geminiResponse
+			if err := json.Unmarshal([]byte(jsonStr), &streamResp); err == nil {
+				// Usage metadata is usually sent in the last chunk or cumulatively
+				if streamResp.UsageMetadata.TotalTokenCount > total {
+					input = streamResp.UsageMetadata.PromptTokenCount
+					output = streamResp.UsageMetadata.CandidatesTokenCount
+					total = streamResp.UsageMetadata.TotalTokenCount
+				}
+			}
+		}
+	}
+
+	return input, output, total
 }

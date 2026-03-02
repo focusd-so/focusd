@@ -48,3 +48,17 @@ type UserDevice struct {
 func (u *UserDevice) TableName() string {
 	return "user_device"
 }
+
+type LLMProxyUsage struct {
+	ID           int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID       int64  `gorm:"not null;index:idx_llm_user_time" json:"user_id"`
+	CreatedAt    int64  `gorm:"not null;index:idx_llm_user_time" json:"created_at"`
+	Provider     string `gorm:"not null;default:gemini" json:"provider"`
+	InputTokens  int    `gorm:"not null;default:0" json:"input_tokens"`
+	OutputTokens int    `gorm:"not null;default:0" json:"output_tokens"`
+	TotalTokens  int    `gorm:"not null;default:0" json:"total_tokens"`
+}
+
+func (l *LLMProxyUsage) TableName() string {
+	return "llm_proxy_usage"
+}

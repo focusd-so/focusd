@@ -9,3 +9,4 @@ focusd*
 .env
 internal/identity/hmac.prod.go
 .gocache
+docs/
