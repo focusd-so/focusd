@@ -38,9 +38,9 @@ function SettingsPage() {
       >
         <TabsList className="mb-2">
           <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="account">Account</TabsTrigger>
           <TabsTrigger value="rules">Custom Rules</TabsTrigger>
           <TabsTrigger value="extensions">Extensions</TabsTrigger>
+          <TabsTrigger value="account">Account</TabsTrigger>
           <TabsTrigger value="about">About</TabsTrigger>
           {import.meta.env.DEV && (
             <TabsTrigger value="dev">Development</TabsTrigger>
@@ -51,9 +51,6 @@ function SettingsPage() {
           <GeneralSettings />
         </TabsContent>
 
-        <TabsContent value="account" className="flex-1 mt-0 overflow-auto">
-          <AccountSettings />
-        </TabsContent>
 
         <TabsContent value="rules" className="flex-1 mt-0 min-h-0">
           <CustomRules />
@@ -61,6 +58,10 @@ function SettingsPage() {
 
         <TabsContent value="extensions" className="flex-1 mt-0 overflow-auto">
           <ExtensionsSettings />
+        </TabsContent>
+
+        <TabsContent value="account" className="flex-1 mt-0 overflow-auto">
+          <AccountSettings />
         </TabsContent>
 
         <TabsContent value="about" className="flex-1 mt-0 overflow-auto">

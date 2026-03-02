@@ -130,7 +130,7 @@ export function PauseConfirmationDialog({
               <div className="space-y-2">
                 <div className="px-1 text-center pb-1">
                   <h3 className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
-                    Need to use a blocked app?
+                    Quick allow blocked apps
                   </h3>
                 </div>
 
@@ -157,28 +157,31 @@ export function PauseConfirmationDialog({
                         )}
 
                         {/* App Name */}
-                        <span className="text-sm font-medium text-muted-foreground flex-1 truncate">
+                        <span className="text-xs font-medium text-muted-foreground flex-1 truncate">
                           {getDisplayName(item)}
                         </span>
 
                         {/* Allow Buttons */}
-                        <div className="flex items-center rounded-md border border-border/40 bg-muted/30 overflow-hidden divide-x divide-border/40">
-                          {[15, 30, 60].map((durationFn) => (
-                            <button
-                              key={durationFn}
-                              onClick={() =>
-                                handleQuickAllow(app?.executable_path || "", app?.hostname || "", durationFn)
-                              }
-                              disabled={isAllowing}
-                              className="px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:bg-green-500/10 hover:text-green-400 transition-all disabled:opacity-50"
-                            >
-                              {isAllowing ? (
-                                "..."
-                              ) : (
-                                durationFn === 60 ? "1h" : `${durationFn}m`
-                              )}
-                            </button>
-                          ))}
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-muted-foreground/60 font-medium whitespace-nowrap">Allow for</span>
+                          <div className="flex items-center rounded-md border border-border/40 bg-muted/30 overflow-hidden divide-x divide-border/40">
+                            {[15, 30, 60].map((durationFn) => (
+                              <button
+                                key={durationFn}
+                                onClick={() =>
+                                  handleQuickAllow(app?.executable_path || "", app?.hostname || "", durationFn)
+                                }
+                                disabled={isAllowing}
+                                className="px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:bg-green-500/10 hover:text-green-400 transition-all disabled:opacity-50"
+                              >
+                                {isAllowing ? (
+                                  "..."
+                                ) : (
+                                  durationFn === 60 ? "1h" : `${durationFn}m`
+                                )}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     );
@@ -186,29 +189,7 @@ export function PauseConfirmationDialog({
                 </div>
               </div>
 
-              <div className="p-3 rounded-xl border border-blue-500/20 bg-blue-500/5 flex gap-3 items-start">
-                <div className="mt-0.5 w-6 h-6 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
-                  <IconBulb className="w-3.5 h-3.5 text-blue-500" />
-                </div>
-                <div className="text-left space-y-0.5 pt-0.5">
-                  <p className="text-xs font-semibold text-blue-500 dark:text-blue-400">
-                    Did you know?
-                  </p>
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    You can{" "}
-                    <button
-                      onClick={() => {
-                        navigate({ to: "/settings", search: { tab: "rules" } });
-                        onOpenChange(false);
-                      }}
-                      className="text-foreground font-medium underline underline-offset-2 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
-                    >
-                      customize your rules
-                    </button>{" "} to allow flexible usage patterns.
-                  </p>
-                </div>
-              </div>
-              <div className="h-px w-full bg-border/40 !my-5" />
+              <div className="h-px w-full bg-border/20 !my-4" />
             </>
           )}
 
@@ -273,7 +254,25 @@ export function PauseConfirmationDialog({
             {isPausing ? "Pausing..." : "Pause Protection"}
           </Button>
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
+
+        {/* Bottom Tip */}
+        <div className="px-6 py-3 border-t border-border/20 bg-muted/20 flex items-center justify-center gap-1.5">
+          <IconBulb className="w-3 h-3 text-blue-500/60" />
+          <p className="text-[10px] text-muted-foreground/80 leading-none">
+            Tip:{" "}
+            <button
+              onClick={() => {
+                navigate({ to: "/settings", search: { tab: "rules" } });
+                onOpenChange(false);
+              }}
+              className="text-blue-500/80 hover:text-blue-500 hover:underline transition-colors font-medium"
+            >
+              Customize your rules
+            </button>{" "}
+            to allow flexible usage patterns.
+          </p>
+        </div>
+      </DialogContent >
+    </Dialog >
   );
 }
