@@ -101,7 +101,7 @@ func main() {
 	apiUntrustedClient := api.NewClient(apiBaseURL)
 
 	if err := identity.ScheduleHandshake(ctx, apiUntrustedClient); err != nil {
-		slog.Error("failed to schedule handshake: %w", err)
+		slog.Error("failed to schedule handshake", "error", err)
 	}
 
 	apiAuthenticatedClient := api.NewClient(apiBaseURL, api.NewSigningInterceptor())
@@ -120,7 +120,7 @@ func main() {
 		APIKey: "stubbed",
 	})
 	if err != nil {
-		slog.Error("failed to create genai client: %w", err)
+		slog.Error("failed to create genai client", "error", err)
 	}
 
 	var wailsAppPtr *application.App

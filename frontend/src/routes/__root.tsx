@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { AppSidebar } from "@/components/app-sidebar";
-import { AccountStatus } from "@/components/account-status";
+// import { AccountStatus } from "@/components/account-status";
 import { useAppVisibilityStore } from "@/stores/app-visibility-store";
 import { useOnboardingStore } from "@/stores/onboarding-store";
 import { useEffect } from "react";
@@ -81,7 +81,7 @@ function RootLayout() {
               </h1>
             )}
           </div>
-          <AccountStatus />
+          {/* <AccountStatus /> */}
         </header>
         <div className="flex flex-1 flex-col h-full overflow-hidden">
           <Outlet />

@@ -26,7 +26,7 @@ type ServiceImpl struct {
 }
 
 func NewServiceImpl(gormDB *gorm.DB, productIDs map[apiv1.CheckoutProduct]string) (*ServiceImpl, error) {
-	if err := gormDB.AutoMigrate(&User{}, &UserDevice{}, &HandshakeNonce{}); err != nil {
+	if err := gormDB.AutoMigrate(&User{}, &UserDevice{}, &HandshakeNonce{}, &LLMProxyUsage{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
