@@ -155,32 +155,6 @@ func setupDatabase(url, token string) (*gorm.DB, error) {
 	return gormDB, nil
 }
 
-// flushCopy copies from r to w, flushing w if it's an http.Flusher
-func flushCopy(w io.Writer, r io.Reader) ([]byte, error) {
-	flusher, canFlush := w.(http.Flusher)
-	var buf bytes.Buffer
-	chunk := make([]byte, 32*1024)
-	for {
-		n, err := r.Read(chunk)
-		if n > 0 {
-			buf.Write(chunk[:n])
-			if _, wErr := w.Write(chunk[:n]); wErr != nil {
-				return buf.Bytes(), wErr
-			}
-			if canFlush {
-				flusher.Flush()
-			}
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return buf.Bytes(), err
-		}
-	}
-	return buf.Bytes(), nil
-}
-
 // geminiProxyHandler proxies requests to Google's Generative Language API
 // Requests to /api/v1/gemini/* are forwarded to https://generativelanguage.googleapis.com/*
 func geminiProxyHandler(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
@@ -289,29 +263,32 @@ func geminiProxyHandler(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	// Set the status code
 	w.WriteHeader(resp.StatusCode)
 
-	// Copy the response body and flush
-	capturedBody, err := flushCopy(w, resp.Body)
+	// Copy the response body
+	capturedBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		slog.Error("failed to copy response body", "error", err)
+		slog.Error("failed to read response body", "error", err)
 	}
 
-	// Asynchronously parse tokens and save usage
-	go func(body []byte, userID int64) {
-		inputTokens, outputTokens, totalTokens := extractUsageMetadata(body)
+	// Synchronously parse tokens and save usage
+	inputTokens, outputTokens, totalTokens := extractUsageMetadata(capturedBody)
 
-		usage := api.LLMProxyUsage{
-			UserID:       userID,
-			CreatedAt:    time.Now().Unix(),
-			Provider:     "gemini",
-			InputTokens:  inputTokens,
-			OutputTokens: outputTokens,
-			TotalTokens:  totalTokens,
-		}
+	usage := api.LLMProxyUsage{
+		UserID:       claims.UserID,
+		CreatedAt:    time.Now().Unix(),
+		Provider:     "gemini",
+		InputTokens:  inputTokens,
+		OutputTokens: outputTokens,
+		TotalTokens:  totalTokens,
+	}
 
-		if err := db.Create(&usage).Error; err != nil {
-			slog.Error("failed to save LLM proxy usage log", "error", err)
-		}
-	}(capturedBody, claims.UserID)
+	if err := db.Create(&usage).Error; err != nil {
+		slog.Error("failed to save LLM proxy usage log", "error", err)
+	}
+
+	// Write the captured body back to the client
+	if _, err := w.Write(capturedBody); err != nil {
+		slog.Error("failed to write response body", "error", err)
+	}
 }
 
 func extractUsageMetadata(body []byte) (input int, output int, total int) {

@@ -1,12 +1,4 @@
-<div align="center">
-  <img src="build/trayicon.png" width="128" alt="Focusd Icon"/>
-  <h1>Focusd</h1>
-  <p><strong>Stay in flow, ship without distractions.</strong></p>
-</div>
-
 Focusd is a privacy-first, macOS-focused distraction blocker aiming to help developers and creators maintain deep work sessions. Rather than manually creating blocklists, Focusd uses LLMs to conditionally restrict distracting apps and URLs, gently nudging you back to your work.
-
-> **Note**: This project is source-available under the **GNU Affero General Public License Version 3 (AGPLv3)**. While you are free to examine, deploy, and learn from its code, you are not permitted to use this source code for closed-source commercial projects without proper licensing.
 
 ## Features
 
