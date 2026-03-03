@@ -46,6 +46,7 @@ message DeviceHandshakeResponse {
 
     // Limits / Account Status
     AccountTier account_tier = 4;
+    int64 trial_ends_at = 5; // Unix timestamp, 0 if not trialing
 }
 
 // ---------------------------------------------------------

@@ -26,6 +26,10 @@ func (s *Service) GetAccountTier(ctx context.Context) (apiv1.DeviceHandshakeResp
 	return accountTier, nil
 }
 
+func (s *Service) GetTrialEndsAt(ctx context.Context) (int64, error) {
+	return trialEndsAt, nil
+}
+
 func (s *Service) CheckoutLink(ctx context.Context) (string, error) {
 	product := apiv1.CheckoutProduct_CHECKOUT_PRODUCT_BASIC
 

@@ -314,157 +314,168 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
 
   return (
     <div
-      className={`flex items-start justify-between p-3 rounded-xl border ${borderColor} ${bgColor} transition-all group gap-4`}
+      className={`flex flex-col p-2.5 rounded-lg border transition-all group gap-2 ${borderColor} ${bgColor}`}
     >
-      <div className="flex items-start gap-3 min-w-0">
-        <div
-          className={`relative w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0 ${iconBgColor} ring-1 transition-all`}
-        >
-          {usage.application?.icon ? (
-            <img
-              src={
-                usage.application.icon.startsWith("data:")
-                  ? usage.application.icon
-                  : `data:image/png;base64,${usage.application.icon}`
-              }
-              alt={usage.application?.hostname || usage.application?.name}
-              className={`w-10 h-10 object-contain ${isAllowed ? "" : "grayscale opacity-70"} group-hover:grayscale-0 group-hover:opacity-100 transition-all`}
-            />
-          ) : isWeb ? (
-            <IconWorld className={`w-6 h-6 ${iconColor}`} />
-          ) : (
-            <IconAppWindow className={`w-6 h-6 ${iconColor}`} />
-          )}
-        </div>
-
-        <div className="flex flex-col min-w-0 pt-0.5">
-          <TruncatedLabel
-            className={`text-sm font-bold text-foreground/90 truncate leading-tight ${textColor} transition-colors`}
+      <div className="flex items-center justify-between w-full">
+        {/* Left Side: Icon and Title/Status */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div
+            className={`relative w-9 h-9 rounded-md flex items-center justify-center overflow-hidden shrink-0 ${iconBgColor} transition-all`}
           >
-            {usage.application?.hostname || usage.application?.name || "Unknown"}
-          </TruncatedLabel>
-          {usage.window_title && (
-            <TruncatedLabel className="text-[10px] text-muted-foreground/60 truncate max-w-[200px]">
-              {usage.window_title}
-            </TruncatedLabel>
-          )}
-          {termSource && !isAllowed && (
-            <span className="text-[9px] text-muted-foreground/50 flex items-center gap-1 mt-0.5">
-              <span>{termSource.icon}</span>
-              {termSource.isLink ? (
-                <TruncatedLabel className="max-w-[200px]">
-                  <Link
-                    to="/settings"
-                    search={{ tab: "rules" }}
-                    className="hover:text-foreground hover:underline transition-colors"
-                  >
-                    {termSource.label}
-                  </Link>
-                </TruncatedLabel>
-              ) : (
-                <TruncatedLabel className="max-w-[200px]">
-                  {termSource.label}
-                </TruncatedLabel>
-              )}
-            </span>
-          )}
-          <div className="flex items-center gap-2 mt-1">
-            {isAllowed ? (
-              <>
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={`text-[10px] font-bold ${statusColor} uppercase tracking-wider`}
-                  >
-                    ALLOWED
-                  </span>
-                  {timeLeft !== null && (
-                    <>
-                      <span className="text-yellow-500/40 text-[10px]">•</span>
-                      <span className="text-xs text-yellow-500 font-mono font-semibold">
-                        {formatTime(timeLeft)} left
-                      </span>
-                    </>
-                  )}
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleUnallow}
-                  className="h-7 px-3 text-xs font-semibold bg-yellow-500/10 border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/20 hover:border-yellow-500/50 transition-all gap-1.5"
-                >
-                  <IconShield className="w-3.5 h-3.5" />
-                  Resume Protection
-                </Button>
-              </>
+            {usage.application?.icon ? (
+              <img
+                src={
+                  usage.application.icon.startsWith("data:")
+                    ? usage.application.icon
+                    : `data:image/png;base64,${usage.application.icon}`
+                }
+                alt={usage.application?.hostname || usage.application?.name}
+                className={`w-5 h-5 object-contain ${isAllowed ? "" : "grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100"} transition-all`}
+              />
+            ) : isWeb ? (
+              <IconWorld className={`w-5 h-5 ${iconColor}`} />
             ) : (
-              <>
-                <span
-                  className={`text-[10px] font-bold ${statusColor} uppercase tracking-wider`}
-                >
-                  BLOCKED
-                </span>
-              </>
+              <IconAppWindow className={`w-5 h-5 ${iconColor}`} />
             )}
           </div>
+
+          <div className="flex flex-col min-w-0 justify-center leading-tight">
+            <div className="flex items-center gap-2">
+              <TruncatedLabel
+                className={`text-xs font-semibold truncate ${textColor} transition-colors`}
+              >
+                {usage.application?.hostname || usage.application?.name || "Unknown"}
+              </TruncatedLabel>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                {isAllowed ? (
+                  <>
+                    <span className={`text-[9px] font-bold ${statusColor} uppercase tracking-wider`}>
+                      ALLOWED
+                    </span>
+                    {timeLeft !== null && (
+                      <span className="text-[9px] text-yellow-500/80 font-mono font-semibold">
+                        {formatTime(timeLeft)} left
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className={`text-[9px] font-bold ${statusColor} uppercase tracking-wider opacity-90`}>
+                    BLOCKED
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 mt-0.5">
+              {termSource && !isAllowed && (
+                <span className="text-[9px] text-muted-foreground/60 flex items-center gap-1 shrink-0">
+                  <span className="opacity-70 text-[8px]">{termSource.icon}</span>
+                  {termSource.isLink ? (
+                    <TruncatedLabel className="max-w-[120px]">
+                      <Link
+                        to="/settings"
+                        search={{ tab: "rules" }}
+                        className="hover:text-foreground hover:underline transition-colors"
+                      >
+                        {termSource.label}
+                      </Link>
+                    </TruncatedLabel>
+                  ) : (
+                    <TruncatedLabel className="max-w-[120px]">
+                      {termSource.label}
+                    </TruncatedLabel>
+                  )}
+                </span>
+              )}
+
+              {termSource && !isAllowed && usage.window_title && (
+                <span className="text-muted-foreground/30 text-[9px] shrink-0">—</span>
+              )}
+
+              {usage.window_title && (
+                <TruncatedLabel className="text-[9px] text-muted-foreground/60 truncate max-w-[200px]">
+                  {usage.window_title}
+                </TruncatedLabel>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div className="flex flex-col items-end gap-2 shrink-0 max-w-[50%] pt-0.5">
-        <div className="flex items-center gap-2">
-          <span className="text-[9px] text-muted-foreground/40 font-mono">
-            {formatSmartDate(usage.started_at)}
-          </span>
-          {usage.tags?.map((usageTag) => (
-            <Badge
-              key={usageTag.tag}
-              variant="outline"
-              className={`px-1.5 py-0 text-[9px] font-bold rounded-full border ${isAllowed ? "border-yellow-500/30 text-yellow-400" : "border-red-500/30 text-red-400"}`}
-            >
-              {usageTag.tag}
-            </Badge>
-          ))}
+        {/* Right Side: Badges, Date, Classification, Buttons */}
+        <div className="flex flex-col items-end justify-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[9px] text-muted-foreground/40 font-mono pr-0.5">
+              {formatSmartDate(usage.started_at)}
+            </span>
 
-          {!isAllowed && count > 1 && (
-            <TooltipProvider>
-              <Tooltip delayDuration={300}>
-                <TooltipTrigger asChild>
-                  <Badge
-                    variant="outline"
-                    className="px-1.5 py-0 text-[9px] font-bold rounded-full bg-red-500/10 border border-red-500/30 text-red-400 cursor-help"
+            {usage.tags?.map((usageTag) => (
+              <Badge
+                key={usageTag.tag}
+                variant="outline"
+                className={`px-1 py-0 text-[8px] font-bold rounded-sm border ${isAllowed ? "border-yellow-500/30 text-yellow-500/80 bg-yellow-500/5" : "border-red-500/30 text-red-500/80 bg-red-500/5"}`}
+              >
+                {usageTag.tag}
+              </Badge>
+            ))}
+
+            {!isAllowed && count > 1 && (
+              <TooltipProvider>
+                <Tooltip delayDuration={300}>
+                  <TooltipTrigger asChild>
+                    <Badge
+                      variant="outline"
+                      className="px-1 py-0 text-[8px] font-bold rounded-sm bg-red-500/10 border border-red-500/30 text-red-400 cursor-help"
+                    >
+                      {count}x
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="bottom"
+                    className="text-xs bg-red-950 border-red-500/30 text-red-200"
                   >
-                    {count}x
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent
-                  side="bottom"
-                  className="text-xs bg-red-950 border-red-500/30 text-red-200"
-                >
-                  <p>Prevented {count} access attempts</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
+                    <p>Prevented {count} access attempts</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
 
-          {!isAllowed && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowAllowDialog(true)}
-              className="h-7 px-2.5 text-[10px] font-semibold rounded-lg text-muted-foreground/40 hover:text-yellow-400 border border-transparent hover:border-yellow-500/30 hover:bg-yellow-500/10 transition-all"
-            >
-              Allow
-            </Button>
-          )}
+            {!isAllowed && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAllowDialog(true)}
+                className="h-5 px-2 text-[9px] font-medium rounded text-muted-foreground/50 hover:text-yellow-400 hover:bg-yellow-500/10 transition-all border border-transparent hover:border-yellow-500/20"
+              >
+                Allow
+              </Button>
+            )}
+
+            {isAllowed && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleUnallow}
+                className="h-5 px-2 text-[9px] font-medium bg-yellow-500/5 border-yellow-500/20 text-yellow-500 hover:bg-yellow-500/10 hover:border-yellow-500/40 transition-all gap-1 rounded"
+              >
+                <IconShield className="w-2.5 h-2.5" />
+                Block Now
+              </Button>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end">
+            <ClassificationSourceBadge
+              source={usage.classification_source}
+              classification={usage.classification}
+              reasoning={usage.classification_reasoning}
+              variant={isAllowed ? "yellow" : "red"}
+              isAllowedDistraction={isAllowed}
+              className="!bg-transparent !border-transparent px-0 py-0 mr-1 opacity-70 font-normal tracking-wide"
+              maxWidth="max-w-[180px]"
+            />
+          </div>
         </div>
-
-        <ClassificationSourceBadge
-          source={usage.classification_source}
-          classification={usage.classification}
-          reasoning={usage.classification_reasoning}
-          variant={isAllowed ? "yellow" : "red"}
-          isAllowedDistraction={isAllowed}
-          maxWidth="max-w-[500px]"
-        />
       </div>
 
       <AllowConfirmationDialog

@@ -7,7 +7,7 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 export function AccountStatus() {
-  const { checkoutLink, fetchAccountTier, isLoadingAccountTier: isStoreLoading } = useAccountStore();
+  const { checkoutLink, fetchAccountTier, isLoadingAccountTier: isStoreLoading, trialEndsAt } = useAccountStore();
   const queryClient = useQueryClient();
 
   const { data: accountTier, isLoading: isQueryLoading } = useQuery({
@@ -50,19 +50,46 @@ export function AccountStatus() {
       <Button
         variant="outline"
         size="sm"
-        className="h-7 border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300 text-xs gap-1.5"
+        className="h-7 border-zinc-500/40 bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20 hover:text-zinc-300 text-xs gap-1.5"
         onClick={handleUpgrade}
       >
         <IconAlertCircle className="w-3.5 h-3.5" />
         <span>Free Plan</span>
-        <span className="text-amber-500/40">·</span>
-        <span className="font-semibold">Upgrade Now</span>
+        <span className="text-zinc-500/40">·</span>
+        <span className="font-semibold text-amber-400 hover:text-amber-300">Upgrade Now</span>
       </Button>
     );
   }
 
-  // TRIAL tier - urgent "trial ended" CTA
+  // TRIAL tier - urgent "trial ended" CTA or "X days left"
   if (accountTier === DeviceHandshakeResponse_AccountTier.DeviceHandshakeResponse_ACCOUNT_TIER_TRIAL) {
+    let daysLeft = 0;
+    let isExpired = false;
+
+    if (trialEndsAt != null && trialEndsAt > 0) {
+      const now = Math.floor(Date.now() / 1000);
+      daysLeft = Math.ceil((trialEndsAt - now) / (24 * 60 * 60));
+      if (daysLeft < 0) {
+        isExpired = true;
+      }
+    }
+
+    if (isExpired || daysLeft <= 0) {
+      return (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300 text-xs gap-1.5"
+          onClick={handleUpgrade}
+        >
+          <IconFlame className="w-3.5 h-3.5" />
+          <span>Trial Ended</span>
+          <span className="text-amber-500/40">·</span>
+          <span className="font-semibold">Upgrade Now</span>
+        </Button>
+      );
+    }
+
     return (
       <Button
         variant="outline"
@@ -71,7 +98,7 @@ export function AccountStatus() {
         onClick={handleUpgrade}
       >
         <IconFlame className="w-3.5 h-3.5" />
-        <span>Trial Ended</span>
+        <span>Try Plus ({daysLeft} days left)</span>
         <span className="text-amber-500/40">·</span>
         <span className="font-semibold">Upgrade Now</span>
       </Button>
@@ -83,7 +110,7 @@ export function AccountStatus() {
     return (
       <div className="flex items-center gap-1.5 h-7 px-3 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
         <IconStar className="w-3.5 h-3.5 fill-emerald-400/20" />
-        <span className="text-xs font-semibold tracking-wide">Basic</span>
+        <span className="text-xs font-semibold tracking-wide">Plus</span>
       </div>
     );
   }

@@ -207,6 +207,7 @@ type DeviceHandshakeResponse struct {
 	ExpiresAt    int64                  `protobuf:"varint,3,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`         // Unix timestamp (hint for client refresh)
 	// Limits / Account Status
 	AccountTier   DeviceHandshakeResponse_AccountTier `protobuf:"varint,4,opt,name=account_tier,json=accountTier,proto3,enum=api.v1.DeviceHandshakeResponse_AccountTier" json:"account_tier,omitempty"`
+	TrialEndsAt   int64                               `protobuf:"varint,5,opt,name=trial_ends_at,json=trialEndsAt,proto3" json:"trial_ends_at,omitempty"` // Unix timestamp, 0 if not trialing
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -267,6 +268,13 @@ func (x *DeviceHandshakeResponse) GetAccountTier() DeviceHandshakeResponse_Accou
 		return x.AccountTier
 	}
 	return DeviceHandshakeResponse_ACCOUNT_TIER_UNSPECIFIED
+}
+
+func (x *DeviceHandshakeResponse) GetTrialEndsAt() int64 {
+	if x != nil {
+		return x.TrialEndsAt
+	}
+	return 0
 }
 
 // ---------------------------------------------------------
@@ -612,13 +620,14 @@ const file_api_v1_service_proto_rawDesc = "" +
 	"\n" +
 	"os_version\x18\x03 \x01(\tR\tosVersion\x12\x1f\n" +
 	"\vapp_version\x18\x04 \x01(\tR\n" +
-	"appVersion\"\xd1\x02\n" +
+	"appVersion\"\xf5\x02\n" +
 	"\x17DeviceHandshakeResponse\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12#\n" +
 	"\rsession_token\x18\x02 \x01(\tR\fsessionToken\x12\x1d\n" +
 	"\n" +
 	"expires_at\x18\x03 \x01(\x03R\texpiresAt\x12N\n" +
-	"\faccount_tier\x18\x04 \x01(\x0e2+.api.v1.DeviceHandshakeResponse.AccountTierR\vaccountTier\"\x88\x01\n" +
+	"\faccount_tier\x18\x04 \x01(\x0e2+.api.v1.DeviceHandshakeResponse.AccountTierR\vaccountTier\x12\"\n" +
+	"\rtrial_ends_at\x18\x05 \x01(\x03R\vtrialEndsAt\"\x88\x01\n" +
 	"\vAccountTier\x12\x1c\n" +
 	"\x18ACCOUNT_TIER_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11ACCOUNT_TIER_FREE\x10\x01\x12\x16\n" +
