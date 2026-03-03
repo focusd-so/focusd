@@ -133,13 +133,13 @@ export function SmartBlockingStatus() {
 
         <div className="flex gap-2">
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="border-muted-foreground/10 hover:border-orange-500/20 hover:bg-orange-500/5 hover:text-orange-400 text-muted-foreground/60 text-xs h-8 gap-2 transition-all"
+            className="hover:bg-orange-500/5 hover:text-orange-400 text-muted-foreground/40 text-[10px] h-7 gap-1.5 transition-all font-medium"
             onClick={handleOpenPauseDialog}
           >
-            <IconPlayerPause className="w-3 h-3" />
-            Pause
+            <IconPlayerPause className="w-2.5 h-2.5 opacity-50" />
+            Pause Protection
           </Button>
 
           <Button

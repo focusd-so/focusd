@@ -312,9 +312,11 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
     usage.classification_reasoning
   );
 
+  const isRecent = !isAllowed && (Math.floor(Date.now() / 1000) - (usage.started_at ?? 0)) < 300;
+
   return (
     <div
-      className={`flex flex-col p-2.5 rounded-lg border transition-all group gap-2 ${borderColor} ${bgColor}`}
+      className={`flex flex-col p-2.5 rounded-lg border transition-all group gap-2 ${borderColor} ${bgColor} ${isRecent ? "ring-1 ring-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]" : ""}`}
     >
       <div className="flex items-center justify-between w-full">
         {/* Left Side: Icon and Title/Status */}
@@ -441,14 +443,32 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
             )}
 
             {!isAllowed && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowAllowDialog(true)}
-                className="h-5 px-2 text-[9px] font-medium rounded text-muted-foreground/50 hover:text-yellow-400 hover:bg-yellow-500/10 transition-all border border-transparent hover:border-yellow-500/20"
-              >
-                Allow
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleAllowWithDuration(15)}
+                  className="h-5 px-1.5 text-[8px] font-bold rounded bg-yellow-500/5 text-yellow-500/40 hover:text-yellow-500 hover:bg-yellow-500/10 transition-all border border-yellow-500/10 hover:border-yellow-500/20"
+                >
+                  15m
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleAllowWithDuration(30)}
+                  className="h-5 px-1.5 text-[8px] font-bold rounded bg-yellow-500/5 text-yellow-500/40 hover:text-yellow-500 hover:bg-yellow-500/10 transition-all border border-yellow-500/10 hover:border-yellow-500/20"
+                >
+                  30m
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAllowDialog(true)}
+                  className="h-5 px-2 text-[9px] font-medium rounded text-muted-foreground/30 hover:text-yellow-400 hover:bg-yellow-500/5 transition-all"
+                >
+                  Allow...
+                </Button>
+              </div>
             )}
 
             {isAllowed && (
