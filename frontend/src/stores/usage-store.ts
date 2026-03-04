@@ -194,6 +194,7 @@ interface UsageState {
   fetchOverview: (date?: Date) => Promise<void>;
   goToPrevDay: () => void;
   goToNextDay: () => void;
+  goToToday: () => void;
   // ScreenTime actions
   setScreenTimeFilters: (filters: Partial<GetUsageListOptions>) => void;
   fetchScreenTimeUsages: (append?: boolean) => Promise<void>;
