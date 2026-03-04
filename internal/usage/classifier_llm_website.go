@@ -816,9 +816,9 @@ func (s *Service) classifyWithGemini(ctx context.Context, instructions, input st
 
 	// Since this is latency sensitive, we use the fastest model available for each tier.
 	models := map[apiv1.DeviceHandshakeResponse_AccountTier]string{
-		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE: "gemini-2.0-flash",
-		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS: "gemini-2.5-flash",
-		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PRO:  "gemini-3-pro-preview",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE: "gemini-2.5-flash-lite",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS: "gemini-3.1-flash-lite-preview",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PRO:  "gemini-3.1-flash-lite-preview",
 	}
 
 	tier := identity.GetAccountTier()

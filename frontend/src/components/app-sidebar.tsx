@@ -1,6 +1,7 @@
 import {
   IconSettings,
   IconShield,
+  IconClock,
 } from "@tabler/icons-react";
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -33,11 +34,9 @@ const applicationItems: MenuItem[] = [
   },
 ];
 
-// const insightItems: MenuItem[] = [
-//   { title: "Overview", to: "/screen-time", icon: IconLayoutDashboard },
-//   { title: "Screen Time", to: "/screen-time/screentime", icon: IconClock },
-//   { title: "Trends", to: "/screen-time/trends", icon: IconTrendingUp },
-// ];
+const insightItems: MenuItem[] = [
+  { title: "Screen Time", to: "/screen-time/screentime", icon: IconClock },
+];
 
 export function AppSidebar() {
   const matchRoute = useMatchRoute();
@@ -73,7 +72,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* <SidebarGroup>
+        <SidebarGroup>
           <SidebarGroupLabel>Insights</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -92,7 +91,7 @@ export function AppSidebar() {
               })}
             </SidebarMenu>
           </SidebarGroupContent>
-        </SidebarGroup> */}
+        </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
