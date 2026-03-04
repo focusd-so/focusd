@@ -814,13 +814,16 @@ func (s *Service) classifyWithGemini(ctx context.Context, instructions, input st
 		return nil, errors.New("genai client not configured")
 	}
 
-	modelName := "gemini-2.0-flash"
-	tier := identity.GetAccountTier()
-	if tier == apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS || tier == apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PRO {
-		modelName = "gemini-2.5-flash"
+	// Since this is latency sensitive, we use the fastest model available for each tier.
+	models := map[apiv1.DeviceHandshakeResponse_AccountTier]string{
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE: "gemini-2.0-flash",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS: "gemini-2.5-flash",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PRO:  "gemini-3-pro-preview",
 	}
 
-	resp, err := s.genaiClient.Models.GenerateContent(ctx, modelName, []*genai.Content{
+	tier := identity.GetAccountTier()
+
+	resp, err := s.genaiClient.Models.GenerateContent(ctx, models[tier], []*genai.Content{
 		{
 			Role: "user",
 			Parts: []*genai.Part{
