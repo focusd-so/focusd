@@ -1,7 +1,6 @@
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -14,6 +13,7 @@ import {
   IconCheck,
   IconRobot,
   IconPlug,
+  IconPlus,
   IconBook,
   IconActivity,
   IconLock,
@@ -35,7 +35,8 @@ export function ExtensionsSettings() {
     queryFn: () => fetchAccountTier(),
   });
 
-  const isFreeTier = accountTier === DeviceHandshakeResponse_AccountTier.DeviceHandshakeResponse_ACCOUNT_TIER_FREE;
+  const isLocked = accountTier === DeviceHandshakeResponse_AccountTier.DeviceHandshakeResponse_ACCOUNT_TIER_FREE;
+
   const baseUrl = `http://localhost:${PORT}`;
 
   const copyToClipboard = (text: string, label: string) => {
@@ -45,75 +46,92 @@ export function ExtensionsSettings() {
   };
 
   return (
-    <div className="space-y-8 max-w-4xl pb-10">
-      {/* Hero Section */}
-      <div className="relative overflow-hidden rounded-3xl border border-emerald-500/10 bg-gradient-to-br from-emerald-500/5 via-transparent to-transparent p-8 shadow-sm">
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div className="space-y-3 flex-1">
+    <div className="space-y-4 max-w-5xl pb-6">
+      {/* Locked Banner Replacement */}
+      {isLocked && (
+        <div className="flex items-center justify-between p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200/90 text-[13px] animate-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1 rounded-md bg-amber-500/20">
+              <IconLock className="w-3.5 h-3.5" />
+            </div>
+            <span>Extensions are available on <strong>Plus</strong> or <strong>Pro</strong> plans. Upgrade to automate your workflow.</span>
+          </div>
+          <Button
+            onClick={() => checkoutLink && Browser.OpenURL(checkoutLink)}
+            size="sm"
+            className="h-7 px-3 bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-bold rounded-lg transition-all"
+          >
+            Upgrade Now
+          </Button>
+        </div>
+      )}
+
+      {/* Hero Section - More Compact */}
+      <div className="relative overflow-hidden rounded-2xl border border-emerald-500/10 bg-gradient-to-br from-emerald-500/5 via-transparent to-transparent p-6 shadow-sm text-foreground">
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="space-y-2 flex-1">
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 px-2 py-0.5 font-bold uppercase tracking-wider text-[10px]">
+              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 px-2 py-0.5 font-bold uppercase tracking-wider text-[9px]">
                 Plus Feature
               </Badge>
             </div>
-            <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
-              Control Focusd with AI Agents
+            <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
+              Extend Focusd with Local API
             </h1>
-            <p className="text-muted-foreground text-sm leading-relaxed max-w-2xl">
-              Focusd provides a local API that allows coding agents like <span className="text-foreground font-medium">Claude Code</span>, <span className="text-foreground font-medium">Cursor</span>, or <span className="text-foreground font-medium">Antigravity</span> to automatically manage your focus state.
+            <p className="text-muted-foreground text-[13px] leading-snug max-w-2xl">
+              Automate your focus workflow and integrate Focusd with third-party tools, coding agents, and custom scripts. Our Local API provides the building blocks for a customized productivity environment.
             </p>
-            <div className="flex flex-wrap gap-4 pt-2">
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full border border-border/50">
-                <IconRobot className="w-3.5 h-3.5" />
-                <span>Claude Code</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full border border-border/50">
-                <IconActivity className="w-3.5 h-3.5" />
-                <span>Cursor</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full border border-border/50">
-                <IconPlug className="w-3.5 h-3.5" />
-                <span>Antigravity/OpenCode</span>
-              </div>
+            <div className="flex flex-wrap gap-2.5 pt-1">
+              {[
+                { icon: IconRobot, label: "AI Agents" },
+                { icon: IconTerminal, label: "Custom Scripts" },
+                { icon: IconPlug, label: "Workflow Tools" },
+              ].map((item, idx) => (
+                <div key={idx} className="flex items-center gap-1.5 text-[11px] text-muted-foreground/80 bg-muted/20 px-2.5 py-1 rounded-full border border-border/30">
+                  <item.icon className="w-3 h-3" />
+                  <span>{item.label}</span>
+                </div>
+              ))}
             </div>
           </div>
-          <div className="hidden lg:block">
-            <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 shadow-inner">
-              <IconPlug className="w-12 h-12 text-emerald-400" />
+          <div className="hidden lg:block shrink-0">
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 shadow-inner">
+              <IconPlus className="w-8 h-8 text-emerald-400/80" />
             </div>
           </div>
         </div>
 
-        {/* Background blobs for aesthetics */}
-        <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-64 h-64 bg-emerald-500/5 blur-[80px] rounded-full pointer-events-none" />
-        <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-48 h-48 bg-emerald-500/5 blur-[60px] rounded-full pointer-events-none" />
+        {/* Background blobs for aesthetics - smaller */}
+        <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-48 h-48 bg-emerald-500/5 blur-[60px] rounded-full pointer-events-none" />
+        <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-32 h-32 bg-emerald-500/5 blur-[40px] rounded-full pointer-events-none" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
+      <div className={`grid grid-cols-1 lg:grid-cols-12 gap-4 transition-all duration-500 ${isLocked ? 'grayscale-[0.5] opacity-80 pointer-events-none select-none' : ''}`}>
         {/* Main Content */}
-        <div className="lg:col-span-8 space-y-6">
-          <Card className="border-border/50 shadow-sm overflow-hidden">
-            <CardHeader className="bg-muted/30 pb-4">
+        <div className="lg:col-span-8 space-y-4">
+          <Card className="border-border/50 shadow-sm overflow-hidden rounded-xl">
+            <CardHeader className="bg-muted/20 py-3 px-4">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-md bg-background border border-border/50">
-                  <IconTerminal className="w-4 h-4 text-emerald-400" />
+                <div className="p-1 rounded-md bg-background border border-border/50">
+                  <IconTerminal className="w-3.5 h-3.5 text-emerald-400" />
                 </div>
                 <div>
-                  <CardTitle className="text-base">Local API Endpoint</CardTitle>
-                  <CardDescription className="text-xs">Access your Focusd instance programmatically</CardDescription>
+                  <CardTitle className="text-sm font-semibold">Local API Endpoint</CardTitle>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="pt-6 space-y-4">
-              <div className="space-y-2">
-                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Base URL</div>
+            <CardContent className="py-4 px-4 space-y-3">
+              <div className="space-y-1.5">
+                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Base URL</div>
                 <div className="flex items-center gap-2 group">
-                  <div className="flex-1 font-mono text-sm bg-muted/50 px-4 py-3 rounded-lg border border-border/50 flex items-center justify-between group-hover:border-emerald-500/30 transition-colors">
+                  <div className="flex-1 font-mono text-[13px] bg-muted/40 px-3 py-2 rounded-lg border border-border/40 flex items-center justify-between group-hover:border-emerald-500/30 transition-colors">
                     <span className="text-foreground/80">{baseUrl}</span>
                     <button
-                      onClick={() => copyToClipboard(baseUrl, "url")}
+                      disabled={isLocked}
+                      onClick={() => !isLocked && copyToClipboard(baseUrl, "url")}
                       className="p-1 rounded hover:bg-emerald-500/10 text-muted-foreground hover:text-emerald-400 transition-all opacity-40 group-hover:opacity-100"
                     >
-                      {copied === "url" ? <IconCheck className="w-4 h-4" /> : <IconCopy className="w-4 h-4" />}
+                      {copied === "url" ? <IconCheck className="w-3.5 h-3.5" /> : <IconCopy className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 </div>
@@ -121,78 +139,79 @@ export function ExtensionsSettings() {
             </CardContent>
           </Card>
 
-          <Card className="border-border/50 shadow-sm overflow-hidden">
-            <CardHeader className="bg-muted/30 pb-4">
+          <Card className="border-border/50 shadow-sm overflow-hidden rounded-xl">
+            <CardHeader className="bg-muted/20 py-3 px-4">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-md bg-background border border-border/50">
-                  <IconBook className="w-4 h-4 text-emerald-400" />
+                <div className="p-1 rounded-md bg-background border border-border/50">
+                  <IconBook className="w-3.5 h-3.5 text-emerald-400" />
                 </div>
                 <div>
-                  <CardTitle className="text-base">Usage Examples</CardTitle>
-                  <CardDescription className="text-xs">Common commands to control your session</CardDescription>
+                  <CardTitle className="text-sm font-semibold">Usage Examples</CardTitle>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="pt-6 space-y-6">
-              <div className="space-y-3">
+            <CardContent className="py-4 px-4 space-y-4">
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Whitelist a site</div>
-                  <Badge variant="outline" className="text-[10px] py-0">POST /whitelist</Badge>
+                  <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Whitelist a site</div>
+                  <Badge variant="outline" className="text-[9px] py-0 px-1 border-border/30 bg-muted/20 text-muted-foreground font-mono">POST /whitelist</Badge>
                 </div>
                 <div className="relative group">
-                  <pre className="text-[13px] bg-zinc-950 text-zinc-300 p-4 rounded-xl overflow-x-auto font-mono border border-white/5 leading-relaxed">
+                  <pre className="text-[12px] bg-zinc-950/80 text-zinc-300 p-3 rounded-lg overflow-x-auto font-mono border border-white/5 leading-relaxed">
                     {`curl -X POST ${baseUrl}/whitelist \\
   -H "Content-Type: application/json" \\
   -d '{"hostname":"x.com","duration_seconds":3600}'`}
                   </pre>
                   <Button
+                    disabled={isLocked}
                     variant="ghost"
                     size="icon"
-                    className="absolute top-2 right-2 h-8 w-8 text-zinc-500 hover:text-white hover:bg-white/10 transition-colors"
-                    onClick={() =>
+                    className="absolute top-2 right-2 h-7 w-7 text-zinc-500 hover:text-white hover:bg-white/10 transition-colors"
+                    onClick={() => !isLocked &&
                       copyToClipboard(
                         `curl -X POST ${baseUrl}/whitelist -H "Content-Type: application/json" -d '{"hostname":"x.com","duration_seconds":3600}'`,
                         "curl-whitelist"
                       )
                     }
                   >
-                    {copied === "curl-whitelist" ? <IconCheck className="w-4 h-4" /> : <IconCopy className="w-4 h-4" />}
+                    {copied === "curl-whitelist" ? <IconCheck className="w-3.5 h-3.5" /> : <IconCopy className="w-3.5 h-3.5" />}
                   </Button>
                 </div>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Remove from whitelist</div>
-                  <Badge variant="outline" className="text-[10px] py-0">POST /unwhitelist</Badge>
+                  <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Remove from whitelist</div>
+                  <Badge variant="outline" className="text-[9px] py-0 px-1 border-border/30 bg-muted/20 text-muted-foreground font-mono">POST /unwhitelist</Badge>
                 </div>
                 <div className="relative group">
-                  <pre className="text-[13px] bg-zinc-950 text-zinc-300 p-4 rounded-xl overflow-x-auto font-mono border border-white/5 leading-relaxed">
+                  <pre className="text-[12px] bg-zinc-950/80 text-zinc-300 p-3 rounded-lg overflow-x-auto font-mono border border-white/5 leading-relaxed">
                     {`curl -X POST ${baseUrl}/unwhitelist \\
   -H "Content-Type: application/json" \\
   -d '{"id":1}'`}
                   </pre>
                   <Button
+                    disabled={isLocked}
                     variant="ghost"
                     size="icon"
-                    className="absolute top-2 right-2 h-8 w-8 text-zinc-500 hover:text-white hover:bg-white/10 transition-colors"
-                    onClick={() =>
+                    className="absolute top-2 right-2 h-7 w-7 text-zinc-500 hover:text-white hover:bg-white/10 transition-colors"
+                    onClick={() => !isLocked &&
                       copyToClipboard(
                         `curl -X POST ${baseUrl}/unwhitelist -H "Content-Type: application/json" -d '{"id":1}'`,
                         "curl-unwhitelist"
                       )
                     }
                   >
-                    {copied === "curl-unwhitelist" ? <IconCheck className="w-4 h-4" /> : <IconCopy className="w-4 h-4" />}
+                    {copied === "curl-unwhitelist" ? <IconCheck className="w-3.5 h-3.5" /> : <IconCopy className="w-3.5 h-3.5" />}
                   </Button>
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-border/50">
-                <div className="flex flex-wrap gap-2">
-                  <div className="text-xs text-muted-foreground mr-2 self-center">Quick Reference:</div>
+              <div className="pt-3 border-t border-border/30">
+                <div className="flex flex-wrap gap-2 items-center">
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Quick Reference:</div>
                   {["/pause", "/unpause", "/whitelist", "/unwhitelist"].map((path) => (
-                    <code key={path} className="text-[10px] bg-muted px-2 py-0.5 rounded border border-border/50 text-foreground/70 font-mono">
+                    <code key={path} className="text-[10px] bg-muted/40 px-1.5 py-0.5 rounded border border-border/30 text-foreground/70 font-mono">
                       {path}
                     </code>
                   ))}
@@ -203,55 +222,44 @@ export function ExtensionsSettings() {
         </div>
 
         {/* Sidebar Info */}
-        <div className="lg:col-span-4 space-y-6">
-          <Card className="border-emerald-500/20 bg-emerald-500/[0.02] shadow-sm">
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2 text-emerald-400 mb-1">
-                <IconStar className="w-4 h-4 fill-emerald-400/20" />
-                <span className="text-xs font-bold uppercase tracking-widest">How it works</span>
+        <div className="lg:col-span-4 space-y-4">
+          <Card className="border-emerald-500/20 bg-emerald-500/[0.02] shadow-sm overflow-hidden rounded-xl h-full">
+            <CardHeader className="py-3 px-4 border-b border-emerald-500/10 bg-emerald-500/5">
+              <div className="flex items-center gap-2 text-emerald-400 mb-0.5">
+                <IconStar className="w-3.5 h-3.5 fill-emerald-400/20" />
+                <span className="text-[10px] font-bold uppercase tracking-widest">How it works</span>
               </div>
-              <CardTitle className="text-sm">Auto-Pilot Mode</CardTitle>
+              <CardTitle className="text-xs font-bold uppercase tracking-tight">Extensible Workflow</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 text-xs text-muted-foreground leading-relaxed">
+            <CardContent className="space-y-3.5 p-4 text-[11px] text-muted-foreground leading-relaxed">
               <p>
-                When you run <span className="text-foreground">Claude Code</span> or other agents, they can call the <code className="text-foreground">/pause</code> endpoint to instantly stop Focusd from blocking your research sites.
+                The Local API allows external tools to query and modify your focus state. This is perfect for the <span className="text-foreground/90 font-medium text-[10px] tracking-tight border border-border/30 rounded-md px-1.5 py-0.5 bg-muted/40">AGENT ERA</span>.
               </p>
-              <p>
-                Once the task is finished, the agent calls <code className="text-foreground">/unpause</code> to resume your productivity protections.
-              </p>
+              <div className="space-y-2.5">
+                {[
+                  { title: "Agents", desc: "can pause blocking while they research on your behalf." },
+                  { title: "Scripts", desc: "can automate blocking based on your specific dev environment state." },
+                  { title: "Dashboards", desc: "can pull your focus stats for custom displays." },
+                ].map((item, idx) => (
+                  <div key={idx} className="flex gap-2.5">
+                    <div className="mt-1 h-1 w-1 rounded-full bg-emerald-500/50 shrink-0" />
+                    <p><span className="text-foreground font-medium underline decoration-emerald-500/20 underline-offset-2">{item.title}</span> {item.desc}</p>
+                  </div>
+                ))}
+              </div>
               <div className="pt-2">
-                <Button variant="outline" className="w-full text-[10px] h-7 border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-400 group">
-                  View Documentation
+                <Button
+                  disabled={isLocked}
+                  variant="outline"
+                  className="w-full text-[10px] h-7 border-emerald-500/20 hover:bg-emerald-500/10 hover:text-emerald-400 group shadow-sm transition-all"
+                >
+                  API Documentation
                   <IconActivity className="w-3 h-3 ml-1.5 opacity-40 group-hover:opacity-100 transition-opacity" />
                 </Button>
               </div>
             </CardContent>
           </Card>
         </div>
-
-        {/* Paywall Overlay */}
-        {isFreeTier && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/40 backdrop-blur-[2px] rounded-xl">
-            <div className="max-w-sm w-full mx-4 space-y-5 rounded-2xl border border-border/50 bg-card p-8 shadow-2xl text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10">
-                <IconStar className="h-7 w-7 text-emerald-400 fill-emerald-400/10" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-bold tracking-tight">Integrations are a Plus feature</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Connect Focusd with your favorite coding agents and automate your focus flow.
-                </p>
-              </div>
-              <Button
-                onClick={() => checkoutLink && Browser.OpenURL(checkoutLink)}
-                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/20 h-10 font-bold"
-              >
-                <IconLock className="mr-2 h-4 w-4" />
-                Upgrade to Unlock
-              </Button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -476,6 +476,12 @@ export function CustomRules() {
             <IconFileText className="w-4 h-4 text-muted-foreground" />
             <span className="text-xs font-medium">rules.ts</span>
           </div>
+          {!isFreeTier && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20 shadow-sm">
+              <IconCrown className="w-3 h-3 text-violet-400" />
+              <span className="text-[10px] font-bold text-violet-400 uppercase tracking-tight">Plus Feature</span>
+            </div>
+          )}
           {hasUnsavedChanges && (
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20">
               <span className="relative flex h-1.5 w-1.5">
