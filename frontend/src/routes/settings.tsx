@@ -9,7 +9,7 @@ import { DevSettings } from "@/components/settings/dev-settings";
 import { AccountSettings } from "@/components/settings/account-settings";
 import { z } from "zod";
 
-const tabValues = ["general", "account", "rules", "integrations", "about", ...(import.meta.env.DEV ? ["dev"] : [])] as const;
+const tabValues = ["general", "account", "rules", "extensions", "about", ...(import.meta.env.DEV ? ["dev"] : [])] as const;
 
 const settingsSearchSchema = z.object({
   tab: z.enum(tabValues as unknown as [string, ...string[]]).optional().catch("general"),
@@ -39,7 +39,7 @@ function SettingsPage() {
         <TabsList className="mb-2">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="rules">Custom Rules</TabsTrigger>
-          <TabsTrigger value="integrations">Integrations</TabsTrigger>
+          <TabsTrigger value="extensions">Extensions</TabsTrigger>
           <TabsTrigger value="account">Account</TabsTrigger>
           <TabsTrigger value="about">About</TabsTrigger>
           {import.meta.env.DEV && (
@@ -56,7 +56,7 @@ function SettingsPage() {
           <CustomRules />
         </TabsContent>
 
-        <TabsContent value="integrations" className="flex-1 mt-0 overflow-auto">
+        <TabsContent value="extensions" className="flex-1 mt-0 overflow-auto">
           <ExtensionsSettings />
         </TabsContent>
 
