@@ -3,6 +3,7 @@ package serve
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -214,7 +215,9 @@ func geminiProxyHandler(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	slog.Info("proxying request to Gemini API", "method", r.Method, "target", targetURL.String())
 
 	// Create the proxy request
-	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL.String(), r.Body)
+	// Create the proxy request using a detached context so the upstream request
+	// to Google isn't canceled if the client disconnects mid-flight.
+	proxyReq, err := http.NewRequestWithContext(context.WithoutCancel(r.Context()), r.Method, targetURL.String(), r.Body)
 	if err != nil {
 		slog.Error("failed to create proxy request", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -237,6 +240,9 @@ func geminiProxyHandler(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	proxyReq.Header.Del("Trailers")
 	proxyReq.Header.Del("Transfer-Encoding")
 	proxyReq.Header.Del("Upgrade")
+	// Strip Authorization so the user's JWT isn't forwarded to Google —
+	// authentication to Gemini is via the ?key= query param instead.
+	proxyReq.Header.Del("Authorization")
 
 	// Execute the proxy request
 	client := &http.Client{Timeout: 120 * time.Second}
@@ -255,19 +261,27 @@ func geminiProxyHandler(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 		}
 	}
 
-	// if the status code is anything >= 400, print an error
-	if resp.StatusCode >= 400 {
-		slog.Error("proxy request failed", "status code", resp.StatusCode)
-	}
-
-	// Set the status code
-	w.WriteHeader(resp.StatusCode)
-
 	// Copy the response body
 	capturedBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		slog.Error("failed to read response body", "error", err)
 	}
+
+	// if the status code is anything >= 400, print an error
+	if resp.StatusCode >= 400 {
+		logBody := capturedBody
+		if resp.Header.Get("Content-Encoding") == "gzip" {
+			if gr, err := gzip.NewReader(bytes.NewReader(capturedBody)); err == nil {
+				if decompressed, err := io.ReadAll(gr); err == nil {
+					logBody = decompressed
+				}
+			}
+		}
+		slog.Error("proxy request failed", "status code", resp.StatusCode, "body", string(logBody))
+	}
+
+	// Set the status code
+	w.WriteHeader(resp.StatusCode)
 
 	// Synchronously parse tokens and save usage
 	inputTokens, outputTokens, totalTokens := extractUsageMetadata(capturedBody)

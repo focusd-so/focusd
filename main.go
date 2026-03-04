@@ -115,6 +115,7 @@ func main() {
 		HTTPClient: &http.Client{
 			Transport: api.NewSigningRoundTripper(nil),
 		},
+		Backend: genai.BackendGeminiAPI,
 		// Since this is required to create the client, we are stubbing it for now.
 		// All the request will be going through api.focusd.so proxy.
 		APIKey: "stubbed",

@@ -135,11 +135,11 @@ export function SmartBlockingStatus() {
           <Button
             variant="ghost"
             size="sm"
-            className="hover:bg-orange-500/5 hover:text-orange-400 text-muted-foreground/40 text-[10px] h-7 gap-1.5 transition-all font-medium"
+            className="hover:bg-orange-500/5 hover:text-orange-400 text-muted-foreground/40 text-xs h-8 gap-2 transition-all"
             onClick={handleOpenPauseDialog}
           >
-            <IconPlayerPause className="w-2.5 h-2.5 opacity-50" />
-            Pause Protection
+            <IconPlayerPause className="w-3 h-3" />
+            Pause
           </Button>
 
           <Button

@@ -811,7 +811,7 @@ func (s *Service) classifyWithGemini(ctx context.Context, instructions, input st
 		return nil, errors.New("genai client not configured")
 	}
 
-	resp, err := s.genaiClient.Models.GenerateContent(ctx, "gemini-3-flash-preview", []*genai.Content{
+	resp, err := s.genaiClient.Models.GenerateContent(ctx, "gemini-2.5-flash", []*genai.Content{
 		{
 			Role: "user",
 			Parts: []*genai.Part{
