@@ -7,7 +7,6 @@ import { ExtensionsSettings } from "@/components/settings/extensions-settings";
 import { AboutSettings } from "@/components/settings/about-settings";
 import { DevSettings } from "@/components/settings/dev-settings";
 import { AccountSettings } from "@/components/settings/account-settings";
-import { IconCrown } from "@tabler/icons-react";
 import { z } from "zod";
 
 const tabValues = ["general", "account", "rules", "extensions", "about", ...(import.meta.env.DEV ? ["dev"] : [])] as const;
@@ -39,14 +38,8 @@ function SettingsPage() {
       >
         <TabsList className="mb-2">
           <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="rules" className="gap-1.5">
-            Custom Rules
-            <IconCrown className="w-3 h-3 text-violet-400 opacity-60" />
-          </TabsTrigger>
-          <TabsTrigger value="extensions" className="gap-1.5">
-            Extensions
-            <IconCrown className="w-3 h-3 text-violet-400 opacity-60" />
-          </TabsTrigger>
+          <TabsTrigger value="rules">Custom Rules</TabsTrigger>
+          <TabsTrigger value="extensions">Extensions</TabsTrigger>
           <TabsTrigger value="account">Account</TabsTrigger>
           <TabsTrigger value="about">About</TabsTrigger>
           {import.meta.env.DEV && (
