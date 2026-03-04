@@ -422,6 +422,21 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
       ? usage.ended_at - usage.started_at
       : null;
 
+  // Detect script execution that was ignored (Free tier)
+  let sandboxDecision: any = null;
+  try {
+    if (usage.sandbox_response && usage.sandbox_response !== "no response") {
+      sandboxDecision = JSON.parse(usage.sandbox_response);
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  const isIgnoredRule =
+    !!sandboxDecision &&
+    usage.classification_source !== "custom_rules" &&
+    usage.termination_mode_source !== "custom_rules";
+
   return (
     <div
       className={`flex flex-col p-1.5 rounded-lg border transition-all ${theme.container}`}
@@ -520,6 +535,28 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
                 termSource?.label === "custom rules" ? termSource : null
               }
             />
+            {isIgnoredRule && (
+              <div className="text-[9px] text-purple-400/80 bg-purple-500/5 px-1.5 py-0.5 rounded border border-purple-500/10 mt-1 flex items-center gap-1 animate-in fade-in slide-in-from-right-1 duration-500">
+                <IconTerminal className="w-2.5 h-2.5 shrink-0" />
+                <span className="truncate">
+                  Script would have{" "}
+                  <span className="font-semibold uppercase text-purple-400">
+                    {sandboxDecision.terminationMode && sandboxDecision.terminationMode !== "none"
+                      ? sandboxDecision.terminationMode
+                      : sandboxDecision.classification}
+                  </span>{" "}
+                  this.{" "}
+                  <Link
+                    to="/settings"
+                    search={{ tab: "rules" }}
+                    className="underline hover:text-purple-300 font-medium"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Upgrade to Pro
+                  </Link>
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Sandbox Logs Toggle */}

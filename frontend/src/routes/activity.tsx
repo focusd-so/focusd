@@ -358,7 +358,7 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
     >
       {/* App Icon */}
       <div
-        className={`relative w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden shrink-0 ring-1 ${iconBgColor} transition-all`}
+        className={`relative w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0 ring-1 ${iconBgColor} transition-all`}
       >
         {usage.application?.icon ? (
           <img
@@ -368,12 +368,12 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
                 : `data:image/png;base64,${usage.application.icon}`
             }
             alt={usage.application?.hostname || usage.application?.name}
-            className={`w-5 h-5 object-contain ${isAllowed ? "" : "grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100"} transition-all`}
+            className={`w-8 h-8 object-contain ${isAllowed ? "" : "grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100"} transition-all`}
           />
         ) : isWeb ? (
-          <IconWorld className={`w-4 h-4 ${iconColor}`} />
+          <IconWorld className={`w-8 h-8 ${iconColor}`} />
         ) : (
-          <IconAppWindow className={`w-4 h-4 ${iconColor}`} />
+          <IconAppWindow className={`w-8 h-8 ${iconColor}`} />
         )}
       </div>
 

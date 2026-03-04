@@ -4,6 +4,9 @@ import type {
   ApplicationUsage,
   ProtectionWhitelist,
   ProtectionPause,
+  DayInsights,
+  ProductivityScore,
+  UsageAggregation,
 } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
 import { TerminationMode, GetUsageListOptions } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
 import {
@@ -16,11 +19,8 @@ import {
   GetPauseHistory,
   GetUsageList,
   GetDayInsights,
+  GetUsageAggregation,
 } from "../../bindings/github.com/focusd-so/focusd/internal/usage/service";
-import type {
-  DayInsights,
-  ProductivityScore,
-} from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
 import { Duration } from "../../bindings/time/models";
 
 export interface BlockedItem {
@@ -162,6 +162,11 @@ interface UsageState {
   isLoading: boolean;
   error: string | null;
 
+  // ScreenTime
+  screenTimeUsages: ApplicationUsage[];
+  screenTimeAggregation: UsageAggregation[];
+  screenTimeFilters: GetUsageListOptions;
+
   // Activity actions
   addUsage: (usage: ApplicationUsage) => void;
   initSubscription: () => void;
@@ -189,7 +194,10 @@ interface UsageState {
   fetchOverview: (date?: Date) => Promise<void>;
   goToPrevDay: () => void;
   goToNextDay: () => void;
-  goToToday: () => void;
+  // ScreenTime actions
+  setScreenTimeFilters: (filters: Partial<GetUsageListOptions>) => void;
+  fetchScreenTimeUsages: (append?: boolean) => Promise<void>;
+  fetchScreenTimeAggregation: () => Promise<void>;
 }
 
 // ── Store implementation ────────────────────────────────────────────────────
@@ -200,6 +208,14 @@ export const useUsageStore = create<UsageState>()((set, get) => ({
   blockedItems: new Map(),
   isSubscribed: false,
   allowedItems: [],
+  isLoading: false,
+  error: null,
+  screenTimeUsages: [],
+  screenTimeAggregation: [],
+  screenTimeFilters: new GetUsageListOptions({
+    Page: 0,
+    PageSize: 50,
+  }),
 
   addUsage: (usage) => {
     set((state) => {
@@ -359,8 +375,6 @@ export const useUsageStore = create<UsageState>()((set, get) => ({
 
   selectedDate: getYesterday(),
   overview: null,
-  isLoading: false,
-  error: null,
 
   setSelectedDate: (date) => {
     set({ selectedDate: date });
@@ -399,6 +413,39 @@ export const useUsageStore = create<UsageState>()((set, get) => ({
 
   goToToday: () => {
     get().setSelectedDate(new Date());
+  },
+
+  // ── ScreenTime Actions ──────────────────────────────────────────────────
+
+  setScreenTimeFilters: (filters) => {
+    set((state) => ({
+      screenTimeFilters: new GetUsageListOptions({
+        ...state.screenTimeFilters,
+        ...filters,
+      }),
+    }));
+  },
+
+  fetchScreenTimeUsages: async (append = false) => {
+    try {
+      const options = get().screenTimeFilters;
+      const usages = await GetUsageList(options);
+      set((state) => ({
+        screenTimeUsages: append ? [...state.screenTimeUsages, ...usages] : usages,
+      }));
+    } catch (err) {
+      console.error("Failed to fetch screen time usages:", err);
+    }
+  },
+
+  fetchScreenTimeAggregation: async () => {
+    try {
+      const options = get().screenTimeFilters;
+      const aggregation = await GetUsageAggregation(options);
+      set({ screenTimeAggregation: aggregation });
+    } catch (err) {
+      console.error("Failed to fetch screen time aggregation:", err);
+    }
   },
 }));
 
