@@ -117,7 +117,24 @@ function ClassificationSourceBadge({
 
 
 function ActivityPage() {
-  const { recentUsages, getBlockedItemsList, allowedItems } = useUsageStore();
+  // Use specific selectors to avoid re-rendering on every store change (like currentTime polling)
+  const recentUsages = useUsageStore((state) => state.recentUsages);
+  const getBlockedItemsList = useUsageStore((state) => state.getBlockedItemsList);
+  const allowedItems = useUsageStore((state) => state.allowedItems);
+  const blockedItems = useUsageStore((state) => state.blockedItems); // Subscribe to blocked items map
+
+  // Defer rendering of the full list to make navigation instant
+  const [renderCount, setRenderCount] = useState(15);
+
+  React.useEffect(() => {
+    if (recentUsages.length > 15) {
+      // Small timeout to allow the initial frame (with 15 items) to paint first
+      const timer = setTimeout(() => {
+        setRenderCount(100);
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [recentUsages.length]);
 
   // Get active usages
   const activeUsages = useMemo(
@@ -127,11 +144,11 @@ function ActivityPage() {
 
   // Combine blocked items with allowed items for display
   const blockedUsagesDisplay = useMemo(() => {
-    const blockedItems = getBlockedItemsList();
+    const itemsList = getBlockedItemsList();
     const result: BlockedUsageDisplay[] = [];
 
     // Process blocked items
-    blockedItems.forEach((item) => {
+    itemsList.forEach((item) => {
       // Check if this item is in the whitelist
       // For web content (has hostname): match by hostname only
       // For native apps (no hostname): match by bundle_id only
@@ -195,7 +212,7 @@ function ActivityPage() {
 
     // Sort by recency (latest first)
     return result.sort((a, b) => (b.usage.started_at ?? 0) - (a.usage.started_at ?? 0));
-  }, [getBlockedItemsList, allowedItems, recentUsages]);
+  }, [getBlockedItemsList, blockedItems, allowedItems, recentUsages]);
 
   return (
     <div className="flex flex-col gap-6 p-4 flex-1 min-h-0 overflow-hidden">
@@ -246,7 +263,7 @@ function ActivityPage() {
               </div>
             ) : (
               <div className="space-y-1.5">
-                {activeUsages.map((usage) => (
+                {activeUsages.slice(0, renderCount).map((usage) => (
                   <UsageItem key={usage.id} usage={usage} />
                 ))}
               </div>
@@ -263,7 +280,8 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
   const { usage, count, isAllowed, expiresAt, whitelistId } = item;
   const isWeb = !!usage.application?.hostname;
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
-  const { addToWhitelist, removeFromWhitelist } = useUsageStore();
+  const addToWhitelist = useUsageStore((state) => state.addToWhitelist);
+  const removeFromWhitelist = useUsageStore((state) => state.removeFromWhitelist);
 
   // Calculate if this item was recently blocked (e.g. within last 5 minutes)
   const isRecentlyBlocked = React.useMemo(() => {

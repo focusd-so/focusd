@@ -383,7 +383,8 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
   const isWeb = !!usage.application?.hostname;
   const isDistractingEvent = isDistracting(usage.classification);
   const isGrayTheme = isNeutralOrSystem(usage.classification);
-  const { resumeProtection, currentPause } = useUsageStore();
+  const resumeProtection = useUsageStore((state) => state.resumeProtection);
+  const currentPause = useUsageStore((state) => state.currentPause);
   const [showLogs, setShowLogs] = useState(false);
 
   // Check if there's currently an active pause

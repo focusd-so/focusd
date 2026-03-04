@@ -33,7 +33,11 @@ export function PauseConfirmationDialog({
   open,
   onOpenChange,
 }: PauseConfirmationDialogProps) {
-  const { getBlockedItemsList, addToWhitelist, pauseProtection, pauseHistory, getPauseHistory } = useUsageStore();
+  const getBlockedItemsList = useUsageStore((state) => state.getBlockedItemsList);
+  const addToWhitelist = useUsageStore((state) => state.addToWhitelist);
+  const pauseProtection = useUsageStore((state) => state.pauseProtection);
+  const pauseHistory = useUsageStore((state) => state.pauseHistory);
+  const getPauseHistory = useUsageStore((state) => state.getPauseHistory);
   const navigate = useNavigate();
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
   const [isPausing, setIsPausing] = useState(false);

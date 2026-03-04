@@ -19,8 +19,10 @@ function formatRemainingTime(seconds: number): string {
 }
 
 export function SmartBlockingStatus() {
-  const { currentPause, resumeProtection, getPauseHistory, initProtectionStore } =
-    useUsageStore();
+  const currentPause = useUsageStore((state) => state.currentPause);
+  const resumeProtection = useUsageStore((state) => state.resumeProtection);
+  const getPauseHistory = useUsageStore((state) => state.getPauseHistory);
+  const initProtectionStore = useUsageStore((state) => state.initProtectionStore);
   const navigate = useNavigate();
   const [showPauseDialog, setShowPauseDialog] = useState(false);
   const hasTriggeredExpiration = useRef(false);
