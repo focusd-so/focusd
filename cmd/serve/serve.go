@@ -62,8 +62,8 @@ var Command = &cli.Command{
 		}
 
 		productIDs := map[apiv1.CheckoutProduct]string{
-			apiv1.CheckoutProduct_CHECKOUT_PRODUCT_BASIC: os.Getenv("CHECKOUT_PRODUCT_BASIC_ID"),
-			apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PRO:   os.Getenv("CHECKOUT_PRODUCT_PRO_ID"),
+			apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PLUS: os.Getenv("CHECKOUT_PRODUCT_PLUS_ID"),
+			apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PRO:  os.Getenv("CHECKOUT_PRODUCT_PRO_ID"),
 		}
 
 		apiService, err := api.NewServiceImpl(gormDB, productIDs)
@@ -240,8 +240,6 @@ func geminiProxyHandler(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	proxyReq.Header.Del("Trailers")
 	proxyReq.Header.Del("Transfer-Encoding")
 	proxyReq.Header.Del("Upgrade")
-	// Strip Authorization so the user's JWT isn't forwarded to Google —
-	// authentication to Gemini is via the ?key= query param instead.
 	proxyReq.Header.Del("Authorization")
 
 	// Execute the proxy request

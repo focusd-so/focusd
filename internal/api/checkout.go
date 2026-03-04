@@ -339,7 +339,7 @@ func (s *ServiceImpl) handleSubscriptionCreated(ctx context.Context, data json.R
 	case "trialing":
 		user.Tier = string(TierTrial)
 	case "active":
-		user.Tier = string(TierBasic)
+		user.Tier = string(TierPlus)
 	case "past_due":
 		user.Tier = string(TierFree)
 	}

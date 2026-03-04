@@ -29,7 +29,7 @@ type CheckoutProduct int32
 
 const (
 	CheckoutProduct_CHECKOUT_PRODUCT_UNSPECIFIED CheckoutProduct = 0
-	CheckoutProduct_CHECKOUT_PRODUCT_BASIC       CheckoutProduct = 1
+	CheckoutProduct_CHECKOUT_PRODUCT_PLUS        CheckoutProduct = 1
 	CheckoutProduct_CHECKOUT_PRODUCT_PRO         CheckoutProduct = 2
 )
 
@@ -37,12 +37,12 @@ const (
 var (
 	CheckoutProduct_name = map[int32]string{
 		0: "CHECKOUT_PRODUCT_UNSPECIFIED",
-		1: "CHECKOUT_PRODUCT_BASIC",
+		1: "CHECKOUT_PRODUCT_PLUS",
 		2: "CHECKOUT_PRODUCT_PRO",
 	}
 	CheckoutProduct_value = map[string]int32{
 		"CHECKOUT_PRODUCT_UNSPECIFIED": 0,
-		"CHECKOUT_PRODUCT_BASIC":       1,
+		"CHECKOUT_PRODUCT_PLUS":        1,
 		"CHECKOUT_PRODUCT_PRO":         2,
 	}
 )
@@ -80,7 +80,7 @@ const (
 	DeviceHandshakeResponse_ACCOUNT_TIER_UNSPECIFIED DeviceHandshakeResponse_AccountTier = 0
 	DeviceHandshakeResponse_ACCOUNT_TIER_FREE        DeviceHandshakeResponse_AccountTier = 1
 	DeviceHandshakeResponse_ACCOUNT_TIER_TRIAL       DeviceHandshakeResponse_AccountTier = 2
-	DeviceHandshakeResponse_ACCOUNT_TIER_BASIC       DeviceHandshakeResponse_AccountTier = 3
+	DeviceHandshakeResponse_ACCOUNT_TIER_PLUS        DeviceHandshakeResponse_AccountTier = 3
 	DeviceHandshakeResponse_ACCOUNT_TIER_PRO         DeviceHandshakeResponse_AccountTier = 4
 )
 
@@ -90,14 +90,14 @@ var (
 		0: "ACCOUNT_TIER_UNSPECIFIED",
 		1: "ACCOUNT_TIER_FREE",
 		2: "ACCOUNT_TIER_TRIAL",
-		3: "ACCOUNT_TIER_BASIC",
+		3: "ACCOUNT_TIER_PLUS",
 		4: "ACCOUNT_TIER_PRO",
 	}
 	DeviceHandshakeResponse_AccountTier_value = map[string]int32{
 		"ACCOUNT_TIER_UNSPECIFIED": 0,
 		"ACCOUNT_TIER_FREE":        1,
 		"ACCOUNT_TIER_TRIAL":       2,
-		"ACCOUNT_TIER_BASIC":       3,
+		"ACCOUNT_TIER_PLUS":        3,
 		"ACCOUNT_TIER_PRO":         4,
 	}
 )
@@ -620,19 +620,19 @@ const file_api_v1_service_proto_rawDesc = "" +
 	"\n" +
 	"os_version\x18\x03 \x01(\tR\tosVersion\x12\x1f\n" +
 	"\vapp_version\x18\x04 \x01(\tR\n" +
-	"appVersion\"\xf5\x02\n" +
+	"appVersion\"\xf4\x02\n" +
 	"\x17DeviceHandshakeResponse\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12#\n" +
 	"\rsession_token\x18\x02 \x01(\tR\fsessionToken\x12\x1d\n" +
 	"\n" +
 	"expires_at\x18\x03 \x01(\x03R\texpiresAt\x12N\n" +
 	"\faccount_tier\x18\x04 \x01(\x0e2+.api.v1.DeviceHandshakeResponse.AccountTierR\vaccountTier\x12\"\n" +
-	"\rtrial_ends_at\x18\x05 \x01(\x03R\vtrialEndsAt\"\x88\x01\n" +
+	"\rtrial_ends_at\x18\x05 \x01(\x03R\vtrialEndsAt\"\x87\x01\n" +
 	"\vAccountTier\x12\x1c\n" +
 	"\x18ACCOUNT_TIER_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11ACCOUNT_TIER_FREE\x10\x01\x12\x16\n" +
-	"\x12ACCOUNT_TIER_TRIAL\x10\x02\x12\x16\n" +
-	"\x12ACCOUNT_TIER_BASIC\x10\x03\x12\x14\n" +
+	"\x12ACCOUNT_TIER_TRIAL\x10\x02\x12\x15\n" +
+	"\x11ACCOUNT_TIER_PLUS\x10\x03\x12\x14\n" +
 	"\x10ACCOUNT_TIER_PRO\x10\x04\"\x85\x02\n" +
 	"\x12LLMClassifyRequest\x12\x1b\n" +
 	"\tbundle_id\x18\x01 \x01(\tR\bbundleId\x12!\n" +
@@ -654,10 +654,10 @@ const file_api_v1_service_proto_rawDesc = "" +
 	"\x04link\x18\x01 \x01(\tR\x04link\"\x1f\n" +
 	"\x1dCheckoutCustomerPortalRequest\"2\n" +
 	"\x1eCheckoutCustomerPortalResponse\x12\x10\n" +
-	"\x03url\x18\x01 \x01(\tR\x03url*i\n" +
+	"\x03url\x18\x01 \x01(\tR\x03url*h\n" +
 	"\x0fCheckoutProduct\x12 \n" +
-	"\x1cCHECKOUT_PRODUCT_UNSPECIFIED\x10\x00\x12\x1a\n" +
-	"\x16CHECKOUT_PRODUCT_BASIC\x10\x01\x12\x18\n" +
+	"\x1cCHECKOUT_PRODUCT_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15CHECKOUT_PRODUCT_PLUS\x10\x01\x12\x18\n" +
 	"\x14CHECKOUT_PRODUCT_PRO\x10\x022\x9d\x02\n" +
 	"\n" +
 	"ApiService\x12R\n" +

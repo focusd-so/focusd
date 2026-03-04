@@ -32,8 +32,8 @@ func TestDeviceHandshake(t *testing.T) {
 	defer os.Unsetenv("PASETO_KEYS")
 
 	svc, err := NewServiceImpl(db, map[apiv1.CheckoutProduct]string{
-		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_BASIC: "basic-product-id",
-		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PRO:   "pro-product-id",
+		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PLUS: "plus-product-id",
+		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PRO:  "pro-product-id",
 	})
 	require.NoError(t, err, "failed to create service")
 
@@ -90,9 +90,14 @@ func TestDeviceHandshake_MissingSecurityHeaders(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err, "failed to connect to in-memory database")
 
+	// Setup Hex Secret
+	secret := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	os.Setenv("HMAC_SECRET_KEY", secret)
+	defer os.Unsetenv("HMAC_SECRET_KEY")
+
 	svc, err := NewServiceImpl(db, map[apiv1.CheckoutProduct]string{
-		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_BASIC: "basic-product-id",
-		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PRO:   "pro-product-id",
+		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PLUS: "plus-product-id",
+		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PRO:  "pro-product-id",
 	})
 	require.NoError(t, err, "failed to create service")
 
@@ -123,9 +128,14 @@ func TestDeviceHandshake_InvalidTimestamp(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err, "failed to connect to in-memory database")
 
+	// Setup Hex Secret
+	secret := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	os.Setenv("HMAC_SECRET_KEY", secret)
+	defer os.Unsetenv("HMAC_SECRET_KEY")
+
 	svc, err := NewServiceImpl(db, map[apiv1.CheckoutProduct]string{
-		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_BASIC: "basic-product-id",
-		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PRO:   "pro-product-id",
+		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PLUS: "plus-product-id",
+		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PRO:  "pro-product-id",
 	})
 	require.NoError(t, err, "failed to create service")
 
@@ -161,9 +171,14 @@ func TestDeviceHandshake_DuplicateNonce(t *testing.T) {
 	os.Setenv("PASETO_KEYS", "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
 	defer os.Unsetenv("PASETO_KEYS")
 
+	// Setup Hex Secret
+	secret := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	os.Setenv("HMAC_SECRET_KEY", secret)
+	defer os.Unsetenv("HMAC_SECRET_KEY")
+
 	svc, err := NewServiceImpl(db, map[apiv1.CheckoutProduct]string{
-		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_BASIC: "basic-product-id",
-		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PRO:   "pro-product-id",
+		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PLUS: "plus-product-id",
+		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PRO:  "pro-product-id",
 	})
 	require.NoError(t, err, "failed to create service")
 
@@ -207,9 +222,14 @@ func TestDeviceHandshake_InvalidSignature(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err, "failed to connect to in-memory database")
 
+	// Setup Hex Secret
+	secret := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	os.Setenv("HMAC_SECRET_KEY", secret)
+	defer os.Unsetenv("HMAC_SECRET_KEY")
+
 	svc, err := NewServiceImpl(db, map[apiv1.CheckoutProduct]string{
-		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_BASIC: "basic-product-id",
-		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PRO:   "pro-product-id",
+		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PLUS: "plus-product-id",
+		apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PRO:  "pro-product-id",
 	})
 	require.NoError(t, err, "failed to create service")
 

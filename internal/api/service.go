@@ -69,8 +69,8 @@ func (s *ServiceImpl) DeviceHandshake(ctx context.Context, req *connect.Request[
 	case string(TierTrial):
 		accountTier = apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_TRIAL
 		trialEndsAt = user.TierChangedAt + 7*24*60*60
-	case string(TierBasic):
-		accountTier = apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_BASIC
+	case string(TierPlus):
+		accountTier = apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS
 	case string(TierPro):
 		accountTier = apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PRO
 	case string(TierFree):

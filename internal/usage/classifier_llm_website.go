@@ -10,6 +10,9 @@ import (
 	"strings"
 	"time"
 
+	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
+	"github.com/focusd-so/focusd/internal/identity"
+
 	"golang.org/x/net/publicsuffix"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genai"
@@ -811,7 +814,13 @@ func (s *Service) classifyWithGemini(ctx context.Context, instructions, input st
 		return nil, errors.New("genai client not configured")
 	}
 
-	resp, err := s.genaiClient.Models.GenerateContent(ctx, "gemini-2.0-flash-lite", []*genai.Content{
+	modelName := "gemini-2.0-flash"
+	tier := identity.GetAccountTier()
+	if tier == apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS || tier == apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PRO {
+		modelName = "gemini-2.5-flash"
+	}
+
+	resp, err := s.genaiClient.Models.GenerateContent(ctx, modelName, []*genai.Content{
 		{
 			Role: "user",
 			Parts: []*genai.Part{

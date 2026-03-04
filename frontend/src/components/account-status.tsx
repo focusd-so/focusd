@@ -105,8 +105,8 @@ export function AccountStatus() {
     );
   }
 
-  // BASIC tier - compact badge
-  if (accountTier === DeviceHandshakeResponse_AccountTier.DeviceHandshakeResponse_ACCOUNT_TIER_BASIC) {
+  // PLUS tier - compact badge
+  if (accountTier === DeviceHandshakeResponse_AccountTier.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS) {
     return (
       <div className="flex items-center gap-1.5 h-7 px-3 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
         <IconStar className="w-3.5 h-3.5 fill-emerald-400/20" />

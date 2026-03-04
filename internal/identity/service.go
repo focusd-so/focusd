@@ -31,7 +31,7 @@ func (s *Service) GetTrialEndsAt(ctx context.Context) (int64, error) {
 }
 
 func (s *Service) CheckoutLink(ctx context.Context) (string, error) {
-	product := apiv1.CheckoutProduct_CHECKOUT_PRODUCT_BASIC
+	product := apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PLUS
 
 	res, err := s.apiClient.CheckoutGetLink(ctx, &connect.Request[apiv1.CheckoutGetLinkRequest]{Msg: &apiv1.CheckoutGetLinkRequest{
 		Product: product,
