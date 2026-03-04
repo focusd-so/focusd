@@ -19,8 +19,10 @@ function formatRemainingTime(seconds: number): string {
 }
 
 export function SmartBlockingStatus() {
-  const { currentPause, resumeProtection, getPauseHistory, initProtectionStore } =
-    useUsageStore();
+  const currentPause = useUsageStore((state) => state.currentPause);
+  const resumeProtection = useUsageStore((state) => state.resumeProtection);
+  const getPauseHistory = useUsageStore((state) => state.getPauseHistory);
+  const initProtectionStore = useUsageStore((state) => state.initProtectionStore);
   const navigate = useNavigate();
   const [showPauseDialog, setShowPauseDialog] = useState(false);
   const hasTriggeredExpiration = useRef(false);
@@ -133,9 +135,9 @@ export function SmartBlockingStatus() {
 
         <div className="flex gap-2">
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="border-muted-foreground/10 hover:border-orange-500/20 hover:bg-orange-500/5 hover:text-orange-400 text-muted-foreground/60 text-xs h-8 gap-2 transition-all"
+            className="hover:bg-orange-500/5 hover:text-orange-400 text-muted-foreground/40 text-xs h-8 gap-2 transition-all"
             onClick={handleOpenPauseDialog}
           >
             <IconPlayerPause className="w-3 h-3" />

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
+	"github.com/focusd-so/focusd/internal/identity"
 	"golang.org/x/net/publicsuffix"
 	"gorm.io/gorm"
 )
@@ -143,22 +145,30 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 
 func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage *ApplicationUsage) (*ClassificationResponse, error) {
 	// Do sandbox classification first, eg user defined custom rules
-	classification, err := s.ClassifyCustomRules(ctx, applicationUsage.Application.Name, applicationUsage.Application.ExecutablePath, applicationUsage.BrowserURL, nil)
+	customRulesResp, err := s.ClassifyCustomRules(ctx, applicationUsage.Application.Name, applicationUsage.Application.ExecutablePath, applicationUsage.BrowserURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify application usage with custom rules: %w", err)
 	}
 
-	if classification != nil {
-		return classification, nil
+	tier := identity.GetAccountTier()
+	isPaid := tier != apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE
+
+	if customRulesResp != nil && isPaid {
+		return customRulesResp, nil
 	}
 
 	// Do obviously classification next, eg social media, news, shopping, etc.
-	classification, err = s.classifyObviously(ctx, applicationUsage.Application.Name, applicationUsage.Application.ExecutablePath, applicationUsage.BrowserURL)
+	classification, err := s.classifyObviously(ctx, applicationUsage.Application.Name, applicationUsage.Application.ExecutablePath, applicationUsage.BrowserURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify application usage with obviously: %w", err)
 	}
 
 	if classification != nil {
+		if customRulesResp != nil {
+			classification.SandboxContext = customRulesResp.SandboxContext
+			classification.SandboxResponse = customRulesResp.SandboxResponse
+			classification.SandboxLogs = customRulesResp.SandboxLogs
+		}
 		return classification, nil
 	}
 
@@ -166,6 +176,12 @@ func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage
 	resp, err := s.ClassifyWithLLM(ctx, applicationUsage.Application.Name, applicationUsage.WindowTitle, applicationUsage.Application.ExecutablePath, applicationUsage.BrowserURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify application usage with LLM: %w", err)
+	}
+
+	if customRulesResp != nil {
+		resp.SandboxContext = customRulesResp.SandboxContext
+		resp.SandboxResponse = customRulesResp.SandboxResponse
+		resp.SandboxLogs = customRulesResp.SandboxLogs
 	}
 
 	slog.Info("classified application usage with LLM", "response", resp)

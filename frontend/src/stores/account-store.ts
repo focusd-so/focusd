@@ -1,12 +1,13 @@
 import { create } from "zustand";
 import { Events } from "@wailsio/runtime";
-import { GetAccountTier, CheckoutLink } from "../../bindings/github.com/focusd-so/focusd/internal/identity/service";
+import { GetAccountTier, GetTrialEndsAt, CheckoutLink } from "../../bindings/github.com/focusd-so/focusd/internal/identity/service";
 import { DeviceHandshakeResponse_AccountTier } from "../../bindings/github.com/focusd-so/focusd/gen/api/v1/models";
 
 interface AccountState {
   checkoutLink: string | null;
   isLoadingAccountTier: boolean;
   isSubscribed: boolean;
+  trialEndsAt: number | null;
 
   fetchAccountTier: (retryCount?: number) => Promise<DeviceHandshakeResponse_AccountTier | null>;
   fetchCheckoutLink: (retryCount?: number) => Promise<void>;
@@ -20,6 +21,7 @@ export const useAccountStore = create<AccountState>()((set, get) => ({
   checkoutLink: null,
   isLoadingAccountTier: true,
   isSubscribed: false,
+  trialEndsAt: null,
 
   fetchAccountTier: async (retryCount = 0) => {
     if (accountTierTimeout) clearTimeout(accountTierTimeout);
@@ -28,7 +30,9 @@ export const useAccountStore = create<AccountState>()((set, get) => ({
       // Only set globally to loading on the first explicit attempt
       if (retryCount === 0) set({ isLoadingAccountTier: true });
       const tier = await GetAccountTier();
-      set({ isLoadingAccountTier: false });
+      const trialEndsAt = await GetTrialEndsAt();
+      console.log("trialEndsAt", trialEndsAt);
+      set({ isLoadingAccountTier: false, trialEndsAt });
       return tier;
     } catch (error) {
       console.error(`Failed to fetch account tier (attempt ${retryCount + 1}):`, error);

@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Editor, { type Monaco } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useAccountStore } from "@/stores/account-store";
+import { DeviceHandshakeResponse_AccountTier } from "../../bindings/github.com/focusd-so/focusd/gen/api/v1/models";
+import { Browser } from "@wailsio/runtime";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { IconDeviceFloppy, IconHistory, IconFileText, IconTerminal, IconTestPipe } from "@tabler/icons-react";
+import { IconDeviceFloppy, IconHistory, IconFileText, IconTerminal, IconTestPipe, IconLock, IconCrown } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ExecutionLogsSheet } from "@/components/execution-logs";
@@ -329,6 +333,14 @@ export function CustomRules() {
     fetchCustomRulesHistory,
   } = useSettingsStore();
 
+  const { checkoutLink, fetchAccountTier } = useAccountStore();
+  const { data: accountTier } = useQuery({
+    queryKey: ['accountTier'],
+    queryFn: () => fetchAccountTier(),
+  });
+
+  const isFreeTier = accountTier === DeviceHandshakeResponse_AccountTier.DeviceHandshakeResponse_ACCOUNT_TIER_FREE;
+
   // Track unsaved draft changes - null means no local changes (use store value)
   const [draft, setDraft] = useState<string | null>(null);
   const [logsOpen, setLogsOpen] = useState(false);
@@ -464,6 +476,12 @@ export function CustomRules() {
             <IconFileText className="w-4 h-4 text-muted-foreground" />
             <span className="text-xs font-medium">rules.ts</span>
           </div>
+          {!isFreeTier && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20 shadow-sm">
+              <IconCrown className="w-3 h-3 text-violet-400" />
+              <span className="text-[10px] font-bold text-violet-400 uppercase tracking-tight">Plus Feature</span>
+            </div>
+          )}
           {hasUnsavedChanges && (
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20">
               <span className="relative flex h-1.5 w-1.5">
@@ -477,9 +495,10 @@ export function CustomRules() {
 
         <div className="flex items-center gap-2">
           <DropdownMenu onOpenChange={handleHistoryOpen}>
-            <DropdownMenuTrigger asChild>
+            <DropdownMenuTrigger asChild disabled={isFreeTier}>
               <button
-                className="inline-flex items-center gap-1.5 h-8 px-2 text-xs font-medium text-muted-foreground/60 hover:text-foreground hover:underline underline-offset-4 transition-colors"
+                disabled={isFreeTier}
+                className="inline-flex items-center gap-1.5 h-8 px-2 text-xs font-medium text-muted-foreground/60 hover:text-foreground hover:underline underline-offset-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-muted-foreground/60 disabled:hover:no-underline"
               >
                 <IconHistory className="w-3.5 h-3.5" />
                 <span className="sr-only sm:not-sr-only">History</span>
@@ -513,7 +532,8 @@ export function CustomRules() {
 
           <button
             onClick={() => setLogsOpen(true)}
-            className="inline-flex items-center gap-1.5 h-8 px-2 text-xs font-medium text-muted-foreground/60 hover:text-foreground hover:underline underline-offset-4 transition-colors"
+            disabled={isFreeTier}
+            className="inline-flex items-center gap-1.5 h-8 px-2 text-xs font-medium text-muted-foreground/60 hover:text-foreground hover:underline underline-offset-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-muted-foreground/60 disabled:hover:no-underline"
           >
             <IconTerminal className="w-3.5 h-3.5" />
             <span className="sr-only sm:not-sr-only">Exec Logs</span>
@@ -521,7 +541,8 @@ export function CustomRules() {
 
           <button
             onClick={() => setTestOpen(true)}
-            className="inline-flex items-center gap-1.5 h-8 px-2 text-xs font-medium text-muted-foreground/60 hover:text-foreground hover:underline underline-offset-4 transition-colors"
+            disabled={isFreeTier}
+            className="inline-flex items-center gap-1.5 h-8 px-2 text-xs font-medium text-muted-foreground/60 hover:text-foreground hover:underline underline-offset-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-muted-foreground/60 disabled:hover:no-underline"
           >
             <IconTestPipe className="w-3.5 h-3.5" />
             <span className="sr-only sm:not-sr-only">Test</span>
@@ -530,10 +551,10 @@ export function CustomRules() {
           <Button
             size="sm"
             onClick={handleSave}
-            disabled={!hasUnsavedChanges}
+            disabled={!hasUnsavedChanges || isFreeTier}
             className={cn(
               "h-8 px-3 transition-all duration-200",
-              hasUnsavedChanges
+              hasUnsavedChanges && !isFreeTier
                 ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-500"
                 : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
             )}
@@ -573,7 +594,7 @@ export function CustomRules() {
         </div>
       )}
 
-      <div className="flex-1 min-h-[400px] user-select-allow bg-[#1e1e1e]">
+      <div className="flex-1 min-h-[400px] user-select-allow bg-[#1e1e1e] relative">
         <Editor
           value={displayedRules}
           height="100%"
@@ -583,6 +604,8 @@ export function CustomRules() {
           onMount={handleEditorMount}
           onChange={handleChange}
           options={{
+            readOnly: isFreeTier,
+            domReadOnly: isFreeTier,
             lineNumbers: "on",
             folding: true,
             renderLineHighlight: "line",
@@ -604,6 +627,33 @@ export function CustomRules() {
             }
           }}
         />
+
+        {/* Free Tier Overlay */}
+        {isFreeTier && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/60 backdrop-blur-sm p-6 text-center">
+            <div className="max-w-md space-y-4 rounded-xl border border-border/50 bg-card p-6 shadow-lg shadow-black/20">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-violet-500/10">
+                <IconCrown className="h-6 w-6 text-violet-400" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold tracking-tight">Custom Rules is a Pro feature</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Write your own logic to handle infinite edge cases. Allow research on youtube,
+                  block specific subreddits, or give yourself a 15 minute break every 2 hours.
+                </p>
+              </div>
+              <div className="pt-2">
+                <Button
+                  onClick={() => checkoutLink && Browser.OpenURL(checkoutLink)}
+                  className="w-full bg-violet-600 hover:bg-violet-700 text-white shadow-md shadow-violet-900/20"
+                >
+                  <IconLock className="mr-2 h-4 w-4" />
+                  Upgrade to unlock
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <ExecutionLogsSheet open={logsOpen} onOpenChange={setLogsOpen} />

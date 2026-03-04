@@ -19,6 +19,7 @@ import (
 var (
 	lastHandshakeAt int64
 	accountTier     apiv1.DeviceHandshakeResponse_AccountTier
+	trialEndsAt     int64
 	token           string
 )
 
@@ -59,6 +60,10 @@ func GetAccountTier() apiv1.DeviceHandshakeResponse_AccountTier {
 	return accountTier
 }
 
+func GetTrialEndsAt() int64 {
+	return trialEndsAt
+}
+
 func PerformHandshake(ctx context.Context, client apiv1connect.ApiServiceClient) error {
 	deviceFingerPrint, err := native.GetIdentity()
 	if err != nil {
@@ -92,6 +97,7 @@ func PerformHandshake(ctx context.Context, client apiv1connect.ApiServiceClient)
 	slog.Info("handshake successful")
 
 	accountTier = resp.Msg.GetAccountTier()
+	trialEndsAt = resp.Msg.GetTrialEndsAt()
 	lastHandshakeAt = time.Now().Unix()
 	token = resp.Msg.GetSessionToken()
 

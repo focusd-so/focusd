@@ -10,7 +10,10 @@ import (
 type SettingsKey string
 
 const (
-	SettingsKeyCustomRules SettingsKey = "custom_rules"
+	SettingsKeyCustomRules          SettingsKey = "custom_rules"
+	SettingsKeyIdleThreshold        SettingsKey = "idle_threshold"
+	SettingsKeyHistoryRetention     SettingsKey = "history_retention"
+	SettingsKeyDistractionAllowance SettingsKey = "distraction_allowance"
 )
 
 type Settings struct {

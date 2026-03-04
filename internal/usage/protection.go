@@ -8,6 +8,8 @@ import (
 
 	"gorm.io/gorm"
 
+	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
+	"github.com/focusd-so/focusd/internal/identity"
 	"github.com/focusd-so/focusd/internal/settings"
 )
 
@@ -243,7 +245,10 @@ func (s *Service) CalculateTerminationMode(ctx context.Context, appUsage *Applic
 	}
 
 	if customRulesDecision.Mode != "" && customRulesDecision.Mode != TerminationModeNone {
-		return customRulesDecision, nil
+		tier := identity.GetAccountTier()
+		if tier != apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE {
+			return customRulesDecision, nil
+		}
 	}
 
 	if classification != ClassificationDistracting {

@@ -36,7 +36,7 @@ message DeviceHandshakeResponse {
         ACCOUNT_TIER_UNSPECIFIED = 0;
         ACCOUNT_TIER_FREE = 1;
         ACCOUNT_TIER_TRIAL = 2;
-        ACCOUNT_TIER_BASIC = 3;
+        ACCOUNT_TIER_PLUS = 3;
         ACCOUNT_TIER_PRO = 4;
     }
 
@@ -46,6 +46,7 @@ message DeviceHandshakeResponse {
 
     // Limits / Account Status
     AccountTier account_tier = 4;
+    int64 trial_ends_at = 5; // Unix timestamp, 0 if not trialing
 }
 
 // ---------------------------------------------------------
@@ -73,7 +74,7 @@ message LLMClassifyResponse {
 // ---------------------------------------------------------
 enum CheckoutProduct {
     CHECKOUT_PRODUCT_UNSPECIFIED = 0;
-    CHECKOUT_PRODUCT_BASIC = 1;
+    CHECKOUT_PRODUCT_PLUS = 1;
     CHECKOUT_PRODUCT_PRO = 2;
 }
 

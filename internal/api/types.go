@@ -5,7 +5,7 @@ type Tier string
 const (
 	TierFree  Tier = "free"
 	TierTrial Tier = "trial"
-	TierBasic Tier = "basic"
+	TierPlus  Tier = "plus"
 	TierPro   Tier = "pro"
 )
 

@@ -10,6 +10,9 @@ import { SettingsKey } from "../../bindings/github.com/focusd-so/focusd/internal
 interface SettingsState {
   settings: Settings[];
   customRules: string;
+  idleThreshold: string;
+  historyRetention: string;
+  distractionAllowance: string;
   customRulesHistory: Settings[];
   isLoading: boolean;
   error: string | null;
@@ -23,6 +26,9 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
   settings: [],
   customRules: "",
+  idleThreshold: "120", // default 120
+  historyRetention: "7", // default 7
+  distractionAllowance: "0", // default 0 / unlimited
   customRulesHistory: [],
   isLoading: false,
   error: null,
@@ -34,7 +40,24 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       const customRules =
         settings?.find((s) => s.key === SettingsKey.SettingsKeyCustomRules)
           ?.value || "";
-      set({ settings: settings || [], customRules, isLoading: false });
+      const idleThreshold =
+        settings?.find((s) => s.key === SettingsKey.SettingsKeyIdleThreshold)
+          ?.value || "120";
+      const historyRetention =
+        settings?.find((s) => s.key === SettingsKey.SettingsKeyHistoryRetention)
+          ?.value || "7";
+      const distractionAllowance =
+        settings?.find((s) => s.key === SettingsKey.SettingsKeyDistractionAllowance)
+          ?.value || "0";
+
+      set({
+        settings: settings || [],
+        customRules,
+        idleThreshold,
+        historyRetention,
+        distractionAllowance,
+        isLoading: false
+      });
     } catch (error) {
       console.error("Failed to fetch settings:", error);
       set({ error: String(error), isLoading: false });
@@ -61,6 +84,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       // Update local state optimistically
       if (key === SettingsKey.SettingsKeyCustomRules) {
         set({ customRules: value });
+      } else if (key === SettingsKey.SettingsKeyIdleThreshold) {
+        set({ idleThreshold: value });
+      } else if (key === SettingsKey.SettingsKeyHistoryRetention) {
+        set({ historyRetention: value });
+      } else if (key === SettingsKey.SettingsKeyDistractionAllowance) {
+        set({ distractionAllowance: value });
       }
 
       // Refresh to get the updated version from backend
