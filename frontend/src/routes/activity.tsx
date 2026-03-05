@@ -154,14 +154,14 @@ function ActivityPage() {
       // For native apps (no hostname): match by bundle_id only
       const whitelistEntry = allowedItems.find((w) => {
         const itemHostname = item.usage.application?.hostname;
-        const itemExePath = item.usage.application?.executable_path;
+        const itemName = item.usage.application?.name;
 
         if (w.hostname) {
           // Whitelist entry is for a website - match by hostname only
           return w.hostname === itemHostname;
-        } else if (w.executable_path) {
+        } else if (w.appname) {
           // Whitelist entry is for a native app - match by executable_path only
-          return w.executable_path === itemExePath;
+          return w.appname === itemName;
         }
         return false;
       });
@@ -181,8 +181,8 @@ function ActivityPage() {
       const alreadyInList = result.some((r) => {
         if (allowed.hostname) {
           return r.usage.application?.hostname === allowed.hostname;
-        } else if (allowed.executable_path) {
-          return r.usage.application?.executable_path === allowed.executable_path;
+        } else if (allowed.appname) {
+          return r.usage.application?.name === allowed.appname;
         }
         return false;
       });
@@ -192,8 +192,8 @@ function ActivityPage() {
         const recentUsage = recentUsages.find((u) => {
           if (allowed.hostname) {
             return u.application?.hostname === allowed.hostname;
-          } else if (allowed.executable_path) {
-            return u.application?.executable_path === allowed.executable_path;
+          } else if (allowed.appname) {
+            return u.application?.name === allowed.appname;
           }
           return false;
         });
