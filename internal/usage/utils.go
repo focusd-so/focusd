@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"time"
 
@@ -125,4 +126,21 @@ func createSandboxContext(appName string, url *string) sandboxContext {
 	}
 
 	return sandboxCtx
+}
+
+func withPtr[T any](v T) *T {
+	// check if v is zero value
+	if reflect.ValueOf(v).IsZero() {
+		return nil
+	}
+
+	return &v
+}
+
+func fromPtr[T any](v *T) T {
+	if v == nil {
+		return *new(T)
+	}
+
+	return *v
 }

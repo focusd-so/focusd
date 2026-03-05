@@ -180,7 +180,7 @@ func (s *Service) Whitelist(appname string, hostname string, duration time.Durat
 	}
 
 	// delete any existing whitelist entries for the bundle ID and hostname
-	if err := s.db.Where("appname = ? AND hostname = ?", appname, hostname).Delete(&ProtectionWhitelist{}).Error; err != nil {
+	if err := s.db.Where("app_name = ? AND hostname = ?", appname, hostname).Delete(&ProtectionWhitelist{}).Error; err != nil {
 		return err
 	}
 
@@ -279,7 +279,7 @@ func (s *Service) CalculateTerminationMode(ctx context.Context, appUsage *Applic
 
 	// get all whitelist entries for the bundle ID and hostname
 	var whitelist ProtectionWhitelist
-	if err := s.db.Where("name = ? AND expires_at > ?", appUsage.Application.Name, time.Now().Unix()).Limit(1).First(&whitelist).Error; err != nil {
+	if err := s.db.Where("app_name = ? AND expires_at > ?", appUsage.Application.Name, time.Now().Unix()).Limit(1).First(&whitelist).Error; err != nil {
 		if err != gorm.ErrRecordNotFound {
 			return TerminationDecision{}, err
 		}

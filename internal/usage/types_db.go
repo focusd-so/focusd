@@ -23,31 +23,35 @@ const (
 //     eg. Chrome + google.com != Chrome + youtube.com, each of them will have its own application
 type Application struct {
 	// mandatory fields
-	ID   int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	Name string `json:"name" gorm:"uniqueIndex:idx_name_hostname_id;nullable"`
+	ID   int64  `json:"id" gorm:"primaryKey;autoIncrement;not null"`
+	Name string `json:"name" gorm:"uniqueIndex:idx_name_hostname_id;not null"`
 
 	// optional fields
 	Icon     *string `json:"icon"` // either app icon or favicon if host is present
-	Hostname *string `json:"hostname" gorm:"uniqueIndex:idx_name_hostname_id;nullable"`
+	Hostname *string `json:"hostname" gorm:"uniqueIndex:idx_name_hostname_id"`
 	Domain   *string `json:"domain"`
 
 	// darwin only
 	BundleID *string `json:"bundle_id"`
 }
 
+func (a Application) TableName() string {
+	return "application"
+}
+
 type ApplicationUsage struct {
 	// mandatory fields
-	ID              int64           `gorm:"primaryKey;autoIncrement" json:"id"`
-	WindowTitle     string          `json:"window_title"`
-	StartedAt       int64           `json:"started_at"`
-	Classification  Classification  `gorm:"index:idx_classification" json:"classification"`
-	TerminationMode TerminationMode `json:"termination_mode"`
-	ExecutablePath  string          `json:"executable_path"`
+	ID              int64           `json:"id" gorm:"primaryKey;autoIncrement;not null"`
+	WindowTitle     string          `json:"window_title" gorm:"not null"`
+	StartedAt       int64           `json:"started_at" gorm:"not null"`
+	Classification  Classification  `json:"classification" gorm:"index:idx_classification"`
+	TerminationMode TerminationMode `json:"termination_mode" gorm:"not null"`
+	ExecutablePath  string          `json:"executable_path" gorm:"not null"`
 
 	// optional fields
-	BrowserURL      *string `json:"browser_url" gorm:"type:text;nullable"`
-	EndedAt         *int64  `json:"ended_at" gorm:"nullable"`
-	DurationSeconds *int    `json:"duration_seconds" gorm:"nullable"`
+	BrowserURL      *string `json:"browser_url" gorm:"type:text"`
+	EndedAt         *int64  `json:"ended_at"`
+	DurationSeconds *int    `json:"duration_seconds"`
 
 	ClassificationError      *string               `gorm:"index:idx_classification_error" json:"classification_error"`
 	ClassificationConfidence *float32              `json:"classification_confidence"`

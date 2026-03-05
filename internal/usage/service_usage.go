@@ -246,49 +246,49 @@ func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage
 //   - error: Any error encountered during database operations or favicon fetching
 func (s *Service) getOrCreateApplication(ctx context.Context, name, icon string, bundleID, rawURL *string) (Application, error) {
 	// Handle web applications (browser tabs with URLs)
-	if rawURL != nil {
+
+	rawURLValue := fromPtr(rawURL)
+
+	if rawURLValue != "" {
 		// Extract hostname from the URL (e.g., "www.google.com" from "https://www.google.com/search?q=...")
-		u, err := url.Parse(*rawURL)
+		u, err := url.Parse(rawURLValue)
 		if err != nil {
 			slog.Warn("failed to parse URL", "error", err)
 		}
 
 		hostname := u.Hostname()
-		if hostname == "" {
-			slog.Warn("empty hostname")
-		}
 
 		// Attempt to find an existing application record by hostname.
 		// Web apps are uniquely identified by hostname, so all tabs from the same
 		// site (e.g., multiple Google tabs) share the same Application record.
-		var application Application
-		if err := s.db.Where("hostname = ? AND name = ?", hostname, name).First(&application).Error; err != nil {
+		var (
+			application Application
+			query       = s.db.Where("(hostname = ? OR hostname IS NULL) AND name = ?", hostname, name)
+		)
+
+		if err := query.First(&application).Error; err != nil {
 			slog.Warn("failed to find application by hostname", "error", err)
 		}
 
 		// If no existing application found, create a new one with the provided metadata
 		if application.ID == 0 {
-			application = Application{
-				Name:     name,
-				Hostname: &hostname,
-				BundleID: bundleID,
-			}
+			application = Application{Name: name, BundleID: bundleID}
 		}
 
-		// Extract the effective domain (TLD+1) if not already set.
-		// This normalizes subdomains: "mail.google.com" and "docs.google.com" both become "google.com".
-		// Useful for grouping related sites and aggregating usage statistics.
-		if application.Domain == nil {
-			domain, _ := publicsuffix.EffectiveTLDPlusOne(hostname)
-			if domain == "" {
-				slog.Warn("empty domain")
-			}
+		if hostname != "" {
+			application.Hostname = &hostname
 
-			application.Domain = &domain
+			// Extract the effective domain (TLD+1) if not already set.
+			// This normalizes subdomains: "mail.google.com" and "docs.google.com" both become "google.com".
+			// Useful for grouping related sites and aggregating usage statistics.
+			domain, _ := publicsuffix.EffectiveTLDPlusOne(hostname)
+			if domain != "" {
+				application.Domain = &domain
+			}
 		}
 
 		// Fetch favicon if icon is empty or very small (old 16x16 ICO format, typically <500 chars base64)
-		if application.Icon != nil && len(*application.Icon) < 500 {
+		if application.Icon == nil {
 			appIcon, err := fetchFavicon(ctx, fmt.Sprintf("https://%s", hostname))
 			if err != nil {
 				slog.Warn("failed to fetch app icon", "error", err)
@@ -319,9 +319,12 @@ func (s *Service) getOrCreateApplication(ctx context.Context, name, icon string,
 		application = Application{
 			Name:     name,
 			BundleID: bundleID,
-			Icon:     &icon,
 		}
-	} else if application.Icon != nil && len(*application.Icon) < 500 && icon != "" {
+	}
+
+	slog.Info("application icon", "icon", application.Icon)
+
+	if application.Icon == nil && icon != "" {
 		// Update the icon for existing apps that don't have one yet
 		application.Icon = &icon
 	}
