@@ -36,8 +36,7 @@ export interface UsageAggregation {
   application: {
     id: number;
     name: string;
-    executable_path: string;
-    icon: string;
+    icon: string | null;
     hostname: string | null;
     domain: string | null;
     bundle_id: string | null;

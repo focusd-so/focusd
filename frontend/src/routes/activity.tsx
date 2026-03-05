@@ -160,7 +160,7 @@ function ActivityPage() {
           // Whitelist entry is for a website - match by hostname only
           return w.hostname === itemHostname;
         } else if (w.appname) {
-          // Whitelist entry is for a native app - match by executable_path only
+          // Whitelist entry is for a native app - match by name only
           return w.appname === itemName;
         }
         return false;

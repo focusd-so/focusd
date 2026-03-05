@@ -173,7 +173,7 @@ export function PauseConfirmationDialog({
                               <button
                                 key={durationFn}
                                 onClick={() =>
-                                  handleQuickAllow(app?.executable_path || "", app?.hostname || "", durationFn)
+                                  handleQuickAllow(app?.name || "", app?.hostname || "", durationFn)
                                 }
                                 disabled={isAllowing}
                                 className="px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:bg-green-500/10 hover:text-green-400 transition-all disabled:opacity-50"
