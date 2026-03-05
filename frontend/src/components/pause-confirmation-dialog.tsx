@@ -97,11 +97,11 @@ export function PauseConfirmationDialog({
     setSelectedDuration(null);
   };
 
-  const handleQuickAllow = async (executablePath: string, hostname: string, durationMinutes: number) => {
-    const key = hostname || executablePath;
+  const handleQuickAllow = async (appName: string, hostname: string, durationMinutes: number) => {
+    const key = hostname || appName;
     setAllowingKey(key);
     try {
-      await addToWhitelist(executablePath, hostname, durationMinutes);
+      await addToWhitelist(appName, hostname, durationMinutes);
       onOpenChange(false);
     } finally {
       setAllowingKey(null);

@@ -42,6 +42,7 @@ type ApplicationUsage struct {
 	StartedAt       int64           `json:"started_at"`
 	Classification  Classification  `gorm:"index:idx_classification" json:"classification"`
 	TerminationMode TerminationMode `json:"termination_mode"`
+	ExecutablePath  string          `json:"executable_path"`
 
 	// optional fields
 	BrowserURL      *string `json:"browser_url" gorm:"type:text;nullable"`
@@ -114,12 +115,12 @@ type ApplicationUsageTags struct {
 }
 
 type ProtectionWhitelist struct {
-	ID        int64 `gorm:"primaryKey;autoIncrement" json:"id"`
+	ID int64 `gorm:"primaryKey;autoIncrement" json:"id"`
+	// ExpiresAt should be pre-calculated and set to the time when the whitelist expires
 	ExpiresAt int64 `json:"expires_at"`
 
-	ExecutablePath string  `gorm:"uniqueIndex:idx_allow_usage_identity" json:"executable_path"`
-	Hostname       *string `gorm:"uniqueIndex:idx_allow_usage_identity" json:"hostname"`
-	URL            *string `gorm:"uniqueIndex:idx_allow_usage_identity" json:"url"`
+	AppName  string  `gorm:"uniqueIndex:idx_allow_usage_identity" json:"appname"`
+	Hostname *string `gorm:"uniqueIndex:idx_allow_usage_identity" json:"hostname"`
 }
 
 func (p *ProtectionWhitelist) TableName() string {
@@ -145,7 +146,6 @@ type IdlePeriod struct {
 	StartedAt       int64  `json:"started_at"`
 	EndedAt         *int64 `json:"end_at" gorm:"index:idx_ended_at"`
 	DurationSeconds *int   `json:"duration_seconds"`
-	Reason          string `json:"reason"`
 }
 
 func (i *IdlePeriod) TableName() string {

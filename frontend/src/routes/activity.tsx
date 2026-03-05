@@ -323,9 +323,9 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
   };
 
   const handleAllowWithDuration = async (durationMinutes: number) => {
-    const executablePath = usage.application?.executable_path || "";
+    const appname = usage.application?.name || "";
     const hostname = usage.application?.hostname || "";
-    await addToWhitelist(executablePath, hostname, durationMinutes);
+    await addToWhitelist(appname, hostname, durationMinutes);
   };
 
   const handleUnallow = async () => {

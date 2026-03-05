@@ -167,7 +167,7 @@ func (s *Service) GetPauseHistory(days int) ([]ProtectionPause, error) {
 //
 // Side effects:
 //   - Creates a ProtectionWhitelist record in the database with expiration timestamp
-func (s *Service) Whitelist(executablePath string, hostname string, duration time.Duration) error {
+func (s *Service) Whitelist(appname string, hostname string, duration time.Duration) error {
 	if duration < 5*time.Minute {
 		return fmt.Errorf("duration must be at least 5 minutes")
 	}
@@ -180,13 +180,13 @@ func (s *Service) Whitelist(executablePath string, hostname string, duration tim
 	}
 
 	// delete any existing whitelist entries for the bundle ID and hostname
-	if err := s.db.Where("executable_path = ? AND hostname = ?", executablePath, hostname).Delete(&ProtectionWhitelist{}).Error; err != nil {
+	if err := s.db.Where("appname = ? AND hostname = ?", appname, hostname).Delete(&ProtectionWhitelist{}).Error; err != nil {
 		return err
 	}
 
 	whitelist := ProtectionWhitelist{
-		ExecutablePath: executablePath,
-		ExpiresAt:      expiresAt,
+		AppName:   appname,
+		ExpiresAt: expiresAt,
 	}
 
 	if hostname != "" {

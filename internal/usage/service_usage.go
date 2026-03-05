@@ -38,10 +38,7 @@ func (s *Service) IdleChanged(ctx context.Context, isIdle bool) error {
 		}
 
 		// create a new idle period
-		newIdlePeriod := &IdlePeriod{
-			StartedAt: time.Now().Unix(),
-			Reason:    "user_idle",
-		}
+		newIdlePeriod := &IdlePeriod{StartedAt: time.Now().Unix()}
 		if err := s.db.Create(&newIdlePeriod).Error; err != nil {
 			return fmt.Errorf("failed to create new idle period: %w", err)
 		}
@@ -75,15 +72,16 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 		return fmt.Errorf("failed to close current application usage: %w", err)
 	}
 
-	application, err := s.getOrCreateApplication(ctx, executablePath, appName, icon, bundleID, url)
+	application, err := s.getOrCreateApplication(ctx, appName, icon, bundleID, url)
 	if err != nil {
 		return fmt.Errorf("failed to get or create application: %w", err)
 	}
 
 	applicationUsage := ApplicationUsage{
-		WindowTitle: windowTitle,
-		BrowserURL:  url,
-		StartedAt:   time.Now().Unix(),
+		ExecutablePath: executablePath,
+		WindowTitle:    windowTitle,
+		BrowserURL:     url,
+		StartedAt:      time.Now().Unix(),
 
 		Application: application,
 	}
@@ -238,7 +236,6 @@ func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage
 //
 // Parameters:
 //   - ctx: Context for cancellation and timeout control (used for favicon fetching)
-//   - executablePath: Full path to the application executable (e.g., "/Applications/Safari.app")
 //   - name: Display name of the application (e.g., "Safari", "Google Chrome")
 //   - icon: Base64-encoded icon data for native apps (ignored for web apps)
 //   - bundleID: Optional macOS bundle identifier (e.g., "com.apple.Safari")
@@ -247,7 +244,7 @@ func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage
 // Returns:
 //   - Application: The found or newly created application record
 //   - error: Any error encountered during database operations or favicon fetching
-func (s *Service) getOrCreateApplication(ctx context.Context, executablePath, name, icon string, bundleID, rawURL *string) (Application, error) {
+func (s *Service) getOrCreateApplication(ctx context.Context, name, icon string, bundleID, rawURL *string) (Application, error) {
 	// Handle web applications (browser tabs with URLs)
 	if rawURL != nil {
 		// Extract hostname from the URL (e.g., "www.google.com" from "https://www.google.com/search?q=...")
@@ -312,7 +309,7 @@ func (s *Service) getOrCreateApplication(ctx context.Context, executablePath, na
 	// Handle native applications (non-browser apps identified by executable path)
 	// Native apps are uniquely identified by their executable path on disk.
 	var application Application
-	if err := s.db.Where("executable_path = ?", executablePath).First(&application).Error; err != nil {
+	if err := s.db.Where("name = ?", name).First(&application).Error; err != nil {
 		slog.Warn("failed to find application by executable path", "error", err)
 	}
 
