@@ -305,10 +305,7 @@ export function terminationMode(ctx) {
 
 		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationNeutral,
-			Application: usage.Application{
-				Name:           "Slack",
-				ExecutablePath: "/Applications/Slack.app",
-			},
+			Application:    usage.Application{Name: "Slack"},
 		})
 		require.NoError(t, err)
 		require.Equal(t, usage.TerminationModeBlock, decision.Mode)
@@ -332,10 +329,7 @@ export function terminationMode(ctx) {
 
 		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
-			Application: usage.Application{
-				Name:           "YouTube",
-				ExecutablePath: "/Applications/YouTube.app",
-			},
+			Application:    usage.Application{Name: "YouTube"},
 		})
 		require.NoError(t, err)
 		require.Equal(t, usage.TerminationModeBlock, decision.Mode)
@@ -363,10 +357,7 @@ export function terminationMode(ctx) {
 		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
 			BrowserURL:     &url,
-			Application: usage.Application{
-				Name:           "Chrome",
-				ExecutablePath: "/Applications/Google Chrome.app",
-			},
+			Application:    usage.Application{Name: "Chrome"},
 		})
 		require.NoError(t, err)
 		require.Equal(t, usage.TerminationModeBlock, decision.Mode)
@@ -392,10 +383,7 @@ export function terminationMode(ctx) {
 		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
 			BrowserURL:     &url,
-			Application: usage.Application{
-				Name:           "Chrome",
-				ExecutablePath: "/Applications/Google Chrome.app",
-			},
+			Application:    usage.Application{Name: "Chrome"},
 		})
 		require.NoError(t, err)
 		require.Equal(t, usage.TerminationModeAllow, decision.Mode)
@@ -413,10 +401,7 @@ export function terminationMode(ctx) {
 
 		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationNeutral,
-			Application: usage.Application{
-				Name:           "VSCode",
-				ExecutablePath: "/Applications/Visual Studio Code.app",
-			},
+			Application:    usage.Application{Name: "VSCode"},
 		})
 		require.NoError(t, err)
 		// When custom rules return undefined, falls through to default logic.
@@ -436,10 +421,7 @@ func TestProtection_CalculateTerminationMode_ProtectionPaused(t *testing.T) {
 
 	decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
 		Classification: usage.ClassificationDistracting,
-		Application: usage.Application{
-			Name:           "YouTube",
-			ExecutablePath: "/Applications/YouTube.app",
-		},
+		Application:    usage.Application{Name: "YouTube"},
 	})
 	require.NoError(t, err)
 	require.Equal(t, usage.TerminationModePaused, decision.Mode)
@@ -457,10 +439,7 @@ func TestProtection_AllowedByWhitelist(t *testing.T) {
 		emptyHostname := ""
 		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
-			Application: usage.Application{
-				ExecutablePath: "/usr/bin/app",
-				Hostname:       &emptyHostname,
-			},
+			Application:    usage.Application{Hostname: &emptyHostname},
 		})
 		require.NoError(t, err)
 		require.Equal(t, usage.TerminationModeAllow, decision.Mode)
@@ -477,10 +456,7 @@ func TestProtection_AllowedByWhitelist(t *testing.T) {
 		hostname := "example.com"
 		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
-			Application: usage.Application{
-				ExecutablePath: "/usr/bin/app",
-				Hostname:       &hostname,
-			},
+			Application:    usage.Application{Hostname: &hostname},
 		})
 		require.NoError(t, err)
 		require.Equal(t, usage.TerminationModeAllow, decision.Mode)

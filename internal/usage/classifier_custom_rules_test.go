@@ -148,7 +148,7 @@ func TestClassifyCustomRules_Application(t *testing.T) {
 	service, _ := setUpService(t, WithSettingsService(settingsService))
 
 	// match Slack app
-	response, err := service.ClassifyCustomRules(context.Background(), "Slack", "/Applications/Slack.app/Contents/MacOS/Slack", nil, nil)
+	response, err := service.ClassifyCustomRules(context.Background(), "Slack", nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, response)
 	require.Equal(t, ClassificationNeutral, response.Classification)
@@ -156,7 +156,7 @@ func TestClassifyCustomRules_Application(t *testing.T) {
 	require.Equal(t, []string{"communication", "work"}, response.Tags)
 
 	// no match Steam app
-	response, err = service.ClassifyCustomRules(context.Background(), "Steam", "/Applications/Steam.app/Contents/MacOS/Steam", nil, nil)
+	response, err = service.ClassifyCustomRules(context.Background(), "Steam", nil, nil)
 	require.NoError(t, err)
 	require.Nil(t, response)
 }

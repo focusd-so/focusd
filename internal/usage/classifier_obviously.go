@@ -491,12 +491,12 @@ var alwaysAllowPathCategories = []hostnameCategory{
 //  2. Obviously productive applications (e.g. developer tools, productivity apps, etc.)
 //  3. Applications that are used mixed of productive and distracting content depending on the usage context
 //     eg. Slack - funny dogs videos is distracting, but billing-internal-channel is supporting for communication
-func (s *Service) classifyObviously(ctx context.Context, executablePath string, appName string, url *string) (*ClassificationResponse, error) {
+func (s *Service) classifyObviously(ctx context.Context, appName string, url *string) (*ClassificationResponse, error) {
 	if url != nil {
 		return s.classifyObviouslyWebsite(ctx, *url)
 	}
 
-	return s.classifyObviouslyApplication(ctx, executablePath, appName)
+	return s.classifyObviouslyApplication(ctx, appName)
 }
 
 func (s *Service) classifyObviouslyWebsite(ctx context.Context, browserURL string) (*ClassificationResponse, error) {
@@ -614,6 +614,6 @@ func (s *Service) classifyObviouslyWebsite(ctx context.Context, browserURL strin
 	return nil, nil
 }
 
-func (s *Service) classifyObviouslyApplication(ctx context.Context, executablePath string, appName string) (*ClassificationResponse, error) {
+func (s *Service) classifyObviouslyApplication(ctx context.Context, appName string) (*ClassificationResponse, error) {
 	return nil, nil
 }

@@ -57,3 +57,14 @@ type ClassifyRequest struct {
 	URL            string         `json:"url"`
 	Classification Classification `json:"classification"`
 }
+
+type ApplicationTagsSlice []ApplicationUsageTags
+
+func (a ApplicationTagsSlice) Tags() []string {
+	tags := make([]string, len(a))
+
+	for i, tag := range a {
+		tags[i] = tag.Tag
+	}
+	return tags
+}

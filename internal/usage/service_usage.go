@@ -11,10 +11,11 @@ import (
 	"strings"
 	"time"
 
-	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
-	"github.com/focusd-so/focusd/internal/identity"
 	"golang.org/x/net/publicsuffix"
 	"gorm.io/gorm"
+
+	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
+	"github.com/focusd-so/focusd/internal/identity"
 )
 
 // IdleChanged is called when the idle state of the user changes (e.g. user starts or stops using the computer)
@@ -87,6 +88,10 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 		Application: application,
 	}
 
+	if s.UsageUpdates != nil {
+		s.UsageUpdates <- &applicationUsage
+	}
+
 	// save the application usage
 	if err := s.db.Save(&applicationUsage).Error; err != nil {
 		return fmt.Errorf("failed to save application usage: %w", err)
@@ -99,12 +104,16 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 		applicationUsage.Classification = ClassificationError
 	} else if classification != nil {
 		applicationUsage.Classification = classification.Classification
-		applicationUsage.ClassificationSource = classification.ClassificationSource
-		applicationUsage.ClassificationReasoning = classification.Reasoning
-		applicationUsage.ClassificationConfidence = classification.ConfidenceScore
+		applicationUsage.ClassificationSource = &classification.ClassificationSource
+		applicationUsage.ClassificationReasoning = &classification.Reasoning
+		applicationUsage.ClassificationConfidence = &classification.ConfidenceScore
 
-		applicationUsage.DetectedProject = classification.DetectedProject
-		applicationUsage.DetectedCommunicationChannel = classification.DetectedCommunicationChannel
+		if classification.DetectedProject != "" {
+			applicationUsage.DetectedProject = &classification.DetectedProject
+		}
+		if classification.DetectedCommunicationChannel != "" {
+			applicationUsage.DetectedCommunicationChannel = &classification.DetectedCommunicationChannel
+		}
 		applicationUsage.Tags = make([]ApplicationUsageTags, len(classification.Tags))
 		for i, tag := range classification.Tags {
 			applicationUsage.Tags[i] = ApplicationUsageTags{
@@ -112,28 +121,47 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 			}
 		}
 
-		applicationUsage.SandboxContext = classification.SandboxContext
-		applicationUsage.SandboxResponse = classification.SandboxResponse
-		applicationUsage.SandboxLogs = classification.SandboxLogs
+		if classification.SandboxContext != "" {
+			applicationUsage.SandboxContext = &classification.SandboxContext
+		}
+		if classification.SandboxResponse != nil {
+			applicationUsage.SandboxResponse = classification.SandboxResponse
+		}
+		if classification.SandboxLogs != "" {
+			applicationUsage.SandboxLogs = &classification.SandboxLogs
+		}
 	}
 
 	// calculate termination mode.
 	terminationMode, err := s.CalculateTerminationMode(ctx, &applicationUsage)
 	if err != nil {
+		termErr := err.Error()
 		applicationUsage.TerminationMode = TerminationModeNone
-		applicationUsage.TerminationError = err.Error()
+		applicationUsage.TerminationError = &termErr
 	}
 
 	applicationUsage.TerminationMode = terminationMode.Mode
-	applicationUsage.TerminationReasoning = terminationMode.Reasoning
-	applicationUsage.TerminationSource = terminationMode.Source
+
+	if terminationMode.Reasoning != "" {
+		applicationUsage.TerminationReasoning = &terminationMode.Reasoning
+	}
+	if terminationMode.Source != "" {
+		applicationUsage.TerminationSource = &terminationMode.Source
+	}
 
 	if err := s.db.Save(&applicationUsage).Error; err != nil {
 		return fmt.Errorf("failed to save application usage: %w", err)
 	}
 
 	if applicationUsage.TerminationMode == TerminationModeBlock {
-		s.appBlocker(applicationUsage.Application.Name, applicationUsage.WindowTitle, applicationUsage.TerminationReasoning, classification.Tags, applicationUsage.BrowserURL)
+		termReason := ""
+		if applicationUsage.ClassificationReasoning != nil {
+			termReason = *applicationUsage.ClassificationReasoning
+		}
+
+		tags := ApplicationTagsSlice(applicationUsage.Tags).Tags()
+
+		s.appBlocker(applicationUsage.Application.Name, applicationUsage.WindowTitle, termReason, tags, applicationUsage.BrowserURL)
 	}
 
 	if s.UsageUpdates != nil {
@@ -145,7 +173,7 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 
 func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage *ApplicationUsage) (*ClassificationResponse, error) {
 	// Do sandbox classification first, eg user defined custom rules
-	customRulesResp, err := s.ClassifyCustomRules(ctx, applicationUsage.Application.Name, applicationUsage.Application.ExecutablePath, applicationUsage.BrowserURL, nil)
+	customRulesResp, err := s.ClassifyCustomRules(ctx, applicationUsage.Application.Name, applicationUsage.BrowserURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify application usage with custom rules: %w", err)
 	}
@@ -158,7 +186,7 @@ func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage
 	}
 
 	// Do obviously classification next, eg social media, news, shopping, etc.
-	classification, err := s.classifyObviously(ctx, applicationUsage.Application.Name, applicationUsage.Application.ExecutablePath, applicationUsage.BrowserURL)
+	classification, err := s.classifyObviously(ctx, applicationUsage.Application.Name, applicationUsage.BrowserURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify application usage with obviously: %w", err)
 	}
@@ -173,7 +201,7 @@ func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage
 	}
 
 	slog.Info("classifying application usage with LLM")
-	resp, err := s.ClassifyWithLLM(ctx, applicationUsage.Application.Name, applicationUsage.WindowTitle, applicationUsage.Application.ExecutablePath, applicationUsage.BrowserURL)
+	resp, err := s.ClassifyWithLLM(ctx, applicationUsage.Application.Name, applicationUsage.WindowTitle, applicationUsage.BrowserURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify application usage with LLM: %w", err)
 	}
@@ -244,10 +272,9 @@ func (s *Service) getOrCreateApplication(ctx context.Context, executablePath, na
 		// If no existing application found, create a new one with the provided metadata
 		if application.ID == 0 {
 			application = Application{
-				Name:           name,
-				ExecutablePath: executablePath,
-				Hostname:       &hostname,
-				BundleID:       bundleID,
+				Name:     name,
+				Hostname: &hostname,
+				BundleID: bundleID,
 			}
 		}
 
@@ -264,14 +291,14 @@ func (s *Service) getOrCreateApplication(ctx context.Context, executablePath, na
 		}
 
 		// Fetch favicon if icon is empty or very small (old 16x16 ICO format, typically <500 chars base64)
-		if len(application.Icon) < 500 {
+		if application.Icon != nil && len(*application.Icon) < 500 {
 			appIcon, err := fetchFavicon(ctx, fmt.Sprintf("https://%s", hostname))
 			if err != nil {
 				slog.Warn("failed to fetch app icon", "error", err)
 			}
 
 			if appIcon != "" {
-				application.Icon = appIcon
+				application.Icon = &appIcon
 			}
 		}
 
@@ -293,14 +320,13 @@ func (s *Service) getOrCreateApplication(ctx context.Context, executablePath, na
 	// For native apps, the icon is provided by the OS (e.g., from the app bundle).
 	if application.ID == 0 {
 		application = Application{
-			Name:           name,
-			ExecutablePath: executablePath,
-			BundleID:       bundleID,
-			Icon:           icon,
+			Name:     name,
+			BundleID: bundleID,
+			Icon:     &icon,
 		}
-	} else if application.Icon == "" && icon != "" {
+	} else if application.Icon != nil && len(*application.Icon) < 500 && icon != "" {
 		// Update the icon for existing apps that don't have one yet
-		application.Icon = icon
+		application.Icon = &icon
 	}
 
 	// Persist the application (creates new or updates existing)
@@ -354,6 +380,10 @@ func (s *Service) closeApplicationUsage(app *ApplicationUsage) error {
 
 	if err := s.db.Save(&app).Error; err != nil {
 		return fmt.Errorf("failed to update application usage: %w", err)
+	}
+
+	if s.UsageUpdates != nil {
+		s.UsageUpdates <- app
 	}
 
 	return nil

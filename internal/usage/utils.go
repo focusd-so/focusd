@@ -110,10 +110,9 @@ func fetchMainContent(ctx context.Context, rawURL string) (string, error) {
 	return article.TextContent, nil
 }
 
-func createSandboxContext(appName, executablePath string, url *string) sandboxContext {
+func createSandboxContext(appName string, url *string) sandboxContext {
 	sandboxCtx := sandboxContext{
-		AppName:        appName,
-		ExecutablePath: executablePath,
+		AppName: appName,
 	}
 
 	if url != nil {

@@ -184,11 +184,16 @@ func (s *Service) Whitelist(executablePath string, hostname string, duration tim
 		return err
 	}
 
-	return s.db.Create(&ProtectionWhitelist{
+	whitelist := ProtectionWhitelist{
 		ExecutablePath: executablePath,
-		Hostname:       hostname,
 		ExpiresAt:      expiresAt,
-	}).Error
+	}
+
+	if hostname != "" {
+		whitelist.Hostname = &hostname
+	}
+
+	return s.db.Create(&whitelist).Error
 }
 
 // GetWhitelist returns all active whitelist entries that haven't expired.
@@ -274,7 +279,7 @@ func (s *Service) CalculateTerminationMode(ctx context.Context, appUsage *Applic
 
 	// get all whitelist entries for the bundle ID and hostname
 	var whitelist ProtectionWhitelist
-	if err := s.db.Where("executable_path = ? AND hostname = ? AND expires_at > ?", appUsage.Application.ExecutablePath, appUsage.Application.Hostname, time.Now().Unix()).Limit(1).First(&whitelist).Error; err != nil {
+	if err := s.db.Where("name = ? AND expires_at > ?", appUsage.Application.Name, time.Now().Unix()).Limit(1).First(&whitelist).Error; err != nil {
 		if err != gorm.ErrRecordNotFound {
 			return TerminationDecision{}, err
 		}
@@ -302,7 +307,7 @@ func (s *Service) calculateTerminationModeWithCustomRules(_ context.Context, app
 		return TerminationDecision{}, nil
 	}
 
-	sandboxCtx := createSandboxContext(appUsage.Application.Name, appUsage.Application.ExecutablePath, appUsage.BrowserURL)
+	sandboxCtx := createSandboxContext(appUsage.Application.Name, appUsage.BrowserURL)
 	sandboxCtx.Classification = string(appUsage.Classification)
 
 	// Get the latest custom rules code

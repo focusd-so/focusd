@@ -243,19 +243,6 @@ func main() {
 		}
 	}()
 
-	native.OnTitleChange(func(event native.NativeEvent) {
-		var bundleID *string
-		if event.BundleID != "" {
-			bundleID = &event.BundleID
-		}
-
-		var urlPtr *string
-		if event.URL != "" {
-			urlPtr = &event.URL
-		}
-
-		usageService.TitleChanged(ctx, event.ExecutablePath, event.Title, event.AppName, event.Icon, bundleID, urlPtr)
-	})
 	native.OnIdleChange(func(idleSeconds float64) {
 		usageService.IdleChanged(ctx, idleSeconds > 120)
 	})
