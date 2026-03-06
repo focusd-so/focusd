@@ -38,10 +38,7 @@ func TestGetDayInsights_UsageSpanningTwoHours(t *testing.T) {
 		EndedAt:         int64Ptr(startAt.Unix() + int64(duration)),
 		DurationSeconds: intPtr(duration),
 		Classification:  usage.ClassificationProductive,
-		Application: usage.Application{
-			Name:           "Google Chrome",
-			ExecutablePath: "/Applications/Google Chrome.app",
-		},
+		Application:     usage.Application{Name: "Google Chrome"},
 	}
 	require.NoError(t, db.Create(&appUsage).Error)
 
@@ -82,10 +79,7 @@ func TestGetDayInsights_UsageSpanningThreeHours(t *testing.T) {
 		EndedAt:         int64Ptr(startAt.Unix() + int64(duration)),
 		DurationSeconds: intPtr(duration),
 		Classification:  usage.ClassificationDistracting,
-		Application: usage.Application{
-			Name:           "YouTube",
-			ExecutablePath: "/Applications/Safari.app",
-		},
+		Application:     usage.Application{Name: "YouTube"},
 	}
 	require.NoError(t, db.Create(&appUsage).Error)
 
@@ -121,10 +115,7 @@ func TestGetDayInsights_UsageWithinSingleHour(t *testing.T) {
 		EndedAt:         int64Ptr(startAt.Unix() + int64(duration)),
 		DurationSeconds: intPtr(duration),
 		Classification:  usage.ClassificationNeutral,
-		Application: usage.Application{
-			Name:           "Finder",
-			ExecutablePath: "/System/Library/CoreServices/Finder.app",
-		},
+		Application:     usage.Application{Name: "Finder"},
 	}
 	require.NoError(t, db.Create(&appUsage).Error)
 
@@ -155,14 +146,14 @@ func TestGetDayInsights_MultipleUsagesSameHour(t *testing.T) {
 			EndedAt:         int64Ptr(u1Start.Unix() + 1200),
 			DurationSeconds: intPtr(1200),
 			Classification:  usage.ClassificationProductive,
-			Application:     usage.Application{Name: "VSCode", ExecutablePath: "/usr/bin/code"},
+			Application:     usage.Application{Name: "VSCode"},
 		},
 		{
 			StartedAt:       u2Start.Unix(),
 			EndedAt:         int64Ptr(u2Start.Unix() + 900),
 			DurationSeconds: intPtr(900),
 			Classification:  usage.ClassificationDistracting,
-			Application:     usage.Application{Name: "Twitter", ExecutablePath: "/Applications/Safari.app"},
+			Application:     usage.Application{Name: "Twitter"},
 		},
 	}
 	for _, u := range usages {
@@ -191,14 +182,14 @@ func TestGetDayInsights_NilAndZeroDurationSkipped(t *testing.T) {
 		StartedAt:       time.Date(2025, 6, 15, 10, 0, 0, 0, time.UTC).Unix(),
 		DurationSeconds: nil,
 		Classification:  usage.ClassificationProductive,
-		Application:     usage.Application{Name: "App1", ExecutablePath: "/bin/app1"},
+		Application:     usage.Application{Name: "App1"},
 	}
 	// Usage with 0 duration – should be skipped
 	u2 := usage.ApplicationUsage{
 		StartedAt:       time.Date(2025, 6, 15, 11, 0, 0, 0, time.UTC).Unix(),
 		DurationSeconds: intPtr(0),
 		Classification:  usage.ClassificationProductive,
-		Application:     usage.Application{Name: "App2", ExecutablePath: "/bin/app2"},
+		Application:     usage.Application{Name: "App2"},
 	}
 	require.NoError(t, db.Create(&u1).Error)
 	require.NoError(t, db.Create(&u2).Error)
@@ -222,7 +213,7 @@ func TestGetDayInsights_UsageExactlyOnHourBoundary(t *testing.T) {
 		EndedAt:         int64Ptr(startAt.Unix() + 3600),
 		DurationSeconds: intPtr(3600),
 		Classification:  usage.ClassificationProductive,
-		Application:     usage.Application{Name: "IDE", ExecutablePath: "/bin/ide"},
+		Application:     usage.Application{Name: "IDE"},
 	}
 	require.NoError(t, db.Create(&appUsage).Error)
 
@@ -251,14 +242,14 @@ func TestGetDayInsights_PerHourProductivityScore(t *testing.T) {
 			EndedAt:         int64Ptr(u1Start.Unix() + 2400),
 			DurationSeconds: intPtr(2400),
 			Classification:  usage.ClassificationProductive,
-			Application:     usage.Application{Name: "Code", ExecutablePath: "/bin/code"},
+			Application:     usage.Application{Name: "Code"},
 		},
 		{
 			StartedAt:       u2Start.Unix(),
 			EndedAt:         int64Ptr(u2Start.Unix() + 1200),
 			DurationSeconds: intPtr(1200),
 			Classification:  usage.ClassificationDistracting,
-			Application:     usage.Application{Name: "Reddit", ExecutablePath: "/Applications/Safari.app"},
+			Application:     usage.Application{Name: "Reddit"},
 		},
 	}
 	for _, u := range usages {

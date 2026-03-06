@@ -27,8 +27,7 @@ type terminationDecision struct {
 // sandboxContext provides context for the current rule execution including usage data and helper functions
 type sandboxContext struct {
 	// Input data
-	AppName        string `json:"appName"`
-	ExecutablePath string `json:"executablePath"`
+	AppName string `json:"appName"`
 
 	Hostname       string `json:"hostname"`
 	Path           string `json:"path"`

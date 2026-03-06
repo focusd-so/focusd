@@ -11,7 +11,7 @@ import (
 	"github.com/focusd-so/focusd/internal/settings"
 )
 
-func (s *Service) ClassifyCustomRules(ctx context.Context, appName string, executablePath string, url *string, nowTime *time.Time) (*ClassificationResponse, error) {
+func (s *Service) ClassifyCustomRules(ctx context.Context, appName string, url *string, nowTime *time.Time) (*ClassificationResponse, error) {
 	if s.settingsService == nil {
 		slog.Warn("settings service is nil, skipping custom rules classification")
 
@@ -20,7 +20,7 @@ func (s *Service) ClassifyCustomRules(ctx context.Context, appName string, execu
 
 	slog.Info("classifying application usage with custom rules")
 
-	sandboxCtx := createSandboxContext(appName, executablePath, url)
+	sandboxCtx := createSandboxContext(appName, url)
 
 	if nowTime != nil {
 		t := *nowTime

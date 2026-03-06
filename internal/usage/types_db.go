@@ -1,3 +1,10 @@
+// types_db.go contains the database models for the usage service
+//
+// The general rule is to use pointers for optional fields and non-pointers for mandatory fields
+//
+// This is to ensure consistency in the database schema and to avoid bugs related to nil vs empty
+// string vs zero value. This will also make sure to properly think-through nil values in the code.
+
 package usage
 
 type (
@@ -9,50 +16,63 @@ const (
 	ExecutionLogTypeTerminationMode ExecutionLogType = "termination_mode"
 )
 
+// Application represents a unique application that has been used by the user
+// Application is unique by name and hostname that is
+//   - if the application is not a browser it is unique by name
+//   - if the application is a browser it is unique by name and domain
+//     eg. Chrome + google.com != Chrome + youtube.com, each of them will have its own application
 type Application struct {
-	ID             int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	Name           string `json:"name"`
-	ExecutablePath string `json:"executable_path"`
-	Icon           string `json:"icon"` // either app icon or favicon
+	// mandatory fields
+	ID   int64  `json:"id" gorm:"primaryKey;autoIncrement;not null"`
+	Name string `json:"name" gorm:"uniqueIndex:idx_name_hostname_id;not null"`
 
-	Hostname *string `json:"hostname" gorm:"uniqueIndex:idx_bundle_id"`
+	// optional fields
+	Icon     *string `json:"icon"` // either app icon or favicon if host is present
+	Hostname *string `json:"hostname" gorm:"uniqueIndex:idx_name_hostname_id"`
 	Domain   *string `json:"domain"`
 
 	// darwin only
-	BundleID *string `json:"bundle_id" gorm:"uniqueIndex:idx_bundle_id;nullable"`
+	BundleID *string `json:"bundle_id"`
+}
+
+func (a Application) TableName() string {
+	return "application"
 }
 
 type ApplicationUsage struct {
-	ID          int64   `gorm:"primaryKey;autoIncrement" json:"id"`
-	WindowTitle string  `json:"window_title"`
-	BrowserURL  *string `json:"browser_url" gorm:"type:text;nullable"`
+	// mandatory fields
+	ID              int64           `json:"id" gorm:"primaryKey;autoIncrement;not null"`
+	WindowTitle     string          `json:"window_title" gorm:"not null"`
+	StartedAt       int64           `json:"started_at" gorm:"not null"`
+	Classification  Classification  `json:"classification" gorm:"index:idx_classification"`
+	TerminationMode TerminationMode `json:"termination_mode" gorm:"not null"`
+	ExecutablePath  string          `json:"executable_path" gorm:"not null"`
 
-	StartedAt       int64  `json:"started_at"`
-	EndedAt         *int64 `json:"ended_at" gorm:"nullable"`
-	DurationSeconds *int   `json:"duration_seconds" gorm:"nullable"`
+	// optional fields
+	BrowserURL      *string `json:"browser_url" gorm:"type:text"`
+	EndedAt         *int64  `json:"ended_at"`
+	DurationSeconds *int    `json:"duration_seconds"`
 
-	Classification           Classification       `gorm:"index:idx_classification" json:"classification"`
-	ClassificationReasoning  string               `json:"classification_reasoning"`
-	ClassificationError      *string              `gorm:"index:idx_classification_error" json:"classification_error"`
-	ClassificationConfidence float32              `json:"classification_confidence"`
-	ClassificationSource     ClassificationSource `json:"classification_source"`
+	ClassificationError      *string               `gorm:"index:idx_classification_error" json:"classification_error"`
+	ClassificationConfidence *float32              `json:"classification_confidence"`
+	ClassificationReasoning  *string               `json:"classification_reasoning"`
+	ClassificationSource     *ClassificationSource `json:"classification_source"`
 
-	DetectedProject              string `gorm:"index:idx_detected_project" json:"detected_project"`
-	DetectedCommunicationChannel string `gorm:"index:idx_detected_communication_channel" json:"detected_communication_channel"`
+	DetectedProject              *string `gorm:"index:idx_detected_project" json:"detected_project"`
+	DetectedCommunicationChannel *string `gorm:"index:idx_detected_communication_channel" json:"detected_communication_channel"`
 
-	TerminationMode      TerminationMode       `json:"termination_mode"`
-	TerminationReasoning string                `json:"termination_reasoning"`
-	TerminationSource    TerminationModeSource `json:"termination_mode_source"`
-	TerminationError     string                `gorm:"index:idx_termination_mode_error" json:"termination_mode_error"`
+	TerminationReasoning *string                `json:"termination_reasoning"`
+	TerminationSource    *TerminationModeSource `json:"termination_mode_source"`
+	TerminationError     *string                `gorm:"index:idx_termination_mode_error" json:"termination_mode_error"`
+
+	SandboxContext  *string `json:"sandbox_context" gorm:"type:text;nullable"`
+	SandboxResponse *string `json:"sandbox_response" gorm:"type:text;nullable"`
+	SandboxLogs     *string `json:"sandbox_logs" gorm:"type:text;nullable"`
 
 	// relations
 	Tags          []ApplicationUsageTags `gorm:"foreignKey:UsageID" json:"tags"`
 	ApplicationID int64                  `json:"application_id"`
 	Application   Application            `gorm:"foreignKey:ApplicationID" json:"application"`
-
-	SandboxContext  string  `json:"sandbox_context" gorm:"type:text;nullable"`
-	SandboxResponse *string `json:"sandbox_response" gorm:"type:text;nullable"`
-	SandboxLogs     string  `json:"sandbox_logs" gorm:"type:text;nullable"`
 }
 
 func (a *ApplicationUsage) TableName() string {
@@ -66,8 +86,23 @@ func (a *ApplicationUsage) TableName() string {
 //   - The application name and title are the same,
 //     eg. Slack + general discussion != Slack + funny memes
 func (a *ApplicationUsage) Same(windowTitle, appName string, bundleID, url *string) bool {
-	if url != nil && a.BrowserURL != nil && *a.BrowserURL == *url {
+	// Consistently handle nil vs empty string for URL comparison
+	aURL := a.BrowserURL
+	if aURL != nil && *aURL == "" {
+		aURL = nil
+	}
+	newURL := url
+	if newURL != nil && *newURL == "" {
+		newURL = nil
+	}
+
+	if aURL != nil && newURL != nil && *aURL == *newURL {
 		return true
+	}
+
+	// If one is nil and the other isn't, they are different (e.g. switching between tabs and native app)
+	if (aURL == nil) != (newURL == nil) {
+		return false
 	}
 
 	if appName == a.Application.Name && windowTitle == a.WindowTitle {
@@ -84,11 +119,12 @@ type ApplicationUsageTags struct {
 }
 
 type ProtectionWhitelist struct {
-	ID             int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	ExecutablePath string `gorm:"uniqueIndex:idx_allow_usage_identity" json:"executable_path"`
-	Hostname       string `gorm:"uniqueIndex:idx_allow_usage_identity" json:"hostname"`
-	URL            string `gorm:"uniqueIndex:idx_allow_usage_identity" json:"url"`
-	ExpiresAt      int64  `json:"expires_at"` // nil = allow indefinitely, otherwise Unix timestamp
+	ID int64 `gorm:"primaryKey;autoIncrement" json:"id"`
+	// ExpiresAt should be pre-calculated and set to the time when the whitelist expires
+	ExpiresAt int64 `json:"expires_at"`
+
+	AppName  string  `gorm:"uniqueIndex:idx_allow_usage_identity" json:"appname"`
+	Hostname *string `gorm:"uniqueIndex:idx_allow_usage_identity" json:"hostname"`
 }
 
 func (p *ProtectionWhitelist) TableName() string {
@@ -114,7 +150,6 @@ type IdlePeriod struct {
 	StartedAt       int64  `json:"started_at"`
 	EndedAt         *int64 `json:"end_at" gorm:"index:idx_ended_at"`
 	DurationSeconds *int   `json:"duration_seconds"`
-	Reason          string `json:"reason"`
 }
 
 func (i *IdlePeriod) TableName() string {

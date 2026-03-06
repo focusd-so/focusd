@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func (s *Service) classifyApplication(ctx context.Context, appName, title, executablePath string, url *string) (*ClassificationResponse, error) {
+func (s *Service) classifyApplication(ctx context.Context, appName, title string, url *string) (*ClassificationResponse, error) {
 	var (
 		instructions = `
 You are a Software Engineering Application Intent Classifier. Your job is to determine if the user is actively doing work related to their software engineering job or seeking entertainment/distraction.
@@ -56,7 +56,7 @@ Executable Path: %s
 		urlValue = *url
 	}
 
-	input := fmt.Sprintf(inputTmpl, appName, title, executablePath, urlValue)
+	input := fmt.Sprintf(inputTmpl, appName, title, urlValue)
 
 	response, err := s.classifyWithGemini(ctx, instructions, input)
 	if err != nil {

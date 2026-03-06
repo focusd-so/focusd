@@ -162,10 +162,7 @@ func TestService_TitleChanged_WhenSameApplication_ContinueCurrentApplicationUsag
 	applicationUsage := usage.ApplicationUsage{
 		StartedAt:   time.Now().Unix(),
 		WindowTitle: "Slack",
-		Application: usage.Application{
-			Name:           "Slack",
-			ExecutablePath: "/Applications/Slack.app/Contents/MacOS/Slack",
-		},
+		Application: usage.Application{Name: "Slack"},
 	}
 	if err := db.Create(&applicationUsage).Error; err != nil {
 		t.Fatalf("failed to create application usage: %v", err)
@@ -195,10 +192,7 @@ func TestService_TitleChanged_WhenDifferentApplication_CloseCurrentApplicationUs
 	applicationUsage := usage.ApplicationUsage{
 		StartedAt:   time.Now().Unix(),
 		WindowTitle: "Slack",
-		Application: usage.Application{
-			Name:           "Slack",
-			ExecutablePath: "/Applications/Slack.app/Contents/MacOS/Slack",
-		},
+		Application: usage.Application{Name: "Slack"},
 	}
 	if err := db.Create(&applicationUsage).Error; err != nil {
 		t.Fatalf("failed to create application usage: %v", err)

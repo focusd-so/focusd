@@ -176,11 +176,7 @@ interface UsageState {
 
   // Whitelist actions
   fetchWhitelist: () => Promise<void>;
-  addToWhitelist: (
-    executablePath: string,
-    hostname: string,
-    durationMinutes: number
-  ) => Promise<void>;
+  addToWhitelist: (appname: string, hostname: string, durationMinutes: number) => Promise<void>;
   removeFromWhitelist: (id: number) => Promise<void>;
 
   // Protection actions
@@ -311,9 +307,9 @@ export const useUsageStore = create<UsageState>()((set, get) => ({
     }
   },
 
-  addToWhitelist: async (executablePath, hostname, durationMinutes) => {
+  addToWhitelist: async (appname: string, hostname: string, durationMinutes: number) => {
     try {
-      await Whitelist(executablePath, hostname, durationMinutes * Duration.Minute);
+      await Whitelist(appname, hostname, durationMinutes * Duration.Minute);
       await get().fetchWhitelist();
     } catch (err) {
       console.error("Failed to add to whitelist:", err);
