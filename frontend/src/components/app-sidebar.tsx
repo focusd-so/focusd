@@ -2,6 +2,7 @@ import {
   IconSettings,
   IconShield,
   IconClock,
+  IconLayoutDashboard,
 } from "@tabler/icons-react";
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -35,6 +36,7 @@ const applicationItems: MenuItem[] = [
 ];
 
 const insightItems: MenuItem[] = [
+  { title: "Overview", to: "/insights", icon: IconLayoutDashboard },
   { title: "Screen Time", to: "/screen-time/screentime", icon: IconClock },
 ];
 
