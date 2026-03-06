@@ -148,7 +148,7 @@ func TestClassifyCustomRules_Application(t *testing.T) {
 	service, _ := setUpService(t, WithSettingsService(settingsService))
 
 	// match Slack app
-	response, err := service.ClassifyCustomRules(context.Background(), "Slack", "/Applications/Slack.app/Contents/MacOS/Slack", nil, nil)
+	response, err := service.ClassifyCustomRules(context.Background(), "Slack", nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, response)
 	require.Equal(t, ClassificationNeutral, response.Classification)
@@ -156,7 +156,7 @@ func TestClassifyCustomRules_Application(t *testing.T) {
 	require.Equal(t, []string{"communication", "work"}, response.Tags)
 
 	// no match Steam app
-	response, err = service.ClassifyCustomRules(context.Background(), "Steam", "/Applications/Steam.app/Contents/MacOS/Steam", nil, nil)
+	response, err = service.ClassifyCustomRules(context.Background(), "Steam", nil, nil)
 	require.NoError(t, err)
 	require.Nil(t, response)
 }
@@ -168,8 +168,7 @@ func TestClassifyCustomRules_Application_Time(t *testing.T) {
 	service, _ := setUpService(t, WithSettingsService(settingsService))
 
 	sandboxCtx := sandboxContext{
-		AppName:        "Discord",
-		ExecutablePath: "com.hnc.discord",
+		AppName: "Discord",
 		Now: func(loc *time.Location) time.Time {
 			return time.Date(2026, 1, 1, 10, 15, 0, 0, time.Local)
 		},
@@ -210,7 +209,6 @@ func TestClassifyCustomRules_Application_MinutesSinceLastBlock(t *testing.T) {
 
 	sandboxCtx := sandboxContext{
 		AppName:                   "Discord",
-		ExecutablePath:            "/Applications/Discord.app/Contents/MacOS/Discord",
 		MinutesSinceLastBlock:     &minutesSinceLastBlock,
 		MinutesUsedSinceLastBlock: &minutesUsedSinceLastBlock,
 	}
@@ -232,8 +230,7 @@ func TestClassifyCustomRules_ExecutionLogs(t *testing.T) {
 
 	// match Productive time
 	sandboxCtx := sandboxContext{
-		AppName:        "Discord",
-		ExecutablePath: "/Applications/Discord.app/Contents/MacOS/Discord",
+		AppName: "Discord",
 	}
 
 	service.ClassifyCustomRulesWithSandbox(context.Background(), sandboxCtx)
@@ -257,9 +254,8 @@ func TestClassifyCustomRules_MinutesUsedInPeriod(t *testing.T) {
 
 	// Test case 1: Minutes used exceeds limit (> 30)
 	sandboxCtx := sandboxContext{
-		AppName:        "YouTube",
-		ExecutablePath: "/Applications/YouTube.app",
-		Hostname:       "youtube.com",
+		AppName:  "YouTube",
+		Hostname: "youtube.com",
 		MinutesUsedInPeriod: func(_, _ string, durationMinutes int64) (int64, error) {
 			calledWithMinutes = durationMinutes
 			return 45, nil // Return 45 minutes (exceeds 30 limit)
@@ -309,7 +305,6 @@ func TestClassifyCustomRules_MinutesUsedInPeriod_NilFunction(t *testing.T) {
 	// Test with nil MinutesUsedInPeriod - should default to 0 and classify as Neutral
 	sandboxCtx := sandboxContext{
 		AppName:             "YouTube",
-		ExecutablePath:      "/Applications/YouTube.app",
 		Hostname:            "youtube.com",
 		MinutesUsedInPeriod: nil, // Explicitly nil
 	}
@@ -331,12 +326,11 @@ func TestClassifyCustomRules_Website(t *testing.T) {
 
 	// Test case 1: Domain matching - youtube.com from www.youtube.com
 	sandboxCtx := sandboxContext{
-		AppName:        "Chrome",
-		ExecutablePath: "/Applications/Google Chrome.app",
-		Hostname:       "www.youtube.com",
-		Domain:         "youtube.com",
-		Path:           "/watch",
-		URL:            "https://www.youtube.com/watch?v=abc123",
+		AppName:  "Chrome",
+		Hostname: "www.youtube.com",
+		Domain:   "youtube.com",
+		Path:     "/watch",
+		URL:      "https://www.youtube.com/watch?v=abc123",
 	}
 
 	response, err := service.ClassifyCustomRulesWithSandbox(context.Background(), sandboxCtx)
@@ -348,12 +342,11 @@ func TestClassifyCustomRules_Website(t *testing.T) {
 
 	// Test case 2: Hostname matching - docs.google.com (subdomain)
 	sandboxCtx = sandboxContext{
-		AppName:        "Chrome",
-		ExecutablePath: "/Applications/Google Chrome.app",
-		Hostname:       "docs.google.com",
-		Domain:         "google.com",
-		Path:           "/document/d/123",
-		URL:            "https://docs.google.com/document/d/123",
+		AppName:  "Chrome",
+		Hostname: "docs.google.com",
+		Domain:   "google.com",
+		Path:     "/document/d/123",
+		URL:      "https://docs.google.com/document/d/123",
 	}
 
 	response, err = service.ClassifyCustomRulesWithSandbox(context.Background(), sandboxCtx)
@@ -365,12 +358,11 @@ func TestClassifyCustomRules_Website(t *testing.T) {
 
 	// Test case 3: Path matching - github.com/pulls
 	sandboxCtx = sandboxContext{
-		AppName:        "Chrome",
-		ExecutablePath: "/Applications/Google Chrome.app",
-		Hostname:       "github.com",
-		Domain:         "github.com",
-		Path:           "/pulls",
-		URL:            "https://github.com/pulls",
+		AppName:  "Chrome",
+		Hostname: "github.com",
+		Domain:   "github.com",
+		Path:     "/pulls",
+		URL:      "https://github.com/pulls",
 	}
 
 	response, err = service.ClassifyCustomRulesWithSandbox(context.Background(), sandboxCtx)
@@ -382,12 +374,11 @@ func TestClassifyCustomRules_Website(t *testing.T) {
 
 	// Test case 4: Path matching with deeper path - github.com/pulls/assigned
 	sandboxCtx = sandboxContext{
-		AppName:        "Chrome",
-		ExecutablePath: "/Applications/Google Chrome.app",
-		Hostname:       "github.com",
-		Domain:         "github.com",
-		Path:           "/pulls/assigned",
-		URL:            "https://github.com/pulls/assigned",
+		AppName:  "Chrome",
+		Hostname: "github.com",
+		Domain:   "github.com",
+		Path:     "/pulls/assigned",
+		URL:      "https://github.com/pulls/assigned",
 	}
 
 	response, err = service.ClassifyCustomRulesWithSandbox(context.Background(), sandboxCtx)
@@ -398,12 +389,11 @@ func TestClassifyCustomRules_Website(t *testing.T) {
 
 	// Test case 5: Full URL matching - twitter.com/home
 	sandboxCtx = sandboxContext{
-		AppName:        "Chrome",
-		ExecutablePath: "/Applications/Google Chrome.app",
-		Hostname:       "twitter.com",
-		Domain:         "twitter.com",
-		Path:           "/home",
-		URL:            "https://twitter.com/home",
+		AppName:  "Chrome",
+		Hostname: "twitter.com",
+		Domain:   "twitter.com",
+		Path:     "/home",
+		URL:      "https://twitter.com/home",
 	}
 
 	response, err = service.ClassifyCustomRulesWithSandbox(context.Background(), sandboxCtx)
@@ -415,12 +405,11 @@ func TestClassifyCustomRules_Website(t *testing.T) {
 
 	// Test case 6: No match - random website
 	sandboxCtx = sandboxContext{
-		AppName:        "Chrome",
-		ExecutablePath: "/Applications/Google Chrome.app",
-		Hostname:       "example.com",
-		Domain:         "example.com",
-		Path:           "/",
-		URL:            "https://example.com/",
+		AppName:  "Chrome",
+		Hostname: "example.com",
+		Domain:   "example.com",
+		Path:     "/",
+		URL:      "https://example.com/",
 	}
 
 	response, err = service.ClassifyCustomRulesWithSandbox(context.Background(), sandboxCtx)
@@ -429,12 +418,11 @@ func TestClassifyCustomRules_Website(t *testing.T) {
 
 	// Test case 7: github.com but NOT /pulls path - should not match
 	sandboxCtx = sandboxContext{
-		AppName:        "Chrome",
-		ExecutablePath: "/Applications/Google Chrome.app",
-		Hostname:       "github.com",
-		Domain:         "github.com",
-		Path:           "/user/repo",
-		URL:            "https://github.com/user/repo",
+		AppName:  "Chrome",
+		Hostname: "github.com",
+		Domain:   "github.com",
+		Path:     "/user/repo",
+		URL:      "https://github.com/user/repo",
 	}
 
 	response, err = service.ClassifyCustomRulesWithSandbox(context.Background(), sandboxCtx)

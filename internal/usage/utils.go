@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"time"
 
@@ -110,10 +111,9 @@ func fetchMainContent(ctx context.Context, rawURL string) (string, error) {
 	return article.TextContent, nil
 }
 
-func createSandboxContext(appName, executablePath string, url *string) sandboxContext {
+func createSandboxContext(appName string, url *string) sandboxContext {
 	sandboxCtx := sandboxContext{
-		AppName:        appName,
-		ExecutablePath: executablePath,
+		AppName: appName,
 	}
 
 	if url != nil {
@@ -126,4 +126,21 @@ func createSandboxContext(appName, executablePath string, url *string) sandboxCo
 	}
 
 	return sandboxCtx
+}
+
+func withPtr[T any](v T) *T {
+	// check if v is zero value
+	if reflect.ValueOf(v).IsZero() {
+		return nil
+	}
+
+	return &v
+}
+
+func fromPtr[T any](v *T) T {
+	if v == nil {
+		return *new(T)
+	}
+
+	return *v
 }

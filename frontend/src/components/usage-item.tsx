@@ -73,11 +73,13 @@ function formatSandboxLogs(logsStr: string | null | undefined): string {
 }
 
 export function formatDuration(seconds: number): string {
-  if (seconds <= 0) return "0m";
+  if (seconds <= 0) return "0s";
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
   if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${s}s`;
 }
 
 export function formatClassificationSource(
@@ -416,7 +418,7 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
     usage.classification_reasoning
   );
 
-  // Duration display: show when ended_at is present
+  // Duration display: show duration for ended items, or elapsed time for ongoing items
   const durationSeconds =
     usage.ended_at && usage.started_at
       ? usage.ended_at - usage.started_at
@@ -494,17 +496,16 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
 
         {/* Right Side Group */}
         <div className="flex items-center gap-2 shrink-0">
-          <div className="flex flex-col items-end gap-0.5">
-            <div className="flex flex-row items-center gap-1">
-              <span className="text-[9px] text-muted-foreground/40 font-mono">
-                {formatSmartDate(usage.started_at)}
-                {durationSeconds != null && durationSeconds > 0 && (
-                  <>
-                    <span className="mx-0.5">·</span>
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center gap-1.5">
+              {durationSeconds != null && durationSeconds >= 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-foreground/90 tabular-nums">
                     {formatDuration(durationSeconds)}
-                  </>
-                )}
-              </span>
+                  </span>
+                </div>
+              )}
+
               <Badge
                 variant="outline"
                 className={`px-1.5 py-0 text-[9px] font-bold rounded-full ${theme.badge}`}
@@ -522,6 +523,11 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
                 </Badge>
               ))}
             </div>
+
+            <span className="text-[10px] text-muted-foreground/50 tabular-nums leading-none">
+              at {formatSmartDate(usage.started_at)}
+            </span>
+
             <ClassificationReasoningLabel
               usage={usage}
               icon={icon}

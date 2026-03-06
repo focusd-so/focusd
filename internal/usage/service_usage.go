@@ -11,10 +11,11 @@ import (
 	"strings"
 	"time"
 
-	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
-	"github.com/focusd-so/focusd/internal/identity"
 	"golang.org/x/net/publicsuffix"
 	"gorm.io/gorm"
+
+	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
+	"github.com/focusd-so/focusd/internal/identity"
 )
 
 // IdleChanged is called when the idle state of the user changes (e.g. user starts or stops using the computer)
@@ -37,10 +38,7 @@ func (s *Service) IdleChanged(ctx context.Context, isIdle bool) error {
 		}
 
 		// create a new idle period
-		newIdlePeriod := &IdlePeriod{
-			StartedAt: time.Now().Unix(),
-			Reason:    "user_idle",
-		}
+		newIdlePeriod := &IdlePeriod{StartedAt: time.Now().Unix()}
 		if err := s.db.Create(&newIdlePeriod).Error; err != nil {
 			return fmt.Errorf("failed to create new idle period: %w", err)
 		}
@@ -74,17 +72,22 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 		return fmt.Errorf("failed to close current application usage: %w", err)
 	}
 
-	application, err := s.getOrCreateApplication(ctx, executablePath, appName, icon, bundleID, url)
+	application, err := s.getOrCreateApplication(ctx, appName, icon, bundleID, url)
 	if err != nil {
 		return fmt.Errorf("failed to get or create application: %w", err)
 	}
 
 	applicationUsage := ApplicationUsage{
-		WindowTitle: windowTitle,
-		BrowserURL:  url,
-		StartedAt:   time.Now().Unix(),
+		ExecutablePath: executablePath,
+		WindowTitle:    windowTitle,
+		BrowserURL:     url,
+		StartedAt:      time.Now().Unix(),
 
 		Application: application,
+	}
+
+	if s.UsageUpdates != nil {
+		s.UsageUpdates <- &applicationUsage
 	}
 
 	// save the application usage
@@ -99,12 +102,16 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 		applicationUsage.Classification = ClassificationError
 	} else if classification != nil {
 		applicationUsage.Classification = classification.Classification
-		applicationUsage.ClassificationSource = classification.ClassificationSource
-		applicationUsage.ClassificationReasoning = classification.Reasoning
-		applicationUsage.ClassificationConfidence = classification.ConfidenceScore
+		applicationUsage.ClassificationSource = &classification.ClassificationSource
+		applicationUsage.ClassificationReasoning = &classification.Reasoning
+		applicationUsage.ClassificationConfidence = &classification.ConfidenceScore
 
-		applicationUsage.DetectedProject = classification.DetectedProject
-		applicationUsage.DetectedCommunicationChannel = classification.DetectedCommunicationChannel
+		if classification.DetectedProject != "" {
+			applicationUsage.DetectedProject = &classification.DetectedProject
+		}
+		if classification.DetectedCommunicationChannel != "" {
+			applicationUsage.DetectedCommunicationChannel = &classification.DetectedCommunicationChannel
+		}
 		applicationUsage.Tags = make([]ApplicationUsageTags, len(classification.Tags))
 		for i, tag := range classification.Tags {
 			applicationUsage.Tags[i] = ApplicationUsageTags{
@@ -112,28 +119,47 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 			}
 		}
 
-		applicationUsage.SandboxContext = classification.SandboxContext
-		applicationUsage.SandboxResponse = classification.SandboxResponse
-		applicationUsage.SandboxLogs = classification.SandboxLogs
+		if classification.SandboxContext != "" {
+			applicationUsage.SandboxContext = &classification.SandboxContext
+		}
+		if classification.SandboxResponse != nil {
+			applicationUsage.SandboxResponse = classification.SandboxResponse
+		}
+		if classification.SandboxLogs != "" {
+			applicationUsage.SandboxLogs = &classification.SandboxLogs
+		}
 	}
 
 	// calculate termination mode.
 	terminationMode, err := s.CalculateTerminationMode(ctx, &applicationUsage)
 	if err != nil {
+		termErr := err.Error()
 		applicationUsage.TerminationMode = TerminationModeNone
-		applicationUsage.TerminationError = err.Error()
+		applicationUsage.TerminationError = &termErr
 	}
 
 	applicationUsage.TerminationMode = terminationMode.Mode
-	applicationUsage.TerminationReasoning = terminationMode.Reasoning
-	applicationUsage.TerminationSource = terminationMode.Source
+
+	if terminationMode.Reasoning != "" {
+		applicationUsage.TerminationReasoning = &terminationMode.Reasoning
+	}
+	if terminationMode.Source != "" {
+		applicationUsage.TerminationSource = &terminationMode.Source
+	}
 
 	if err := s.db.Save(&applicationUsage).Error; err != nil {
 		return fmt.Errorf("failed to save application usage: %w", err)
 	}
 
 	if applicationUsage.TerminationMode == TerminationModeBlock {
-		s.appBlocker(applicationUsage.Application.Name, applicationUsage.WindowTitle, applicationUsage.TerminationReasoning, classification.Tags, applicationUsage.BrowserURL)
+		termReason := ""
+		if applicationUsage.ClassificationReasoning != nil {
+			termReason = *applicationUsage.ClassificationReasoning
+		}
+
+		tags := ApplicationTagsSlice(applicationUsage.Tags).Tags()
+
+		s.appBlocker(applicationUsage.Application.Name, applicationUsage.WindowTitle, termReason, tags, applicationUsage.BrowserURL)
 	}
 
 	if s.UsageUpdates != nil {
@@ -145,7 +171,7 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 
 func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage *ApplicationUsage) (*ClassificationResponse, error) {
 	// Do sandbox classification first, eg user defined custom rules
-	customRulesResp, err := s.ClassifyCustomRules(ctx, applicationUsage.Application.Name, applicationUsage.Application.ExecutablePath, applicationUsage.BrowserURL, nil)
+	customRulesResp, err := s.ClassifyCustomRules(ctx, applicationUsage.Application.Name, applicationUsage.BrowserURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify application usage with custom rules: %w", err)
 	}
@@ -158,7 +184,7 @@ func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage
 	}
 
 	// Do obviously classification next, eg social media, news, shopping, etc.
-	classification, err := s.classifyObviously(ctx, applicationUsage.Application.Name, applicationUsage.Application.ExecutablePath, applicationUsage.BrowserURL)
+	classification, err := s.classifyObviously(ctx, applicationUsage.Application.Name, applicationUsage.BrowserURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify application usage with obviously: %w", err)
 	}
@@ -173,7 +199,7 @@ func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage
 	}
 
 	slog.Info("classifying application usage with LLM")
-	resp, err := s.ClassifyWithLLM(ctx, applicationUsage.Application.Name, applicationUsage.WindowTitle, applicationUsage.Application.ExecutablePath, applicationUsage.BrowserURL)
+	resp, err := s.ClassifyWithLLM(ctx, applicationUsage.Application.Name, applicationUsage.WindowTitle, applicationUsage.BrowserURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify application usage with LLM: %w", err)
 	}
@@ -210,7 +236,6 @@ func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage
 //
 // Parameters:
 //   - ctx: Context for cancellation and timeout control (used for favicon fetching)
-//   - executablePath: Full path to the application executable (e.g., "/Applications/Safari.app")
 //   - name: Display name of the application (e.g., "Safari", "Google Chrome")
 //   - icon: Base64-encoded icon data for native apps (ignored for web apps)
 //   - bundleID: Optional macOS bundle identifier (e.g., "com.apple.Safari")
@@ -219,59 +244,58 @@ func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage
 // Returns:
 //   - Application: The found or newly created application record
 //   - error: Any error encountered during database operations or favicon fetching
-func (s *Service) getOrCreateApplication(ctx context.Context, executablePath, name, icon string, bundleID, rawURL *string) (Application, error) {
+func (s *Service) getOrCreateApplication(ctx context.Context, name, icon string, bundleID, rawURL *string) (Application, error) {
 	// Handle web applications (browser tabs with URLs)
-	if rawURL != nil {
+
+	rawURLValue := fromPtr(rawURL)
+
+	if rawURLValue != "" {
 		// Extract hostname from the URL (e.g., "www.google.com" from "https://www.google.com/search?q=...")
-		u, err := url.Parse(*rawURL)
+		u, err := url.Parse(rawURLValue)
 		if err != nil {
 			slog.Warn("failed to parse URL", "error", err)
 		}
 
 		hostname := u.Hostname()
-		if hostname == "" {
-			slog.Warn("empty hostname")
-		}
 
 		// Attempt to find an existing application record by hostname.
 		// Web apps are uniquely identified by hostname, so all tabs from the same
 		// site (e.g., multiple Google tabs) share the same Application record.
-		var application Application
-		if err := s.db.Where("hostname = ? AND name = ?", hostname, name).First(&application).Error; err != nil {
+		var (
+			application Application
+			query       = s.db.Where("(hostname = ? OR hostname IS NULL) AND name = ?", hostname, name)
+		)
+
+		if err := query.First(&application).Error; err != nil {
 			slog.Warn("failed to find application by hostname", "error", err)
 		}
 
 		// If no existing application found, create a new one with the provided metadata
 		if application.ID == 0 {
-			application = Application{
-				Name:           name,
-				ExecutablePath: executablePath,
-				Hostname:       &hostname,
-				BundleID:       bundleID,
-			}
+			application = Application{Name: name, BundleID: bundleID}
 		}
 
-		// Extract the effective domain (TLD+1) if not already set.
-		// This normalizes subdomains: "mail.google.com" and "docs.google.com" both become "google.com".
-		// Useful for grouping related sites and aggregating usage statistics.
-		if application.Domain == nil {
-			domain, _ := publicsuffix.EffectiveTLDPlusOne(hostname)
-			if domain == "" {
-				slog.Warn("empty domain")
-			}
+		if hostname != "" {
+			application.Hostname = &hostname
 
-			application.Domain = &domain
+			// Extract the effective domain (TLD+1) if not already set.
+			// This normalizes subdomains: "mail.google.com" and "docs.google.com" both become "google.com".
+			// Useful for grouping related sites and aggregating usage statistics.
+			domain, _ := publicsuffix.EffectiveTLDPlusOne(hostname)
+			if domain != "" {
+				application.Domain = &domain
+			}
 		}
 
 		// Fetch favicon if icon is empty or very small (old 16x16 ICO format, typically <500 chars base64)
-		if len(application.Icon) < 500 {
+		if application.Icon == nil {
 			appIcon, err := fetchFavicon(ctx, fmt.Sprintf("https://%s", hostname))
 			if err != nil {
 				slog.Warn("failed to fetch app icon", "error", err)
 			}
 
 			if appIcon != "" {
-				application.Icon = appIcon
+				application.Icon = &appIcon
 			}
 		}
 
@@ -285,7 +309,7 @@ func (s *Service) getOrCreateApplication(ctx context.Context, executablePath, na
 	// Handle native applications (non-browser apps identified by executable path)
 	// Native apps are uniquely identified by their executable path on disk.
 	var application Application
-	if err := s.db.Where("executable_path = ?", executablePath).First(&application).Error; err != nil {
+	if err := s.db.Where("name = ?", name).First(&application).Error; err != nil {
 		slog.Warn("failed to find application by executable path", "error", err)
 	}
 
@@ -293,14 +317,16 @@ func (s *Service) getOrCreateApplication(ctx context.Context, executablePath, na
 	// For native apps, the icon is provided by the OS (e.g., from the app bundle).
 	if application.ID == 0 {
 		application = Application{
-			Name:           name,
-			ExecutablePath: executablePath,
-			BundleID:       bundleID,
-			Icon:           icon,
+			Name:     name,
+			BundleID: bundleID,
 		}
-	} else if application.Icon == "" && icon != "" {
+	}
+
+	slog.Info("application icon", "icon", application.Icon)
+
+	if application.Icon == nil && icon != "" {
 		// Update the icon for existing apps that don't have one yet
-		application.Icon = icon
+		application.Icon = &icon
 	}
 
 	// Persist the application (creates new or updates existing)
@@ -354,6 +380,10 @@ func (s *Service) closeApplicationUsage(app *ApplicationUsage) error {
 
 	if err := s.db.Save(&app).Error; err != nil {
 		return fmt.Errorf("failed to update application usage: %w", err)
+	}
+
+	if s.UsageUpdates != nil {
+		s.UsageUpdates <- app
 	}
 
 	return nil

@@ -41,7 +41,7 @@ tasks:
             ref: .DEV
       - task: common:generate:icons
     cmds:
-      - go build {{.BUILD_FLAGS}} -ldflags="{{.LDFLAGS_FULL}}" -o {{.OUTPUT}}
+      - go build -p 1 {{.BUILD_FLAGS}} -ldflags="{{.LDFLAGS_FULL}}" -o {{.OUTPUT}}
     vars:
       BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production -trimpath -buildvcs=false{{end}}'
       LDFLAGS_FULL: '{{if eq .DEV "true"}}{{.LDFLAGS}}{{else}}-w -s {{.LDFLAGS}}{{end}}'

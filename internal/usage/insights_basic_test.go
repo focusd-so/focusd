@@ -26,12 +26,6 @@ func TestGetUsageList_NoFilters(t *testing.T) {
 	}
 	durations := []int{1800, 2700, 1200, 3000}
 	names := []string{"Chrome", "Slack", "Finder", "Safari"}
-	paths := []string{
-		"/Applications/Google Chrome.app",
-		"/Applications/Slack.app",
-		"/System/Library/CoreServices/Finder.app",
-		"/Applications/Safari.app",
-	}
 	for i := range starts {
 		endAt := starts[i].Unix() + int64(durations[i])
 		u := usage.ApplicationUsage{
@@ -39,10 +33,7 @@ func TestGetUsageList_NoFilters(t *testing.T) {
 			EndedAt:         &endAt,
 			DurationSeconds: &durations[i],
 			Classification:  usage.ClassificationProductive,
-			Application: usage.Application{
-				Name:           names[i],
-				ExecutablePath: paths[i],
-			},
+			Application:     usage.Application{Name: names[i]},
 		}
 		require.NoError(t, db.Create(&u).Error)
 	}
@@ -70,10 +61,7 @@ func TestGetUsageList_StartedAtFilter(t *testing.T) {
 			EndedAt:         &endAt,
 			DurationSeconds: &durations[i],
 			Classification:  usage.ClassificationProductive,
-			Application: usage.Application{
-				Name:           "App",
-				ExecutablePath: "/bin/app",
-			},
+			Application:     usage.Application{Name: "App"},
 		}
 		require.NoError(t, db.Create(&u).Error)
 	}
@@ -109,10 +97,7 @@ func TestGetUsageList_EndedAtFilter(t *testing.T) {
 			EndedAt:         &endAt,
 			DurationSeconds: &durations[i],
 			Classification:  usage.ClassificationProductive,
-			Application: usage.Application{
-				Name:           "App",
-				ExecutablePath: "/bin/app",
-			},
+			Application:     usage.Application{Name: "App"},
 		}
 		require.NoError(t, db.Create(&u).Error)
 	}
@@ -149,10 +134,7 @@ func TestGetUsageList_StartedAtAndEndedAtCombined(t *testing.T) {
 			EndedAt:         &endAt,
 			DurationSeconds: &durations[i],
 			Classification:  usage.ClassificationProductive,
-			Application: usage.Application{
-				Name:           "App",
-				ExecutablePath: "/bin/app",
-			},
+			Application:     usage.Application{Name: "App"},
 		}
 		require.NoError(t, db.Create(&u).Error)
 	}
@@ -187,10 +169,7 @@ func TestGetUsageList_StartedAtExactBoundary(t *testing.T) {
 		EndedAt:         &endAt,
 		DurationSeconds: &dur,
 		Classification:  usage.ClassificationProductive,
-		Application: usage.Application{
-			Name:           "App",
-			ExecutablePath: "/bin/app",
-		},
+		Application:     usage.Application{Name: "App"},
 	}
 	require.NoError(t, db.Create(&u).Error)
 
@@ -216,10 +195,7 @@ func TestGetUsageList_EndedAtExactBoundary(t *testing.T) {
 		EndedAt:         &endAtUnix,
 		DurationSeconds: &dur,
 		Classification:  usage.ClassificationProductive,
-		Application: usage.Application{
-			Name:           "App",
-			ExecutablePath: "/bin/app",
-		},
+		Application:     usage.Application{Name: "App"},
 	}
 	require.NoError(t, db.Create(&u).Error)
 
@@ -248,7 +224,7 @@ func TestGetUsageList_OrderDescByStartedAt(t *testing.T) {
 			EndedAt:         &endAt,
 			DurationSeconds: &dur,
 			Classification:  usage.ClassificationProductive,
-			Application:     usage.Application{Name: "App", ExecutablePath: "/bin/app"},
+			Application:     usage.Application{Name: "App"},
 		}
 		require.NoError(t, db.Create(&u).Error)
 	}
@@ -274,10 +250,7 @@ func TestGetUsageList_PreloadsApplication(t *testing.T) {
 		EndedAt:         &endAt,
 		DurationSeconds: &dur,
 		Classification:  usage.ClassificationProductive,
-		Application: usage.Application{
-			Name:           "Visual Studio Code",
-			ExecutablePath: "/usr/bin/code",
-		},
+		Application:     usage.Application{Name: "Visual Studio Code"},
 	}
 	require.NoError(t, db.Create(&u).Error)
 
@@ -287,7 +260,6 @@ func TestGetUsageList_PreloadsApplication(t *testing.T) {
 
 	// Application relation should be eagerly loaded
 	require.Equal(t, "Visual Studio Code", result[0].Application.Name)
-	require.Equal(t, "/usr/bin/code", result[0].Application.ExecutablePath)
 }
 
 func TestGetUsageList_PreloadsTags(t *testing.T) {
@@ -301,10 +273,7 @@ func TestGetUsageList_PreloadsTags(t *testing.T) {
 		EndedAt:         &endAt,
 		DurationSeconds: &dur,
 		Classification:  usage.ClassificationProductive,
-		Application: usage.Application{
-			Name:           "Slack",
-			ExecutablePath: "/Applications/Slack.app",
-		},
+		Application:     usage.Application{Name: "Slack"},
 	}
 	require.NoError(t, db.Create(&u).Error)
 
@@ -343,7 +312,7 @@ func TestGetUsageList_DateFilter(t *testing.T) {
 			EndedAt:         &endAt,
 			DurationSeconds: &dur,
 			Classification:  usage.ClassificationProductive,
-			Application:     usage.Application{Name: "App", ExecutablePath: "/bin/app"},
+			Application:     usage.Application{Name: "App"},
 		}
 		require.NoError(t, db.Create(&u).Error)
 	}
@@ -370,7 +339,7 @@ func TestGetUsageList_DateFilterNoMatches(t *testing.T) {
 		EndedAt:         &endAt,
 		DurationSeconds: &dur,
 		Classification:  usage.ClassificationProductive,
-		Application:     usage.Application{Name: "App", ExecutablePath: "/bin/app"},
+		Application:     usage.Application{Name: "App"},
 	}
 	require.NoError(t, db.Create(&u).Error)
 
@@ -397,7 +366,7 @@ func TestGetUsageList_PaginationPageAndPageSize(t *testing.T) {
 			EndedAt:         &endAt,
 			DurationSeconds: &dur,
 			Classification:  usage.ClassificationProductive,
-			Application:     usage.Application{Name: "App", ExecutablePath: "/bin/app"},
+			Application:     usage.Application{Name: "App"},
 		}
 		require.NoError(t, db.Create(&u).Error)
 	}
@@ -455,7 +424,7 @@ func TestGetUsageList_PaginationRequiresBothPageAndPageSize(t *testing.T) {
 			EndedAt:         &endAt,
 			DurationSeconds: &dur,
 			Classification:  usage.ClassificationProductive,
-			Application:     usage.Application{Name: "App", ExecutablePath: "/bin/app"},
+			Application:     usage.Application{Name: "App"},
 		}
 		require.NoError(t, db.Create(&u).Error)
 	}
@@ -500,7 +469,7 @@ func TestGetUsageList_DateCombinedWithStartedAtAndEndedAt(t *testing.T) {
 			EndedAt:         &endAt,
 			DurationSeconds: &dur,
 			Classification:  usage.ClassificationProductive,
-			Application:     usage.Application{Name: "App", ExecutablePath: "/bin/app"},
+			Application:     usage.Application{Name: "App"},
 		}
 		require.NoError(t, db.Create(&u).Error)
 	}
@@ -542,10 +511,7 @@ func TestGetUsageList_NoMatchesWithNarrowWindow(t *testing.T) {
 			EndedAt:         &endAt,
 			DurationSeconds: &durations[i],
 			Classification:  usage.ClassificationProductive,
-			Application: usage.Application{
-				Name:           "App",
-				ExecutablePath: "/bin/app",
-			},
+			Application:     usage.Application{Name: "App"},
 		}
 		require.NoError(t, db.Create(&u).Error)
 	}
@@ -586,7 +552,7 @@ func TestGetUsageList_TerminationModeFilter(t *testing.T) {
 			DurationSeconds: &dur,
 			Classification:  usage.ClassificationProductive,
 			TerminationMode: modes[i],
-			Application:     usage.Application{Name: "App", ExecutablePath: "/bin/app"},
+			Application:     usage.Application{Name: "App"},
 		}
 		require.NoError(t, db.Create(&u).Error)
 	}
@@ -612,7 +578,7 @@ func TestGetUsageList_TerminationModeFilterNoMatches(t *testing.T) {
 		DurationSeconds: &dur,
 		Classification:  usage.ClassificationProductive,
 		TerminationMode: usage.TerminationModeNone,
-		Application:     usage.Application{Name: "App", ExecutablePath: "/bin/app"},
+		Application:     usage.Application{Name: "App"},
 	}
 	require.NoError(t, db.Create(&u).Error)
 
@@ -645,7 +611,7 @@ func TestGetUsageList_TerminationModeFilterCombinedWithDateRange(t *testing.T) {
 			DurationSeconds: &dur,
 			Classification:  usage.ClassificationProductive,
 			TerminationMode: row.mode,
-			Application:     usage.Application{Name: "App", ExecutablePath: "/bin/app"},
+			Application:     usage.Application{Name: "App"},
 		}
 		require.NoError(t, db.Create(&u).Error)
 	}
@@ -683,7 +649,7 @@ func TestGetUsageList_TerminationModeNilIgnored(t *testing.T) {
 			DurationSeconds: &dur,
 			Classification:  usage.ClassificationProductive,
 			TerminationMode: modes[i],
-			Application:     usage.Application{Name: "App", ExecutablePath: "/bin/app"},
+			Application:     usage.Application{Name: "App"},
 		}
 		require.NoError(t, db.Create(&u).Error)
 	}

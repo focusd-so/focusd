@@ -160,7 +160,6 @@ export function TestRulesSheet({
   onOpenChange: (open: boolean) => void;
 }) {
   const [appName, setAppName] = useState("");
-  const [executablePath, setExecutablePath] = useState("");
   const [url, setUrl] = useState("");
   const [datetime, setDatetime] = useState(formatDatetimeLocal(new Date()));
   const [timezone, setTimezone] = useState("local");
@@ -184,7 +183,6 @@ export function TestRulesSheet({
 
       const response = await ClassifyCustomRules(
         appName.trim(),
-        executablePath.trim(),
         urlParam,
         nowTime
       );
@@ -233,18 +231,6 @@ export function TestRulesSheet({
                   value={appName}
                   onChange={(e) => setAppName(e.target.value)}
                   className="h-9 text-sm bg-background/50"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-                  Executable Path <span className="text-[10px] font-normal text-muted-foreground/40">(optional)</span>
-                </label>
-                <Input
-                  placeholder="e.g. /Applications/Slack.app/Contents/MacOS/Slack"
-                  value={executablePath}
-                  onChange={(e) => setExecutablePath(e.target.value)}
-                  className="h-9 text-sm bg-background/50 font-mono text-xs"
                 />
               </div>
 

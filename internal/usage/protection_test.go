@@ -162,7 +162,7 @@ func TestProtection_Whitelist_CreatesEntry(t *testing.T) {
 	err = db.First(&entry).Error
 	require.NoError(t, err)
 
-	require.Equal(t, "/usr/bin/app", entry.ExecutablePath)
+	require.Equal(t, "/usr/bin/app", entry.AppName)
 	require.Equal(t, "example.com", entry.Hostname)
 	require.InDelta(t, time.Now().Add(30*time.Minute).Unix(), entry.ExpiresAt, 5)
 }
@@ -183,7 +183,7 @@ func TestProtection_Whitelist_ReplacesExistingEntry(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, entries, 1)
-	require.Equal(t, "/usr/bin/app", entries[0].ExecutablePath)
+	require.Equal(t, "/usr/bin/app", entries[0].AppName)
 	require.Equal(t, "example.com", entries[0].Hostname)
 	require.InDelta(t, time.Now().Add(1*time.Hour).Unix(), entries[0].ExpiresAt, 5)
 }
@@ -201,15 +201,15 @@ func TestProtection_GetWhitelist_ReturnsActiveEntries(t *testing.T) {
 
 	// 1. Future expiration (Active)
 	active := usage.ProtectionWhitelist{
-		ExecutablePath: "/bin/active",
-		ExpiresAt:      now + 3600,
+		AppName:   "/bin/active",
+		ExpiresAt: now + 3600,
 	}
 	require.NoError(t, db.Create(&active).Error)
 
 	// 2. Past expiration (Inactive)
 	inactive := usage.ProtectionWhitelist{
-		ExecutablePath: "/bin/inactive",
-		ExpiresAt:      now - 3600,
+		AppName:   "/bin/inactive",
+		ExpiresAt: now - 3600,
 	}
 	require.NoError(t, db.Create(&inactive).Error)
 
@@ -224,8 +224,8 @@ func TestProtection_GetWhitelist_ReturnsIndefiniteEntries(t *testing.T) {
 
 	// Indefinite expiration (ExpiresAt = 0)
 	indefinite := usage.ProtectionWhitelist{
-		ExecutablePath: "/bin/indefinite",
-		ExpiresAt:      0,
+		AppName:   "/bin/indefinite",
+		ExpiresAt: 0,
 	}
 	require.NoError(t, db.Create(&indefinite).Error)
 
@@ -247,7 +247,7 @@ func TestProtection_RemoveWhitelist_DeletesEntry(t *testing.T) {
 	service, db := setUpService(t)
 
 	entry := usage.ProtectionWhitelist{
-		ExecutablePath: "/bin/app",
+		AppName: "/bin/app",
 	}
 	require.NoError(t, db.Create(&entry).Error)
 
@@ -305,10 +305,7 @@ export function terminationMode(ctx) {
 
 		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationNeutral,
-			Application: usage.Application{
-				Name:           "Slack",
-				ExecutablePath: "/Applications/Slack.app",
-			},
+			Application:    usage.Application{Name: "Slack"},
 		})
 		require.NoError(t, err)
 		require.Equal(t, usage.TerminationModeBlock, decision.Mode)
@@ -332,10 +329,7 @@ export function terminationMode(ctx) {
 
 		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
-			Application: usage.Application{
-				Name:           "YouTube",
-				ExecutablePath: "/Applications/YouTube.app",
-			},
+			Application:    usage.Application{Name: "YouTube"},
 		})
 		require.NoError(t, err)
 		require.Equal(t, usage.TerminationModeBlock, decision.Mode)
@@ -363,10 +357,7 @@ export function terminationMode(ctx) {
 		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
 			BrowserURL:     &url,
-			Application: usage.Application{
-				Name:           "Chrome",
-				ExecutablePath: "/Applications/Google Chrome.app",
-			},
+			Application:    usage.Application{Name: "Chrome"},
 		})
 		require.NoError(t, err)
 		require.Equal(t, usage.TerminationModeBlock, decision.Mode)
@@ -392,10 +383,7 @@ export function terminationMode(ctx) {
 		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
 			BrowserURL:     &url,
-			Application: usage.Application{
-				Name:           "Chrome",
-				ExecutablePath: "/Applications/Google Chrome.app",
-			},
+			Application:    usage.Application{Name: "Chrome"},
 		})
 		require.NoError(t, err)
 		require.Equal(t, usage.TerminationModeAllow, decision.Mode)
@@ -413,10 +401,7 @@ export function terminationMode(ctx) {
 
 		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationNeutral,
-			Application: usage.Application{
-				Name:           "VSCode",
-				ExecutablePath: "/Applications/Visual Studio Code.app",
-			},
+			Application:    usage.Application{Name: "VSCode"},
 		})
 		require.NoError(t, err)
 		// When custom rules return undefined, falls through to default logic.
@@ -436,10 +421,7 @@ func TestProtection_CalculateTerminationMode_ProtectionPaused(t *testing.T) {
 
 	decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
 		Classification: usage.ClassificationDistracting,
-		Application: usage.Application{
-			Name:           "YouTube",
-			ExecutablePath: "/Applications/YouTube.app",
-		},
+		Application:    usage.Application{Name: "YouTube"},
 	})
 	require.NoError(t, err)
 	require.Equal(t, usage.TerminationModePaused, decision.Mode)
@@ -457,10 +439,7 @@ func TestProtection_AllowedByWhitelist(t *testing.T) {
 		emptyHostname := ""
 		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
-			Application: usage.Application{
-				ExecutablePath: "/usr/bin/app",
-				Hostname:       &emptyHostname,
-			},
+			Application:    usage.Application{Hostname: &emptyHostname},
 		})
 		require.NoError(t, err)
 		require.Equal(t, usage.TerminationModeAllow, decision.Mode)
@@ -477,10 +456,7 @@ func TestProtection_AllowedByWhitelist(t *testing.T) {
 		hostname := "example.com"
 		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
-			Application: usage.Application{
-				ExecutablePath: "/usr/bin/app",
-				Hostname:       &hostname,
-			},
+			Application:    usage.Application{Hostname: &hostname},
 		})
 		require.NoError(t, err)
 		require.Equal(t, usage.TerminationModeAllow, decision.Mode)

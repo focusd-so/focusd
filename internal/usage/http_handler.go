@@ -18,7 +18,7 @@ type UnpauseRequest struct {
 }
 
 type WhitelistRequest struct {
-	ExecutablePath  string `json:"executable_path"`
+	AppName         string `json:"app_name"`
 	Hostname        string `json:"hostname"`
 	DurationSeconds int    `json:"duration_seconds"`
 }
@@ -80,7 +80,7 @@ func (s *Service) RegisterHTTPHandlers(r *chi.Mux) {
 				req.DurationSeconds = 60 * 60 // 1 hour
 			}
 
-			if err := s.Whitelist(req.ExecutablePath, req.Hostname, time.Duration(req.DurationSeconds)*time.Second); err != nil {
+			if err := s.Whitelist(req.AppName, req.Hostname, time.Duration(req.DurationSeconds)*time.Second); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
