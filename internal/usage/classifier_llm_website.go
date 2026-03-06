@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -816,12 +817,19 @@ func (s *Service) classifyWithGemini(ctx context.Context, instructions, input st
 
 	// Since this is latency sensitive, we use the fastest model available for each tier.
 	models := map[apiv1.DeviceHandshakeResponse_AccountTier]string{
-		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE: "gemini-2.5-flash-lite",
-		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS: "gemini-3.1-flash-lite-preview",
-		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PRO:  "gemini-3.1-flash-lite-preview",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_UNSPECIFIED: "gemini-2.5-flash-lite",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE:        "gemini-2.5-flash-lite",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_TRIAL:       "gemini-2.5-flash-lite",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS:        "gemini-3.1-flash-lite-preview",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PRO:         "gemini-3.1-flash-lite-preview",
 	}
 
 	tier := identity.GetAccountTier()
+	if !slices.Contains([]apiv1.DeviceHandshakeResponse_AccountTier{apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE, apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS}, tier) {
+		slog.Warn("tier is not pro, using free model", "tier", tier)
+
+		tier = apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE
+	}
 
 	resp, err := s.genaiClient.Models.GenerateContent(ctx, models[tier], []*genai.Content{
 		{

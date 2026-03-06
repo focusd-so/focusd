@@ -62,8 +62,8 @@ var Command = &cli.Command{
 		}
 
 		productIDs := map[apiv1.CheckoutProduct]string{
-			apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PLUS: os.Getenv("CHECKOUT_PRODUCT_PLUS_ID"),
-			apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PRO:  os.Getenv("CHECKOUT_PRODUCT_PRO_ID"),
+			apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PLUS: os.Getenv("POLAR_PRODUCT_PLUS_ID"),
+			apiv1.CheckoutProduct_CHECKOUT_PRODUCT_PRO:  os.Getenv("POLAR_PRODUCT_PRO_ID"),
 		}
 
 		apiService, err := api.NewServiceImpl(gormDB, productIDs)
