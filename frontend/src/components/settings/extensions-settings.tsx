@@ -1,33 +1,87 @@
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState } from "react";
 import {
   IconTerminal,
   IconCopy,
   IconCheck,
   IconRobot,
-  IconPlug,
-  IconPlus,
   IconBook,
-  IconActivity,
   IconLock,
-  IconStar
+  IconCode
 } from "@tabler/icons-react";
-import { Browser } from "@wailsio/runtime";
+import { Browser, Clipboard } from "@wailsio/runtime";
 import { useAccountStore } from "@/stores/account-store";
 import { useQuery } from "@tanstack/react-query";
 import { DeviceHandshakeResponse_AccountTier } from "../../../bindings/github.com/focusd-so/focusd/gen/api/v1/models";
 
 const PORT = 50533;
 
+const API_EXAMPLES = [
+  {
+    id: "whitelist",
+    title: "Whitelist a site",
+    method: "POST",
+    path: "/whitelist",
+    description: "Temporarily allow access to a specific domain while in focus mode. Useful for giving agents access to docs.",
+    code: `curl -X POST http://localhost:50533/whitelist \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "hostname": "example.com",
+    "duration_seconds": 3600
+  }'`
+  },
+  {
+    id: "unwhitelist",
+    title: "Remove from whitelist",
+    method: "POST",
+    path: "/unwhitelist",
+    description: "Remove a previously whitelisted domain from the allowed list to re-enable blocking.",
+    code: `curl -X POST http://localhost:50533/unwhitelist \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "id": 1
+  }'`
+  },
+  {
+    id: "pause",
+    title: "Pause Focus",
+    method: "POST",
+    path: "/pause",
+    description: "Temporarily pause your current focus session for a specific duration.",
+    code: `curl -X POST http://localhost:50533/pause \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "duration_seconds": 300
+  }'`
+  },
+  {
+    id: "unpause",
+    title: "Unpause Focus",
+    method: "POST",
+    path: "/unpause",
+    description: "Resume your focus session immediately, canceling any active pause.",
+    code: `curl -X POST http://localhost:50533/unpause`
+  },
+  {
+    id: "status",
+    title: "Get Status",
+    method: "GET",
+    path: "/status",
+    description: "Retrieve the current status of Focusd, including active sessions, pauses, and whitelists.",
+    code: `curl -X GET http://localhost:50533/status`
+  }
+];
+
 export function ExtensionsSettings() {
   const [copied, setCopied] = useState<string | null>(null);
+  const [selectedExampleId, setSelectedExampleId] = useState<string>(API_EXAMPLES[0].id);
+
   const { checkoutLink, fetchAccountTier } = useAccountStore();
 
   const { data: accountTier } = useQuery({
@@ -40,16 +94,18 @@ export function ExtensionsSettings() {
   const baseUrl = `http://localhost:${PORT}`;
 
   const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
+    Clipboard.SetText(text);
     setCopied(label);
     setTimeout(() => setCopied(null), 2000);
   };
 
+  const activeEx = API_EXAMPLES.find(ex => ex.id === selectedExampleId) || API_EXAMPLES[0];
+
   return (
-    <div className="space-y-4 max-w-5xl pb-6">
-      {/* Locked Banner Replacement */}
+    <div className="flex flex-col h-[calc(100vh-10rem)] max-w-5xl gap-4 pb-2">
+      {/* Locked Banner */}
       {isLocked && (
-        <div className="flex items-center justify-between p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200/90 text-[13px] animate-in slide-in-from-top-2 duration-300">
+        <div className="flex-none flex items-center justify-between p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200/90 text-[13px]">
           <div className="flex items-center gap-2.5">
             <div className="p-1 rounded-md bg-amber-500/20">
               <IconLock className="w-3.5 h-3.5" />
@@ -66,201 +122,124 @@ export function ExtensionsSettings() {
         </div>
       )}
 
-      {/* Hero Section - More Compact */}
-      <div className="relative overflow-hidden rounded-2xl border border-emerald-500/10 bg-gradient-to-br from-emerald-500/5 via-transparent to-transparent p-6 shadow-sm text-foreground">
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="space-y-2 flex-1">
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 px-2 py-0.5 font-bold uppercase tracking-wider text-[9px]">
-                Plus Feature
-              </Badge>
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
-              Extend Focusd with Local API
-            </h1>
-            <p className="text-muted-foreground text-[13px] leading-snug max-w-2xl">
-              Automate your focus workflow and integrate Focusd with third-party tools, coding agents, and custom scripts. Our Local API provides the building blocks for a customized productivity environment.
-            </p>
-            <div className="flex flex-wrap gap-2.5 pt-1">
-              {[
-                { icon: IconRobot, label: "AI Agents" },
-                { icon: IconTerminal, label: "Custom Scripts" },
-                { icon: IconPlug, label: "Workflow Tools" },
-              ].map((item, idx) => (
-                <div key={idx} className="flex items-center gap-1.5 text-[11px] text-muted-foreground/80 bg-muted/20 px-2.5 py-1 rounded-full border border-border/30">
-                  <item.icon className="w-3 h-3" />
-                  <span>{item.label}</span>
+      {/* Top Section: Endpoint & Info */}
+      <div className="flex-none flex flex-col md:flex-row items-stretch gap-4">
+        <Card className="flex-1 bg-muted/10 border-border/50 shadow-sm overflow-hidden">
+          <CardContent className="p-4 flex items-center justify-between h-full">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                <IconTerminal className="w-5 h-5 text-emerald-400" />
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest leading-none mb-1.5 flex items-center gap-2">
+                  Local API Endpoint
+                  {!isLocked && (
+                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 px-1.5 py-0 font-bold uppercase tracking-wider text-[8px]">
+                      Plus Feature
+                    </Badge>
+                  )}
                 </div>
-              ))}
+                <div className="font-mono text-sm text-foreground/90">{baseUrl}</div>
+              </div>
             </div>
-          </div>
-          <div className="hidden lg:block shrink-0">
-            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 shadow-inner">
-              <IconPlus className="w-8 h-8 text-emerald-400/80" />
-            </div>
-          </div>
-        </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 text-xs h-8 border-border/50 bg-background hover:bg-muted/50"
+              onClick={() => copyToClipboard(baseUrl, "url")}
+            >
+              {copied === "url" ? <IconCheck className="w-3.5 h-3.5 text-emerald-400" /> : <IconCopy className="w-3.5 h-3.5" />}
+              {copied === "url" ? "Copied" : "Copy URL"}
+            </Button>
+          </CardContent>
+        </Card>
 
-        {/* Background blobs for aesthetics - smaller */}
-        <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-48 h-48 bg-emerald-500/5 blur-[60px] rounded-full pointer-events-none" />
-        <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-32 h-32 bg-emerald-500/5 blur-[40px] rounded-full pointer-events-none" />
+        <div className="hidden lg:flex flex-col justify-center px-5 py-4 w-[320px] rounded-xl border border-border/50 bg-muted/5 text-[12px] text-muted-foreground leading-snug relative overflow-hidden">
+          <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/3 w-24 h-24 bg-emerald-500/10 blur-[20px] rounded-full pointer-events-none" />
+          <h3 className="font-semibold text-foreground flex items-center gap-1.5 mb-1.5 z-10">
+            <IconRobot className="w-4 h-4 text-emerald-400" />
+            Extensible Workflow
+          </h3>
+          <p className="z-10 text-foreground/70">
+            Automate focus with local scripts or let coding agents manage blocking automatically while researching.
+          </p>
+        </div>
       </div>
 
-      <div className={`grid grid-cols-1 lg:grid-cols-12 gap-4 transition-all duration-500 ${isLocked ? 'grayscale-[0.5] opacity-80 pointer-events-none select-none' : ''}`}>
-        {/* Main Content */}
-        <div className="lg:col-span-8 space-y-4">
-          <Card className="border-border/50 shadow-sm overflow-hidden rounded-xl">
-            <CardHeader className="bg-muted/20 py-3 px-4">
-              <div className="flex items-center gap-2">
-                <div className="p-1 rounded-md bg-background border border-border/50">
-                  <IconTerminal className="w-3.5 h-3.5 text-emerald-400" />
-                </div>
-                <div>
-                  <CardTitle className="text-sm font-semibold">Local API Endpoint</CardTitle>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="py-4 px-4 space-y-3">
-              <div className="space-y-1.5">
-                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Base URL</div>
-                <div className="flex items-center gap-2 group">
-                  <div className="flex-1 font-mono text-[13px] bg-muted/40 px-3 py-2 rounded-lg border border-border/40 flex items-center justify-between group-hover:border-emerald-500/30 transition-colors">
-                    <span className="text-foreground/80">{baseUrl}</span>
-                    <button
-                      disabled={isLocked}
-                      onClick={() => !isLocked && copyToClipboard(baseUrl, "url")}
-                      className="p-1 rounded hover:bg-emerald-500/10 text-muted-foreground hover:text-emerald-400 transition-all opacity-40 group-hover:opacity-100"
-                    >
-                      {copied === "url" ? <IconCheck className="w-3.5 h-3.5" /> : <IconCopy className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      {/* Split View for Examples */}
+      <Card className="flex-1 overflow-hidden border-border/50 shadow-sm flex flex-col min-h-0 transition-all">
+        <div className="flex flex-col md:flex-row h-full divide-y md:divide-y-0 md:divide-x divide-border/50 min-h-0">
 
-          <Card className="border-border/50 shadow-sm overflow-hidden rounded-xl">
-            <CardHeader className="bg-muted/20 py-3 px-4">
-              <div className="flex items-center gap-2">
-                <div className="p-1 rounded-md bg-background border border-border/50">
-                  <IconBook className="w-3.5 h-3.5 text-emerald-400" />
-                </div>
-                <div>
-                  <CardTitle className="text-sm font-semibold">Usage Examples</CardTitle>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="py-4 px-4 space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Whitelist a site</div>
-                  <Badge variant="outline" className="text-[9px] py-0 px-1 border-border/30 bg-muted/20 text-muted-foreground font-mono">POST /whitelist</Badge>
-                </div>
-                <div className="relative group">
-                  <pre className="text-[12px] bg-zinc-950/80 text-zinc-300 p-3 rounded-lg overflow-x-auto font-mono border border-white/5 leading-relaxed">
-                    {`curl -X POST ${baseUrl}/whitelist \\
-  -H "Content-Type: application/json" \\
-  -d '{"hostname":"x.com","duration_seconds":3600}'`}
-                  </pre>
-                  <Button
-                    disabled={isLocked}
-                    variant="ghost"
-                    size="icon"
-                    className="absolute top-2 right-2 h-7 w-7 text-zinc-500 hover:text-white hover:bg-white/10 transition-colors"
-                    onClick={() => !isLocked &&
-                      copyToClipboard(
-                        `curl -X POST ${baseUrl}/whitelist -H "Content-Type: application/json" -d '{"hostname":"x.com","duration_seconds":3600}'`,
-                        "curl-whitelist"
-                      )
-                    }
+          {/* Sidebar List */}
+          <div className="w-full md:w-[280px] shrink-0 bg-muted/5 flex flex-col h-full min-h-0">
+            <div className="flex-none p-3 border-b border-border/50 bg-muted/10 flex items-center gap-2 text-foreground/80">
+              <IconBook className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs font-semibold uppercase tracking-wider">Usage Examples</span>
+            </div>
+            <ScrollArea className="flex-1">
+              <div className="p-2 space-y-0.5">
+                {API_EXAMPLES.map(ex => (
+                  <button
+                    key={ex.id}
+                    onClick={() => setSelectedExampleId(ex.id)}
+                    className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all flex items-center justify-between group ${selectedExampleId === ex.id
+                      ? 'bg-emerald-500/10 text-emerald-400 font-medium'
+                      : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                      }`}
                   >
-                    {copied === "curl-whitelist" ? <IconCheck className="w-3.5 h-3.5" /> : <IconCopy className="w-3.5 h-3.5" />}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Remove from whitelist</div>
-                  <Badge variant="outline" className="text-[9px] py-0 px-1 border-border/30 bg-muted/20 text-muted-foreground font-mono">POST /unwhitelist</Badge>
-                </div>
-                <div className="relative group">
-                  <pre className="text-[12px] bg-zinc-950/80 text-zinc-300 p-3 rounded-lg overflow-x-auto font-mono border border-white/5 leading-relaxed">
-                    {`curl -X POST ${baseUrl}/unwhitelist \\
-  -H "Content-Type: application/json" \\
-  -d '{"id":1}'`}
-                  </pre>
-                  <Button
-                    disabled={isLocked}
-                    variant="ghost"
-                    size="icon"
-                    className="absolute top-2 right-2 h-7 w-7 text-zinc-500 hover:text-white hover:bg-white/10 transition-colors"
-                    onClick={() => !isLocked &&
-                      copyToClipboard(
-                        `curl -X POST ${baseUrl}/unwhitelist -H "Content-Type: application/json" -d '{"id":1}'`,
-                        "curl-unwhitelist"
-                      )
-                    }
-                  >
-                    {copied === "curl-unwhitelist" ? <IconCheck className="w-3.5 h-3.5" /> : <IconCopy className="w-3.5 h-3.5" />}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-border/30">
-                <div className="flex flex-wrap gap-2 items-center">
-                  <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Quick Reference:</div>
-                  {["/pause", "/unpause", "/whitelist", "/unwhitelist"].map((path) => (
-                    <code key={path} className="text-[10px] bg-muted/40 px-1.5 py-0.5 rounded border border-border/30 text-foreground/70 font-mono">
-                      {path}
-                    </code>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Sidebar Info */}
-        <div className="lg:col-span-4 space-y-4">
-          <Card className="border-emerald-500/20 bg-emerald-500/[0.02] shadow-sm overflow-hidden rounded-xl h-full">
-            <CardHeader className="py-3 px-4 border-b border-emerald-500/10 bg-emerald-500/5">
-              <div className="flex items-center gap-2 text-emerald-400 mb-0.5">
-                <IconStar className="w-3.5 h-3.5 fill-emerald-400/20" />
-                <span className="text-[10px] font-bold uppercase tracking-widest">How it works</span>
-              </div>
-              <CardTitle className="text-xs font-bold uppercase tracking-tight">Extensible Workflow</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3.5 p-4 text-[11px] text-muted-foreground leading-relaxed">
-              <p>
-                The Local API allows external tools to query and modify your focus state. This is perfect for the <span className="text-foreground/90 font-medium text-[10px] tracking-tight border border-border/30 rounded-md px-1.5 py-0.5 bg-muted/40">AGENT ERA</span>.
-              </p>
-              <div className="space-y-2.5">
-                {[
-                  { title: "Agents", desc: "can pause blocking while they research on your behalf." },
-                  { title: "Scripts", desc: "can automate blocking based on your specific dev environment state." },
-                  { title: "Dashboards", desc: "can pull your focus stats for custom displays." },
-                ].map((item, idx) => (
-                  <div key={idx} className="flex gap-2.5">
-                    <div className="mt-1 h-1 w-1 rounded-full bg-emerald-500/50 shrink-0" />
-                    <p><span className="text-foreground font-medium underline decoration-emerald-500/20 underline-offset-2">{item.title}</span> {item.desc}</p>
-                  </div>
+                    <div className="truncate pr-2">{ex.title}</div>
+                    <Badge variant="outline" className={`text-[9px] py-0 px-1 font-mono uppercase bg-transparent ${selectedExampleId === ex.id
+                      ? 'border-emerald-500/30 text-emerald-400'
+                      : 'border-border/30 text-muted-foreground group-hover:border-border/60'
+                      }`}>
+                      {ex.method}
+                    </Badge>
+                  </button>
                 ))}
               </div>
-              <div className="pt-2">
-                <Button
-                  disabled={isLocked}
-                  variant="outline"
-                  className="w-full text-[10px] h-7 border-emerald-500/20 hover:bg-emerald-500/10 hover:text-emerald-400 group shadow-sm transition-all"
-                >
-                  API Documentation
-                  <IconActivity className="w-3 h-3 ml-1.5 opacity-40 group-hover:opacity-100 transition-opacity" />
-                </Button>
+            </ScrollArea>
+          </div>
+
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col h-full min-w-0 bg-background relative">
+            <div className="flex-none p-5 pb-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-lg font-semibold text-foreground tracking-tight">{activeEx.title}</h3>
+                <Badge variant="outline" className="font-mono text-[10px] sm:text-xs bg-muted/20 border-border/50">
+                  <span className={`mr-1.5 ${activeEx.method === 'GET' ? 'text-blue-400' : 'text-emerald-400'}`}>{activeEx.method}</span>
+                  {activeEx.path}
+                </Badge>
               </div>
-            </CardContent>
-          </Card>
+              <p className="text-[13px] text-muted-foreground/90 leading-relaxed max-w-2xl">{activeEx.description}</p>
+            </div>
+
+            <div className="flex-1 p-5 pt-0 min-h-0 flex flex-col">
+              <div className="relative group flex-1 rounded-xl overflow-hidden border border-border/50 bg-zinc-950 flex flex-col min-h-0">
+                <div className="flex-none px-4 py-2.5 bg-zinc-900 border-b border-white/5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <IconCode className="w-4 h-4 text-zinc-500" />
+                    <span className="text-xs font-mono text-zinc-400">cURL format</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-zinc-400 hover:text-white hover:bg-white/10"
+                    onClick={() => copyToClipboard(activeEx.code, "curl-" + activeEx.id)}
+                  >
+                    {copied === "curl-" + activeEx.id ? <IconCheck className="w-4 h-4 text-emerald-400" /> : <IconCopy className="w-4 h-4" />}
+                  </Button>
+                </div>
+                <div className="flex-1 overflow-auto bg-zinc-950 p-4">
+                  <pre className="text-[13px] leading-relaxed font-mono text-zinc-300 w-full">
+                    <code>{activeEx.code}</code>
+                  </pre>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
