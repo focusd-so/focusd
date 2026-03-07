@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -55,6 +56,7 @@ func init() {
 	application.RegisterEvent[usage.ApplicationUsage]("usage:update")
 	application.RegisterEvent[usage.ProtectionPause]("protection:status")
 	application.RegisterEvent[any]("authctx:updated")
+	application.RegisterEvent[*updater.UpdateInfo]("update:available")
 }
 
 // main function serves as the application's entry point. It initializes the application, creates a window,
@@ -195,9 +197,38 @@ func main() {
 		}
 	})
 
+	isAutoUpdateEnabled := func() bool {
+		setting, err := settingsService.GetLatest(settings.SettingsKeyAutoUpdate)
+		if err != nil {
+			slog.Error("failed to read auto-update setting", "error", err)
+			return true
+		}
+		if setting == nil {
+			return true
+		}
+
+		enabled, err := strconv.ParseBool(setting.Value)
+		if err != nil {
+			slog.Warn("invalid auto-update setting, falling back to enabled", "value", setting.Value, "error", err)
+			return true
+		}
+
+		return enabled
+	}
+
 	var updaterService *updater.Service
 	if isProductionBuild {
-		updaterService = updater.NewService(Version, "focusd-so", "focusd")
+		updaterService = updater.NewService(
+			Version,
+			"focusd-so",
+			"focusd",
+			isAutoUpdateEnabled,
+			func(info *updater.UpdateInfo) {
+				if wailsAppPtr != nil {
+					wailsAppPtr.Event.Emit("update:available", info)
+				}
+			},
+		)
 	}
 
 	nativeService := native.NewNativeService()
@@ -318,7 +349,25 @@ func main() {
 	if updaterService != nil {
 		menu.Add("Check for Updates...").OnClick(func(_ *application.Context) {
 			go func() {
-				info, err := updaterService.CheckForUpdate(ctx)
+				if isAutoUpdateEnabled() {
+					info, err := updaterService.CheckForUpdate(ctx)
+					if err != nil {
+						slog.Error("manual update check failed", "error", err)
+						return
+					}
+					if info == nil {
+						slog.Info("manual update check: already up to date")
+						return
+					}
+
+					slog.Info("manual update check: update available, applying", "version", info.Version)
+					if err := updaterService.ApplyUpdate(ctx); err != nil {
+						slog.Error("manual update failed", "error", err)
+					}
+					return
+				}
+
+				info, err := updaterService.RefreshPendingUpdate(ctx)
 				if err != nil {
 					slog.Error("manual update check failed", "error", err)
 					return
@@ -327,8 +376,10 @@ func main() {
 					slog.Info("manual update check: already up to date")
 					return
 				}
-				slog.Info("manual update check: update available, applying", "version", info.Version)
-				updaterService.ApplyUpdate(ctx)
+
+				slog.Info("manual update check: update available", "version", info.Version)
+				window.Show()
+				window.Focus()
 			}()
 		})
 	}

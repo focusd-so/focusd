@@ -13,6 +13,7 @@ interface SettingsState {
   idleThreshold: string;
   historyRetention: string;
   distractionAllowance: string;
+  autoUpdate: boolean;
   customRulesHistory: Settings[];
   isLoading: boolean;
   error: string | null;
@@ -23,12 +24,21 @@ interface SettingsState {
   getSettingValue: (key: string) => string | undefined;
 }
 
+function parseBooleanSetting(value: string | undefined, fallback: boolean) {
+  if (value == null || value === "") {
+    return fallback;
+  }
+
+  return value.toLowerCase() !== "false";
+}
+
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
   settings: [],
   customRules: "",
   idleThreshold: "120", // default 120
   historyRetention: "7", // default 7
   distractionAllowance: "0", // default 0 / unlimited
+  autoUpdate: true,
   customRulesHistory: [],
   isLoading: false,
   error: null,
@@ -49,6 +59,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       const distractionAllowance =
         settings?.find((s) => s.key === SettingsKey.SettingsKeyDistractionAllowance)
           ?.value || "0";
+      const autoUpdate = parseBooleanSetting(
+        settings?.find((s) => s.key === SettingsKey.SettingsKeyAutoUpdate)?.value,
+        true
+      );
 
       set({
         settings: settings || [],
@@ -56,6 +70,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         idleThreshold,
         historyRetention,
         distractionAllowance,
+        autoUpdate,
         isLoading: false
       });
     } catch (error) {
@@ -90,6 +105,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         set({ historyRetention: value });
       } else if (key === SettingsKey.SettingsKeyDistractionAllowance) {
         set({ distractionAllowance: value });
+      } else if (key === SettingsKey.SettingsKeyAutoUpdate) {
+        set({ autoUpdate: parseBooleanSetting(value, true) });
       }
 
       // Refresh to get the updated version from backend

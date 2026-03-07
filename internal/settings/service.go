@@ -14,6 +14,7 @@ const (
 	SettingsKeyIdleThreshold        SettingsKey = "idle_threshold"
 	SettingsKeyHistoryRetention     SettingsKey = "history_retention"
 	SettingsKeyDistractionAllowance SettingsKey = "distraction_allowance"
+	SettingsKeyAutoUpdate           SettingsKey = "auto_update"
 )
 
 type Settings struct {
