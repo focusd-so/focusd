@@ -47,6 +47,7 @@ export function Step2({ onAllGranted, entered }: Step2Props) {
       if (granted) setAccessibility("granted");
     });
     CheckAutomation("com.apple.systemevents").then((granted) => {
+      console.log(granted)
       if (granted) setSystemEvents("granted");
     });
     Promise.all([
