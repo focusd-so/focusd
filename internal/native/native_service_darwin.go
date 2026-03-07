@@ -85,6 +85,12 @@ func (s *NativeService) RequestAccessibility() bool {
 	return C.checkAccessibility(C.Boolean(1)) != 0
 }
 
+// CheckAutomation silently checks whether automation permission for a given
+// bundle ID is already granted, without triggering a TCC prompt.
+func (s *NativeService) CheckAutomation(bundleID string) bool {
+	return CheckAutomationPermission(bundleID)
+}
+
 // RequestAutomation triggers the macOS TCC prompt for a specific app bundle ID.
 // Returns true if permission was granted (or was already granted).
 func (s *NativeService) RequestAutomation(bundleID string) bool {

@@ -7,8 +7,27 @@ package native
 #cgo CFLAGS: -x objective-c -fobjc-arc
 #cgo LDFLAGS: -framework Cocoa -framework ApplicationServices -framework CoreGraphics
 
+#include <stdlib.h>
 #include <Cocoa/Cocoa.h>
 #include <ApplicationServices/ApplicationServices.h>
+
+// checkAutomationPermission uses AEDeterminePermissionToAutomateTarget to
+// silently check if automation permission for a bundle ID is granted.
+// Returns 1 if granted, 0 otherwise.
+static int checkAutomationPermission(const char* bundleID) {
+    NSString* bid = [NSString stringWithUTF8String:bundleID];
+
+    NSAppleEventDescriptor* targetDesc = [NSAppleEventDescriptor descriptorWithBundleIdentifier:bid];
+
+    OSStatus status = AEDeterminePermissionToAutomateTarget(
+        targetDesc.aeDesc,
+        typeWildCard,
+        typeWildCard,
+        false  // askUserIfNeeded = false -> don't prompt
+    );
+
+    return (status == noErr) ? 1 : 0;
+}
 
 // Forward declaration of Go callback
 extern void goOnTitleChange(int pid, char* bundleID, char* title, char* appName, char* executablePath, char* appIcon);
@@ -188,6 +207,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unsafe"
 )
 
 var (
@@ -450,6 +470,15 @@ func BlockApp(appName, title, reason string, tags []string) error {
 	minimiseApp(appName)
 
 	return nil
+}
+
+// CheckAutomationPermission checks whether automation permission for a given
+// bundle ID is already granted, without triggering a TCC prompt.
+// Returns true if granted, false if denied or not yet asked.
+func CheckAutomationPermission(bundleID string) bool {
+	cBundleID := C.CString(bundleID)
+	defer C.free(unsafe.Pointer(cBundleID))
+	return C.checkAutomationPermission(cBundleID) != 0
 }
 
 // RequestAutomationPermission runs a harmless AppleScript to intentionally

@@ -24,6 +24,10 @@ func (s *NativeService) RequestAccessibility() bool {
 	return true
 }
 
+func (s *NativeService) CheckAutomation(bundleID string) bool {
+	return true
+}
+
 func (s *NativeService) RequestAutomation(bundleID string) bool {
 	return true
 }

@@ -226,9 +226,14 @@ export const useUsageStore = create<UsageState>()((set, get) => ({
           usage.application?.bundle_id ||
           String(usage.id);
         const existing = blocked.get(key);
+        let newCount = existing ? existing.count : 1;
+        if (existing && existing.usage.id !== usage.id) {
+          newCount = existing.count + 1;
+        }
+
         blocked.set(key, {
           usage,
-          count: existing ? existing.count + 1 : 1,
+          count: newCount,
         });
       }
 

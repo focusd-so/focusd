@@ -381,7 +381,7 @@ func (s *Service) getOrCreateApplication(ctx context.Context, name, icon string,
 func (s *Service) getCurrentApplicationUsage() (*ApplicationUsage, error) {
 	var application ApplicationUsage
 
-	if err := s.db.Preload("Application").Where("ended_at IS NULL").Limit(1).Order("started_at DESC").First(&application).Error; err != nil {
+	if err := s.db.Preload("Application").Preload("Tags").Where("ended_at IS NULL").Limit(1).Order("started_at DESC").First(&application).Error; err != nil {
 		if err != gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("failed to find current application usage: %w", err)
 		}

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import {
   CheckAccessibility,
+  CheckAutomation,
   RequestAccessibility,
   RequestAutomation,
   OpenSettings,
@@ -39,11 +40,20 @@ export function Step2({ onAllGranted, entered }: Step2Props) {
     useState<PermissionStatus>("pending");
   const [browsers, setBrowsers] = useState<PermissionStatus>("pending");
 
-  // Check accessibility on mount
+  // Pre-check all permissions on mount (silent, no prompts)
   useEffect(() => {
     const t = setTimeout(() => setIsVisible(true), 50);
     CheckAccessibility().then((granted) => {
       if (granted) setAccessibility("granted");
+    });
+    CheckAutomation("com.apple.systemevents").then((granted) => {
+      if (granted) setSystemEvents("granted");
+    });
+    Promise.all([
+      CheckAutomation("com.google.Chrome"),
+      CheckAutomation("com.apple.Safari"),
+    ]).then(([chrome, safari]) => {
+      if (chrome || safari) setBrowsers("granted");
     });
     return () => clearTimeout(t);
   }, []);

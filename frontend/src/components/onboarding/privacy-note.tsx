@@ -20,7 +20,16 @@ export function PrivacyNote({ className = "", style }: PrivacyNoteProps) {
                 <span className="text-zinc-300 font-medium">Privacy First</span> — All
                 data stays on your Mac. When needed, it's processed through our
                 encrypted server to AI models with zero retention — never stored,
-                shared, or used for training.
+                shared, or used for training. Focusd is source available on{" "}
+                <a
+                    href="https://github.com/focusd-so/focusd"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-indigo-400 hover:text-indigo-300 underline"
+                >
+                    GitHub
+                </a>
+                .
             </p>
         </div>
     );
