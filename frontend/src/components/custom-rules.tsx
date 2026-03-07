@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { IconDeviceFloppy, IconHistory, IconFileText, IconTerminal, IconTestPipe, IconLock, IconCrown } from "@tabler/icons-react";
+import { IconDeviceFloppy, IconHistory, IconFileText, IconTerminal, IconTestPipe, IconCrown } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ExecutionLogsSheet } from "@/components/execution-logs";
@@ -468,196 +468,184 @@ export function CustomRules() {
   }, []);
 
   return (
-    <div className="flex flex-col h-full w-full border rounded-lg bg-card overflow-hidden">
-      {/* Integrated Toolbar */}
-      <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b border-border/50">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-background/50 border border-border/50 shadow-sm">
-            <IconFileText className="w-4 h-4 text-muted-foreground" />
-            <span className="text-xs font-medium">rules.ts</span>
+    <div className="flex flex-col h-full w-full gap-4 pb-2">
+      {isFreeTier && (
+        <div className="flex-none flex items-center justify-between p-3 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-200/90 text-[13px]">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1 rounded-md bg-violet-500/20">
+              <IconCrown className="w-3.5 h-3.5" />
+            </div>
+            <span>Custom Rules are available on <strong>Plus</strong> or <strong>Pro</strong> plans. Upgrade to execute advanced logic.</span>
           </div>
-          {!isFreeTier && (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20 shadow-sm">
-              <IconCrown className="w-3 h-3 text-violet-400" />
-              <span className="text-[10px] font-bold text-violet-400 uppercase tracking-tight">Plus Feature</span>
-            </div>
-          )}
-          {hasUnsavedChanges && (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary"></span>
-              </span>
-              <span className="text-[10px] uppercase tracking-wider font-bold text-primary">Unsaved</span>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <DropdownMenu onOpenChange={handleHistoryOpen}>
-            <DropdownMenuTrigger asChild disabled={isFreeTier}>
-              <button
-                disabled={isFreeTier}
-                className="inline-flex items-center gap-1.5 h-8 px-2 text-xs font-medium text-muted-foreground/60 hover:text-foreground hover:underline underline-offset-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-muted-foreground/60 disabled:hover:no-underline"
-              >
-                <IconHistory className="w-3.5 h-3.5" />
-                <span className="sr-only sm:not-sr-only">History</span>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
-              <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Version History</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {customRulesHistory.length === 0 ? (
-                <DropdownMenuItem disabled className="text-xs">No history available</DropdownMenuItem>
-              ) : (
-                customRulesHistory.map((version, index) => (
-                  <DropdownMenuItem
-                    key={version.id}
-                    onClick={() => handleRestoreVersion(version.value)}
-                    className="flex flex-col items-start gap-0.5 py-2"
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <span className="font-semibold text-sm">Version {version.version}</span>
-                      <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                        {index === 0 && version.value === customRules
-                          ? "CURRENT"
-                          : formatDate(version.created_at)}
-                      </span>
-                    </div>
-                  </DropdownMenuItem>
-                ))
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <button
-            onClick={() => setLogsOpen(true)}
-            disabled={isFreeTier}
-            className="inline-flex items-center gap-1.5 h-8 px-2 text-xs font-medium text-muted-foreground/60 hover:text-foreground hover:underline underline-offset-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-muted-foreground/60 disabled:hover:no-underline"
-          >
-            <IconTerminal className="w-3.5 h-3.5" />
-            <span className="sr-only sm:not-sr-only">Exec Logs</span>
-          </button>
-
-          <button
-            onClick={() => setTestOpen(true)}
-            disabled={isFreeTier}
-            className="inline-flex items-center gap-1.5 h-8 px-2 text-xs font-medium text-muted-foreground/60 hover:text-foreground hover:underline underline-offset-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-muted-foreground/60 disabled:hover:no-underline"
-          >
-            <IconTestPipe className="w-3.5 h-3.5" />
-            <span className="sr-only sm:not-sr-only">Test</span>
-          </button>
-
           <Button
+            onClick={() => checkoutLink && Browser.OpenURL(checkoutLink)}
             size="sm"
-            onClick={handleSave}
-            disabled={!hasUnsavedChanges || isFreeTier}
-            className={cn(
-              "h-8 px-3 transition-all duration-200",
-              hasUnsavedChanges && !isFreeTier
-                ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-500"
-                : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
-            )}
+            className="h-7 px-3 bg-violet-600 hover:bg-violet-500 text-white text-[11px] font-bold rounded-lg transition-all"
           >
-            <IconDeviceFloppy className="w-4 h-4 sm:mr-1.5" />
-            <span className="text-xs font-bold sm:inline hidden">Save Rules</span>
+            Upgrade Now
           </Button>
-        </div>
-      </div>
-
-      {/* Draft restoration banner */}
-      {showDraftBanner && (
-        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-primary/5 border-b border-primary/10">
-          <div className="flex items-center gap-2">
-            <IconFileText className="w-4 h-4 text-primary/70" />
-            <span className="text-xs text-muted-foreground">
-              Restorable draft found from a previous session.
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={handleDiscardDraft}
-              className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive transition-colors"
-            >
-              Discard
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleRestoreDraft}
-              className="h-7 px-3 text-xs bg-primary/20 text-primary hover:bg-primary/30 border-none"
-            >
-              Restore Draft
-            </Button>
-          </div>
         </div>
       )}
 
-      <div className="flex-1 min-h-[400px] user-select-allow bg-[#1e1e1e] relative">
-        <Editor
-          value={displayedRules}
-          height="100%"
-          language="typescript"
-          theme="vs-dark"
-          beforeMount={handleEditorWillMount}
-          onMount={handleEditorMount}
-          onChange={handleChange}
-          options={{
-            readOnly: isFreeTier,
-            domReadOnly: isFreeTier,
-            lineNumbers: "on",
-            folding: true,
-            renderLineHighlight: "line",
-            minimap: { enabled: false },
-            tabSize: 2,
-            fontSize: 13,
-            fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Source Code Pro', monospace",
-            scrollBeyondLastLine: false,
-            padding: { top: 10, bottom: 10 },
-            overviewRulerBorder: false,
-            hideCursorInOverviewRuler: true,
-            definitionLinkOpensInPeek: true,
-            scrollbar: {
-              vertical: 'visible',
-              horizontal: 'visible',
-              useShadows: false,
-              verticalScrollbarSize: 10,
-              horizontalScrollbarSize: 10,
-            }
-          }}
-        />
+      <div className="flex-1 flex flex-col min-h-0 border rounded-lg bg-card overflow-hidden">
+        {/* Integrated Toolbar */}
+        <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b border-border/50">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-background/50 border border-border/50 shadow-sm">
+              <IconFileText className="w-4 h-4 text-muted-foreground" />
+              <span className="text-xs font-medium">rules.ts</span>
+            </div>
+            {!isFreeTier && (
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20 shadow-sm">
+                <IconCrown className="w-3 h-3 text-violet-400" />
+                <span className="text-[10px] font-bold text-violet-400 uppercase tracking-tight">Plus Feature</span>
+              </div>
+            )}
+            {hasUnsavedChanges && (
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary"></span>
+                </span>
+                <span className="text-[10px] uppercase tracking-wider font-bold text-primary">Unsaved</span>
+              </div>
+            )}
+          </div>
 
-        {/* Free Tier Overlay */}
-        {isFreeTier && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/60 backdrop-blur-sm p-6 text-center">
-            <div className="max-w-md space-y-4 rounded-xl border border-border/50 bg-card p-6 shadow-lg shadow-black/20">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-violet-500/10">
-                <IconCrown className="h-6 w-6 text-violet-400" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-bold tracking-tight">Custom Rules is a Pro feature</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Write your own logic to handle infinite edge cases. Allow research on youtube,
-                  block specific subreddits, or give yourself a 15 minute break every 2 hours.
-                </p>
-              </div>
-              <div className="pt-2">
-                <Button
-                  onClick={() => checkoutLink && Browser.OpenURL(checkoutLink)}
-                  className="w-full bg-violet-600 hover:bg-violet-700 text-white shadow-md shadow-violet-900/20"
+          <div className="flex items-center gap-2">
+            <DropdownMenu onOpenChange={handleHistoryOpen}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="inline-flex items-center gap-1.5 h-8 px-2 text-xs font-medium text-muted-foreground/60 hover:text-foreground hover:underline underline-offset-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-muted-foreground/60 disabled:hover:no-underline"
                 >
-                  <IconLock className="mr-2 h-4 w-4" />
-                  Upgrade to unlock
-                </Button>
-              </div>
+                  <IconHistory className="w-3.5 h-3.5" />
+                  <span className="sr-only sm:not-sr-only">History</span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Version History</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {customRulesHistory.length === 0 ? (
+                  <DropdownMenuItem disabled className="text-xs">No history available</DropdownMenuItem>
+                ) : (
+                  customRulesHistory.map((version, index) => (
+                    <DropdownMenuItem
+                      key={version.id}
+                      onClick={() => handleRestoreVersion(version.value)}
+                      className="flex flex-col items-start gap-0.5 py-2"
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span className="font-semibold text-sm">Version {version.version}</span>
+                        <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                          {index === 0 && version.value === customRules
+                            ? "CURRENT"
+                            : formatDate(version.created_at)}
+                        </span>
+                      </div>
+                    </DropdownMenuItem>
+                  ))
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <button
+              onClick={() => setLogsOpen(true)}
+              className="inline-flex items-center gap-1.5 h-8 px-2 text-xs font-medium text-muted-foreground/60 hover:text-foreground hover:underline underline-offset-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-muted-foreground/60 disabled:hover:no-underline"
+            >
+              <IconTerminal className="w-3.5 h-3.5" />
+              <span className="sr-only sm:not-sr-only">Exec Logs</span>
+            </button>
+
+            <button
+              onClick={() => setTestOpen(true)}
+              className="inline-flex items-center gap-1.5 h-8 px-2 text-xs font-medium text-muted-foreground/60 hover:text-foreground hover:underline underline-offset-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-muted-foreground/60 disabled:hover:no-underline"
+            >
+              <IconTestPipe className="w-3.5 h-3.5" />
+              <span className="sr-only sm:not-sr-only">Test</span>
+            </button>
+
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={!hasUnsavedChanges}
+              className={cn(
+                "h-8 px-3 transition-all duration-200",
+                hasUnsavedChanges
+                  ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-500"
+                  : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
+              )}
+            >
+              <IconDeviceFloppy className="w-4 h-4 sm:mr-1.5" />
+              <span className="text-xs font-bold sm:inline hidden">Save Rules</span>
+            </Button>
+          </div>
+        </div>
+
+        {/* Draft restoration banner */}
+        {showDraftBanner && (
+          <div className="flex items-center justify-between gap-3 px-4 py-2 bg-primary/5 border-b border-primary/10">
+            <div className="flex items-center gap-2">
+              <IconFileText className="w-4 h-4 text-primary/70" />
+              <span className="text-xs text-muted-foreground">
+                Restorable draft found from a previous session.
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleDiscardDraft}
+                className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive transition-colors"
+              >
+                Discard
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleRestoreDraft}
+                className="h-7 px-3 text-xs bg-primary/20 text-primary hover:bg-primary/30 border-none"
+              >
+                Restore Draft
+              </Button>
             </div>
           </div>
         )}
-      </div>
 
-      <ExecutionLogsSheet open={logsOpen} onOpenChange={setLogsOpen} />
-      <TestRulesSheet open={testOpen} onOpenChange={setTestOpen} />
+        <div className="flex-1 min-h-[400px] user-select-allow bg-[#1e1e1e] relative">
+          <Editor
+            value={displayedRules}
+            height="100%"
+            language="typescript"
+            theme="vs-dark"
+            beforeMount={handleEditorWillMount}
+            onMount={handleEditorMount}
+            onChange={handleChange}
+            options={{
+              lineNumbers: "on",
+              folding: true,
+              renderLineHighlight: "line",
+              minimap: { enabled: false },
+              tabSize: 2,
+              fontSize: 13,
+              fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Source Code Pro', monospace",
+              scrollBeyondLastLine: false,
+              padding: { top: 10, bottom: 10 },
+              overviewRulerBorder: false,
+              hideCursorInOverviewRuler: true,
+              definitionLinkOpensInPeek: true,
+              scrollbar: {
+                vertical: 'visible',
+                horizontal: 'visible',
+                useShadows: false,
+                verticalScrollbarSize: 10,
+                horizontalScrollbarSize: 10,
+              }
+            }}
+          />
+        </div>
+
+        <ExecutionLogsSheet open={logsOpen} onOpenChange={setLogsOpen} />
+        <TestRulesSheet open={testOpen} onOpenChange={setTestOpen} />
+      </div>
     </div>
   );
 }
