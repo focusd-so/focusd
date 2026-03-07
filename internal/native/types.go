@@ -49,6 +49,11 @@ func (e *NativeEvent) BrowserHostname() string {
 	return hostname
 }
 
+type InstalledBrowser struct {
+	BundleID string `json:"bundleID"`
+	Name     string `json:"name"`
+}
+
 func (e *NativeEvent) Domain() string {
 	if e.URL == "" {
 		return ""

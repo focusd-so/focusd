@@ -58,3 +58,7 @@ func (s *NativeService) DisableLoginItem() error {
 func (s *NativeService) LoginItemEnabled() bool {
 	return false
 }
+
+func (s *NativeService) GetInstalledBrowsers() []InstalledBrowser {
+	return []InstalledBrowser{}
+}
