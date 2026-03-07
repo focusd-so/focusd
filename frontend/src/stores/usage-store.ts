@@ -98,7 +98,7 @@ const mapDayInsightsToOverview = (
 
   const hourlyBreakdown = insights.ProductivityPerHourBreakdown ?? {};
   Object.entries(hourlyBreakdown).forEach(([hourKey, score]) => {
-    const parsedHour = new Date(hourKey).getHours();
+    const parsedHour = parseInt(hourKey, 10);
     const safeScore = normalizeProductivityScore(score);
 
     const current = hourlyTotals.get(parsedHour);

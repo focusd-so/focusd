@@ -7,8 +7,10 @@ package native
 #cgo CFLAGS: -x objective-c -fobjc-arc
 #cgo LDFLAGS: -framework Cocoa -framework ApplicationServices -framework ServiceManagement
 
+#include <stdlib.h>
 #include <ApplicationServices/ApplicationServices.h>
 
+#import <Cocoa/Cocoa.h>
 #import <ServiceManagement/ServiceManagement.h>
 
 static Boolean checkAccessibility(Boolean prompt) {
@@ -55,11 +57,34 @@ static int loginItemEnabled(void) {
 	}
 	return 0;
 }
+
+// getInstalledAppName returns the display name of the app with the given bundle ID,
+// or NULL if the app is not installed.
+static const char* getInstalledAppName(const char* bundleID) {
+	@autoreleasepool {
+		NSString *bid = [NSString stringWithUTF8String:bundleID];
+		NSURL *appURL = [[NSWorkspace sharedWorkspace] URLForApplicationWithBundleIdentifier:bid];
+		if (appURL == nil) {
+			return NULL;
+		}
+		NSBundle *bundle = [NSBundle bundleWithURL:appURL];
+		NSString *name = [bundle objectForInfoDictionaryKey:@"CFBundleDisplayName"];
+		if (name == nil) {
+			name = [bundle objectForInfoDictionaryKey:@"CFBundleName"];
+		}
+		if (name == nil) {
+			name = [[appURL lastPathComponent] stringByDeletingPathExtension];
+		}
+		return strdup([name UTF8String]);
+	}
+}
 */
 import "C"
 import (
 	"fmt"
+	"sort"
 	"sync"
+	"unsafe"
 )
 
 // NativeService is a Wails-bound service for managing macOS permissions
@@ -133,4 +158,52 @@ func (s *NativeService) DisableLoginItem() error {
 // LoginItemEnabled returns whether the app is currently registered to open at login.
 func (s *NativeService) LoginItemEnabled() bool {
 	return C.loginItemEnabled() != 0
+}
+
+var browserPriority = map[string]int{
+	"com.apple.Safari":        0,
+	"com.google.Chrome":       1,
+	"com.brave.Browser":       2,
+	"com.microsoft.edgemac":   3,
+	"com.operasoftware.Opera": 4,
+	"com.vivaldi.Vivaldi":     5,
+	"company.thebrowser.Browser": 6,
+}
+
+// GetInstalledBrowsers returns all known browsers that are installed on the system,
+// sorted with popular browsers first.
+func (s *NativeService) GetInstalledBrowsers() []InstalledBrowser {
+	allBundleIDs := make([]string, 0, len(chromeBaseBundleIDs)+len(safariBasedBundleIDs))
+	allBundleIDs = append(allBundleIDs, safariBasedBundleIDs...)
+	allBundleIDs = append(allBundleIDs, chromeBaseBundleIDs...)
+
+	var installed []InstalledBrowser
+	for _, bid := range allBundleIDs {
+		cBid := C.CString(bid)
+		cName := C.getInstalledAppName(cBid)
+		C.free(unsafe.Pointer(cBid))
+		if cName == nil {
+			continue
+		}
+		name := C.GoString(cName)
+		C.free(unsafe.Pointer(cName))
+		installed = append(installed, InstalledBrowser{BundleID: bid, Name: name})
+	}
+
+	sort.SliceStable(installed, func(i, j int) bool {
+		pi, okI := browserPriority[installed[i].BundleID]
+		pj, okJ := browserPriority[installed[j].BundleID]
+		if okI && okJ {
+			return pi < pj
+		}
+		if okI {
+			return true
+		}
+		if okJ {
+			return false
+		}
+		return installed[i].Name < installed[j].Name
+	})
+
+	return installed
 }

@@ -2,82 +2,77 @@ package usage
 
 import (
 	"fmt"
-	"log/slog"
 	"math"
 	"time"
 )
 
 func (s *Service) GetDayInsights(date time.Time) (DayInsights, error) {
-
-	slog.Info("[INGISHTS]: requestung for", "date", date)
-
 	if date.IsZero() {
 		date = time.Now()
 	}
 
-	listOpts := GetUsageListOptions{
-		Date: &date,
-	}
-
-	usages, err := s.GetUsageList(listOpts)
+	usages, err := s.GetUsageList(GetUsageListOptions{Date: &date})
 	if err != nil {
 		return DayInsights{}, fmt.Errorf("failed to get usage list: %w", err)
 	}
 
-	slog.Info("[INGISHTS]: number of usages", "count", len(usages))
-
-	var (
-		productivityScore            = ProductivityScore{}
-		productivityPerHourBreakdown = make(ProductivityPerHourBreakdown)
-	)
+	score := ProductivityScore{}
+	hourly := make(ProductivityPerHourBreakdown)
 
 	for i, usage := range usages {
-		// calculate overall summary
-		end := fromPtr(usage.EndedAt)
-
-		if end == 0 {
-			if len(usages) > i+1 {
-				end = usages[i+1].StartedAt
-			}
-
-			if end == 0 {
-				continue
-			}
-		}
-
-		durationSeconds := end - usage.StartedAt
-		if durationSeconds <= 0 {
+		end := resolveEndTime(usage, usages, i)
+		if end <= usage.StartedAt {
 			continue
 		}
 
-		slog.Info("[INGISHTS]: calculated duration in seconds", "duration", durationSeconds)
+		dur := int(end - usage.StartedAt)
+		score.addSeconds(usage.Classification, dur)
 
-		switch usage.Classification {
-		case ClassificationProductive:
-			productivityScore.ProductiveSeconds += int(durationSeconds)
-		case ClassificationDistracting:
-			productivityScore.DistractiveSeconds += int(durationSeconds)
-		default:
-			productivityScore.OtherSeconds += int(durationSeconds)
+		for hour, secs := range splitSecondsPerHour(usage.StartedAt, end) {
+			entry := hourly[hour]
+			entry.addSeconds(usage.Classification, secs)
+			hourly[hour] = entry
+		}
+	}
+
+	score.ProductivityScore = calculateProductivityScore(score.ProductiveSeconds, score.DistractiveSeconds)
+	for hour, s := range hourly {
+		s.ProductivityScore = calculateProductivityScore(s.ProductiveSeconds, s.DistractiveSeconds)
+		hourly[hour] = s
+	}
+
+	return DayInsights{ProductivityScore: score, ProductivityPerHourBreakdown: hourly}, nil
+}
+
+func resolveEndTime(usage ApplicationUsage, usages []ApplicationUsage, i int) int64 {
+	if usage.EndedAt != nil {
+		return *usage.EndedAt
+	}
+	if i+1 < len(usages) {
+		return usages[i+1].StartedAt
+	}
+	return 0
+}
+
+func splitSecondsPerHour(startUnix, endUnix int64) map[int]int {
+	start := time.Unix(startUnix, 0).UTC()
+	end := time.Unix(endUnix, 0).UTC()
+	result := make(map[int]int)
+
+	for cursor := start; cursor.Before(end); {
+		hour := cursor.Hour()
+		nextHour := time.Date(cursor.Year(), cursor.Month(), cursor.Day(), hour+1, 0, 0, 0, time.UTC)
+
+		segmentEnd := end
+		if nextHour.Before(end) {
+			segmentEnd = nextHour
 		}
 
+		result[hour] += int(segmentEnd.Sub(cursor).Seconds())
+		cursor = segmentEnd
 	}
 
-	slog.Info("[INGISHTS]: total  seconds", "productivity", productivityScore.ProductiveSeconds, "distracting", productivityScore.DistractiveSeconds)
-
-	// Calculate overall score
-	productivityScore.ProductivityScore = calculateProductivityScore(productivityScore.ProductiveSeconds, productivityScore.DistractiveSeconds)
-
-	// Calculate hourly scores
-	for hour, score := range productivityPerHourBreakdown {
-		score.ProductivityScore = calculateProductivityScore(score.ProductiveSeconds, score.DistractiveSeconds)
-		productivityPerHourBreakdown[hour] = score
-	}
-
-	return DayInsights{
-		ProductivityScore:            productivityScore,
-		ProductivityPerHourBreakdown: productivityPerHourBreakdown,
-	}, nil
+	return result
 }
 
 func calculateProductivityScore(productiveSeconds, distractiveSeconds int) int {
