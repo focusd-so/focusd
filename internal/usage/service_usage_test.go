@@ -32,13 +32,20 @@ func setUpService(t *testing.T, options ...usage.Option) (*usage.Service, *gorm.
 func TestService_WhenEnterIdle_ContinueCurrentIdlePeriod(t *testing.T) {
 	service, db := setUpService(t)
 
-	// create a new idle period
-	idlePeriod := usage.IdlePeriod{
-		StartedAt: time.Now().Unix(),
+	// create the Idle application
+	idleApp := usage.Application{Name: usage.IdleApplicationName}
+	require.NoError(t, db.Create(&idleApp).Error)
+
+	// create an open idle usage
+	idleUsage := usage.ApplicationUsage{
+		ApplicationID:   idleApp.ID,
+		StartedAt:       time.Now().Unix(),
+		Classification:  usage.ClassificationNone,
+		TerminationMode: usage.TerminationModeNone,
+		WindowTitle:     usage.IdleApplicationName,
+		ExecutablePath:  "idle",
 	}
-	if err := db.Create(&idlePeriod).Error; err != nil {
-		t.Fatalf("failed to create idle period: %v", err)
-	}
+	require.NoError(t, db.Create(&idleUsage).Error)
 
 	// wait 3 seconds
 	time.Sleep(3 * time.Second)
@@ -47,61 +54,73 @@ func TestService_WhenEnterIdle_ContinueCurrentIdlePeriod(t *testing.T) {
 	err := service.IdleChanged(context.Background(), true)
 	require.NoError(t, err, "failed to enter idle")
 
-	// read the idle period
-	var readIdlePeriod usage.IdlePeriod
-	if err := db.Where("id = ?", idlePeriod.ID).First(&readIdlePeriod).Error; err != nil {
-		t.Fatalf("failed to find idle period: %v", err)
-	}
+	// read the idle usage — it should still be open
+	var readIdleUsage usage.ApplicationUsage
+	require.NoError(t, db.Where("id = ?", idleUsage.ID).First(&readIdleUsage).Error)
 
-	require.NotEqual(t, int64(0), readIdlePeriod.StartedAt)
-	require.Equal(t, readIdlePeriod.ID, idlePeriod.ID)
-	require.Nil(t, readIdlePeriod.EndedAt)
-	require.Nil(t, readIdlePeriod.DurationSeconds)
+	require.NotEqual(t, int64(0), readIdleUsage.StartedAt)
+	require.Equal(t, readIdleUsage.ID, idleUsage.ID)
+	require.Nil(t, readIdleUsage.EndedAt)
+	require.Nil(t, readIdleUsage.DurationSeconds)
 }
 
 func TestService_WhenEnterIdle_CreateNewIdlePeriod(t *testing.T) {
 	service, db := setUpService(t)
 
+	// create the Idle application
+	idleApp := usage.Application{Name: usage.IdleApplicationName}
+	require.NoError(t, db.Create(&idleApp).Error)
+
 	now := time.Now().Unix()
 	expectedDurationSeconds := 3
 
-	// create a closed idle period
-	closedIdlePeriod := usage.IdlePeriod{
+	// create a closed idle usage
+	closedIdleUsage := usage.ApplicationUsage{
+		ApplicationID:   idleApp.ID,
 		StartedAt:       time.Now().Unix(),
 		EndedAt:         &now,
 		DurationSeconds: &expectedDurationSeconds,
+		Classification:  usage.ClassificationNone,
+		TerminationMode: usage.TerminationModeNone,
+		WindowTitle:     usage.IdleApplicationName,
+		ExecutablePath:  "idle",
 	}
-	if err := db.Create(&closedIdlePeriod).Error; err != nil {
-		t.Fatalf("failed to create closed idle period: %v", err)
-	}
+	require.NoError(t, db.Create(&closedIdleUsage).Error)
 
 	// enter idle
 	err := service.IdleChanged(context.Background(), true)
 	require.NoError(t, err, "failed to enter idle")
 
-	// read the idle period
-	var readIdlePeriod usage.IdlePeriod
-	if err := db.Where("ended_at IS NULL").Limit(1).Order("started_at desc").First(&readIdlePeriod).Error; err != nil {
-		t.Fatalf("failed to find idle period: %v", err)
-	}
+	// read the new idle usage
+	var readIdleUsage usage.ApplicationUsage
+	require.NoError(t, db.Joins("Application").
+		Where("application.name = ? AND application_usage.ended_at IS NULL", usage.IdleApplicationName).
+		Limit(1).Order("application_usage.started_at DESC").
+		First(&readIdleUsage).Error)
 
-	require.NotEqual(t, int64(0), readIdlePeriod.StartedAt)
-	require.NotEqual(t, readIdlePeriod.ID, closedIdlePeriod.ID)
-	require.Nil(t, readIdlePeriod.EndedAt)
-	require.Nil(t, readIdlePeriod.DurationSeconds)
+	require.NotEqual(t, int64(0), readIdleUsage.StartedAt)
+	require.NotEqual(t, readIdleUsage.ID, closedIdleUsage.ID)
+	require.Nil(t, readIdleUsage.EndedAt)
+	require.Nil(t, readIdleUsage.DurationSeconds)
 }
 
 func TestService_WhenExitIdle_CloseCurrentIdlePeriod(t *testing.T) {
 	service, db := setUpService(t)
 
-	// create a new idle period
-	idlePeriod := usage.IdlePeriod{
-		StartedAt: time.Now().Unix(),
-	}
+	// create the Idle application
+	idleApp := usage.Application{Name: usage.IdleApplicationName}
+	require.NoError(t, db.Create(&idleApp).Error)
 
-	if err := db.Create(&idlePeriod).Error; err != nil {
-		t.Fatalf("failed to create idle period: %v", err)
+	// create an open idle usage
+	idleUsage := usage.ApplicationUsage{
+		ApplicationID:   idleApp.ID,
+		StartedAt:       time.Now().Unix(),
+		Classification:  usage.ClassificationNone,
+		TerminationMode: usage.TerminationModeNone,
+		WindowTitle:     usage.IdleApplicationName,
+		ExecutablePath:  "idle",
 	}
+	require.NoError(t, db.Create(&idleUsage).Error)
 
 	// wait 3 seconds
 	time.Sleep(3 * time.Second)
@@ -110,16 +129,14 @@ func TestService_WhenExitIdle_CloseCurrentIdlePeriod(t *testing.T) {
 	err := service.IdleChanged(context.Background(), false)
 	require.NoError(t, err, "failed to exit idle")
 
-	// read the idle period
-	var readIdlePeriod usage.IdlePeriod
-	if err := db.Where("id = ?", idlePeriod.ID).First(&readIdlePeriod).Error; err != nil {
-		t.Fatalf("failed to find idle period: %v", err)
-	}
+	// read the idle usage
+	var readIdleUsage usage.ApplicationUsage
+	require.NoError(t, db.Where("id = ?", idleUsage.ID).First(&readIdleUsage).Error)
 
-	require.NotEqual(t, int64(0), readIdlePeriod.StartedAt)
-	require.NotEqual(t, int64(0), readIdlePeriod.EndedAt)
-	require.NotNil(t, readIdlePeriod.DurationSeconds)
-	require.Equal(t, 3, *readIdlePeriod.DurationSeconds)
+	require.NotEqual(t, int64(0), readIdleUsage.StartedAt)
+	require.NotNil(t, readIdleUsage.EndedAt)
+	require.NotNil(t, readIdleUsage.DurationSeconds)
+	require.Equal(t, 3, *readIdleUsage.DurationSeconds)
 }
 
 func TestService_CloseCurrentApplicationUsageWhenEnterIdle(t *testing.T) {

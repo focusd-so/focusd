@@ -20,33 +20,71 @@ import (
 
 // IdleChanged is called when the idle state of the user changes (e.g. user starts or stops using the computer)
 func (s *Service) IdleChanged(ctx context.Context, isIdle bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if isIdle {
-		if err := s.closeCurrentApplicationUsage(); err != nil {
-			return fmt.Errorf("failed to close current application usage: %w", err)
-		}
-
-		// check if there is a current idle period
-		var idlePeriod IdlePeriod
-		err := s.db.Where("ended_at IS NULL").Limit(1).Order("started_at desc").First(&idlePeriod).Error
+		// close only non-idle application usage (leave any existing idle usage open)
+		var currentUsage ApplicationUsage
+		err := s.db.Preload("Application").
+			Joins("LEFT JOIN application ON application.id = application_usage.application_id").
+			Where("application_usage.ended_at IS NULL AND (application.name IS NULL OR application.name != ?)", IdleApplicationName).
+			Limit(1).Order("application_usage.started_at DESC").
+			First(&currentUsage).Error
 		if err != nil && err != gorm.ErrRecordNotFound {
-			return fmt.Errorf("failed to find current idle period: %w", err)
+			return fmt.Errorf("failed to find current application usage: %w", err)
+		}
+		if currentUsage.ID > 0 {
+			if err := s.closeApplicationUsage(&currentUsage); err != nil {
+				return fmt.Errorf("failed to close current application usage: %w", err)
+			}
 		}
 
-		// if there is a current idle period, let it continue
-		if idlePeriod.ID > 0 {
+		// check if there is already an open idle usage
+		var existingIdleUsage ApplicationUsage
+		err = s.db.Joins("Application").
+			Where("application.name = ? AND application_usage.ended_at IS NULL", IdleApplicationName).
+			Limit(1).Order("application_usage.started_at DESC").
+			First(&existingIdleUsage).Error
+		if err != nil && err != gorm.ErrRecordNotFound {
+			return fmt.Errorf("failed to find current idle usage: %w", err)
+		}
+
+		// if there is an open idle usage, let it continue
+		if existingIdleUsage.ID > 0 {
 			return nil
 		}
 
-		// create a new idle period
-		newIdlePeriod := &IdlePeriod{StartedAt: time.Now().Unix()}
-		if err := s.db.Create(&newIdlePeriod).Error; err != nil {
-			return fmt.Errorf("failed to create new idle period: %w", err)
+		// get or create the Idle application
+		var idleApp Application
+		if err := s.db.Where("name = ?", IdleApplicationName).First(&idleApp).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				idleApp = Application{Name: IdleApplicationName}
+				if err := s.db.Create(&idleApp).Error; err != nil {
+					return fmt.Errorf("failed to create idle application: %w", err)
+				}
+			} else {
+				return fmt.Errorf("failed to find idle application: %w", err)
+			}
+		}
+
+		// create a new idle usage
+		idleUsage := &ApplicationUsage{
+			ApplicationID:   idleApp.ID,
+			StartedAt:       time.Now().Unix(),
+			Classification:  ClassificationNone,
+			TerminationMode: TerminationModeNone,
+			WindowTitle:     IdleApplicationName,
+			ExecutablePath:  "idle",
+		}
+		if err := s.db.Create(idleUsage).Error; err != nil {
+			return fmt.Errorf("failed to create idle usage: %w", err)
 		}
 
 	} else {
-		// close the current idle period
-		if err := s.closeCurrentIdlePeriod(); err != nil {
-			return fmt.Errorf("failed to close current idle period: %w", err)
+		// close the current idle usage
+		if err := s.closeCurrentIdleUsage(); err != nil {
+			return fmt.Errorf("failed to close current idle usage: %w", err)
 		}
 	}
 
@@ -56,6 +94,9 @@ func (s *Service) IdleChanged(ctx context.Context, isIdle bool) error {
 // TitleChanged is called when the title of the current application changes,
 // whether it's a new application or the same application title has changed
 func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle, appName, icon string, bundleID, url *string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	// check if the current application is the same
 	currentApplicationUsage, err := s.getCurrentApplicationUsage()
 	if err != nil {
@@ -99,7 +140,7 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 	if err != nil {
 		errMsg := err.Error()
 		applicationUsage.ClassificationError = &errMsg
-		applicationUsage.Classification = ClassificationError
+		applicationUsage.Classification = ClassificationNone
 	} else if classification != nil {
 		applicationUsage.Classification = classification.Classification
 		applicationUsage.ClassificationSource = &classification.ClassificationSource
@@ -353,19 +394,6 @@ func (s *Service) getCurrentApplicationUsage() (*ApplicationUsage, error) {
 	return &application, nil
 }
 
-func (s *Service) closeCurrentApplicationUsage() error {
-	application, err := s.getCurrentApplicationUsage()
-	if err != nil {
-		return fmt.Errorf("failed to find current application usage: %w", err)
-	}
-
-	if application == nil {
-		return nil
-	}
-
-	return s.closeApplicationUsage(application)
-}
-
 func (s *Service) closeApplicationUsage(app *ApplicationUsage) error {
 	if app == nil || app.EndedAt != nil {
 		return nil
@@ -389,27 +417,20 @@ func (s *Service) closeApplicationUsage(app *ApplicationUsage) error {
 	return nil
 }
 
-func (s *Service) closeCurrentIdlePeriod() error {
-	var idlePeriod IdlePeriod
-	err := s.db.Where("ended_at IS NULL").Limit(1).Order("started_at desc").First(&idlePeriod).Error
+func (s *Service) closeCurrentIdleUsage() error {
+	var idleUsage ApplicationUsage
+	err := s.db.Joins("Application").
+		Where("application.name = ? AND application_usage.ended_at IS NULL", IdleApplicationName).
+		Limit(1).Order("application_usage.started_at DESC").
+		First(&idleUsage).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil // Nothing to close
 		}
-		return fmt.Errorf("failed to find current idle period: %w", err)
+		return fmt.Errorf("failed to find current idle usage: %w", err)
 	}
 
-	now := time.Now().Unix()
-	idlePeriod.EndedAt = &now
-
-	durationInSeconds := int(now - idlePeriod.StartedAt)
-	idlePeriod.DurationSeconds = &durationInSeconds
-
-	if err := s.db.Save(&idlePeriod).Error; err != nil {
-		return fmt.Errorf("failed to update idle period: %w", err)
-	}
-
-	return nil
+	return s.closeApplicationUsage(&idleUsage)
 }
 
 func fetchFavicon(ctx context.Context, rawURL string) (string, error) {

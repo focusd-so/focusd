@@ -60,13 +60,10 @@ func (s *Service) GetUsageList(options GetUsageListOptions) ([]ApplicationUsage,
 		query = query.Where("application_id = ?", *options.ApplicationID)
 	}
 
-	if options.Hostname != nil || options.BundleID != nil || options.ApplicationName != nil {
+	if options.Hostname != nil || options.ApplicationName != nil {
 		query = query.Joins("JOIN application ON application.id = application_usage.application_id")
 		if options.Hostname != nil {
 			query = query.Where("application.hostname = ?", *options.Hostname)
-		}
-		if options.BundleID != nil {
-			query = query.Where("application.bundle_id = ?", *options.BundleID)
 		}
 		if options.ApplicationName != nil {
 			query = query.Where("application.name = ?", *options.ApplicationName)
