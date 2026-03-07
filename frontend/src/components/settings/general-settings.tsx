@@ -5,7 +5,7 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { SettingsKey } from "../../../bindings/github.com/focusd-so/focusd/internal/settings/models";
 
 export function GeneralSettings() {
-  const { idleThreshold, historyRetention, distractionAllowance, updateSetting } = useSettingsStore();
+  const { idleThreshold, historyRetention, distractionAllowance, autoUpdate, updateSetting } = useSettingsStore();
 
   return (
     <div className="space-y-6">
@@ -17,6 +17,27 @@ export function GeneralSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label className="text-sm font-medium">App updates</Label>
+              <div className="text-sm text-muted-foreground">
+                Install new versions automatically or show a manual update prompt.
+              </div>
+            </div>
+            <Select
+              value={autoUpdate ? "automatic" : "manual"}
+              onValueChange={(val) => updateSetting(SettingsKey.SettingsKeyAutoUpdate, String(val === "automatic"))}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Select update mode" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="automatic">Automatic</SelectItem>
+                <SelectItem value="manual">Manual</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">

@@ -8,17 +8,23 @@ import { Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as updater$0 from "../../../../focusd-so/focusd/internal/updater/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as usage$0 from "../../../../focusd-so/focusd/internal/usage/models.js";
 
 function configure() {
     Object.freeze(Object.assign($Create.Events, {
         "protection:status": $$createType0,
-        "usage:update": $$createType1,
+        "update:available": $$createType2,
+        "usage:update": $$createType3,
     }));
 }
 
 // Private type creation functions
 const $$createType0 = usage$0.ProtectionPause.createFrom;
-const $$createType1 = usage$0.ApplicationUsage.createFrom;
+const $$createType1 = updater$0.UpdateInfo.createFrom;
+const $$createType2 = $Create.Nullable($$createType1);
+const $$createType3 = usage$0.ApplicationUsage.createFrom;
 
 configure();

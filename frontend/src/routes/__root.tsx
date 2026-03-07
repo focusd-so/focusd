@@ -17,6 +17,7 @@ import { useOnboardingStore } from "@/stores/onboarding-store";
 import { useEffect } from "react";
 import { StartObserver, EnableLoginItem } from "../../bindings/github.com/focusd-so/focusd/internal/native/nativeservice";
 import { AccountStatus } from "@/components/account-status";
+import { UpdateStatus } from "@/components/update-status";
 
 const routeTitles: Record<string, string> = {
   "/activity": "Smart Blocking",
@@ -81,7 +82,10 @@ function RootLayout() {
               </h1>
             )}
           </div>
-          <AccountStatus />
+          <div className="flex items-center gap-2">
+            <UpdateStatus />
+            <AccountStatus />
+          </div>
         </header>
         <div className="flex flex-1 flex-col h-full overflow-hidden">
           <Outlet />

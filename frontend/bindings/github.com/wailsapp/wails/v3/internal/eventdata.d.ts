@@ -7,6 +7,9 @@ import type { Events } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import type * as updater$0 from "../../../../focusd-so/focusd/internal/updater/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import type * as usage$0 from "../../../../focusd-so/focusd/internal/usage/models.js";
 
 declare module "@wailsio/runtime" {
@@ -14,6 +17,7 @@ declare module "@wailsio/runtime" {
         interface CustomEvents {
             "authctx:updated": any;
             "protection:status": usage$0.ProtectionPause;
+            "update:available": updater$0.UpdateInfo | null;
             "usage:update": usage$0.ApplicationUsage;
         }
     }
