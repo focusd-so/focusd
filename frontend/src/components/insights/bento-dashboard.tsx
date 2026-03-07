@@ -1,8 +1,10 @@
 import {
   IconChevronLeft,
   IconChevronRight,
+  IconHistory,
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,7 +45,7 @@ function HourlyBreakdownChart({
           <span>0</span>
         </div>
         {/* Bars */}
-        <div className="flex items-end gap-[2px] h-20 flex-1">
+        <div className="flex items-end gap-[2px] h-20 flex-1 overflow-hidden">
           {hourlyData.map((hour) => {
             // Only use Productive + Distractive
             const totalSeconds =
@@ -73,7 +75,7 @@ function HourlyBreakdownChart({
                 <TooltipTrigger asChild>
                   <div
                     className="flex-1 flex flex-col"
-                    style={{ height: `${height}%` }}
+                    style={{ height: `${Math.min(100, height)}%` }}
                   >
                     {/* Distractive (top - red) */}
                     {disPct > 0 && (
@@ -340,11 +342,19 @@ export function BentoDashboard() {
           <TopBlockedCard blockedAttempts={mockDayData.blockedAttempts} />
         </div>
         <div className="col-span-2">
-          <div className="bg-gradient-to-br from-violet-500/10 to-purple-600/5 border-violet-500/20 rounded-xl p-4 flex flex-col justify-center h-full">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-violet-400 mb-1">Coming Soon</p>
-            <h3 className="text-lg font-semibold">Weekly LLM Trends</h3>
-            <p className="text-xs text-muted-foreground mt-1">Deep dive into your productivity patterns over the week.</p>
-          </div>
+          <Link
+            to="/screen-time/screentime"
+            className="block h-full group transition-all"
+          >
+            <div className="bg-gradient-to-br from-violet-500/10 to-purple-600/5 border border-violet-500/20 rounded-xl p-4 flex flex-col justify-center h-full group-hover:bg-violet-500/20 group-hover:border-violet-500/40 transition-all">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-violet-400">Deep Dive</p>
+                <IconHistory className="w-4 h-4 text-violet-400 opacity-50 group-hover:opacity-100 transition-opacity" />
+              </div>
+              <h3 className="text-lg font-semibold group-hover:text-violet-200 transition-colors">Detailed History</h3>
+              <p className="text-xs text-muted-foreground mt-1">View your full activity feed and usage aggregations.</p>
+            </div>
+          </Link>
         </div>
       </div>
 

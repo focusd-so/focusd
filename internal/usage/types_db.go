@@ -145,17 +145,6 @@ func (p *ProtectionPause) TableName() string {
 	return "protection_pause"
 }
 
-type IdlePeriod struct {
-	ID              int64  `gorm:"primaryKey;autoIncrement"`
-	StartedAt       int64  `json:"started_at"`
-	EndedAt         *int64 `json:"end_at" gorm:"index:idx_ended_at"`
-	DurationSeconds *int   `json:"duration_seconds"`
-}
-
-func (i *IdlePeriod) TableName() string {
-	return "idle_period"
-}
-
 type SandboxExecutionLog struct {
 	ID         int64   `gorm:"primaryKey;autoIncrement" json:"id"`
 	Context    string  `json:"context" gorm:"type:text;nullable"`

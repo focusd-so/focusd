@@ -1,7 +1,5 @@
 package usage
 
-import "time"
-
 type DayInsights struct {
 	ProductivityScore            ProductivityScore
 	ProductivityPerHourBreakdown ProductivityPerHourBreakdown
@@ -14,4 +12,4 @@ type ProductivityScore struct {
 	ProductivityScore  int
 }
 
-type ProductivityPerHourBreakdown map[time.Time]ProductivityScore
+type ProductivityPerHourBreakdown map[int]ProductivityScore

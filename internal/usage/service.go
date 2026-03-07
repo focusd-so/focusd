@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"google.golang.org/genai"
@@ -26,6 +27,10 @@ type Service struct {
 	onProtectionPaused  func(pause ProtectionPause)
 	onProtectionResumed func(pause ProtectionPause)
 
+	// mu serializes title change processing to prevent race conditions
+	// when multiple events fire concurrently
+	mu sync.Mutex
+
 	// channel to receive usage updates
 	UsageUpdates chan *ApplicationUsage
 }
@@ -37,7 +42,6 @@ func NewService(ctx context.Context, db *gorm.DB, options ...Option) (*Service, 
 		&ApplicationUsageTags{},
 		&ProtectionPause{},
 		&ProtectionWhitelist{},
-		&IdlePeriod{},
 		&SandboxExecutionLog{},
 	); err != nil {
 		return nil, fmt.Errorf("failed to migrate usage tables: %w", err)

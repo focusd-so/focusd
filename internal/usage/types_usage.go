@@ -23,7 +23,9 @@ const (
 	ClassificationSourceCloudLLM    ClassificationSource = "llm"
 	ClassificationSourceCustomRules ClassificationSource = "custom_rules"
 
-	ClassificationError       Classification = "unknown"
+	IdleApplicationName = "Idle"
+
+	ClassificationNone        Classification = "none"
 	ClassificationProductive  Classification = "productive"
 	ClassificationDistracting Classification = "distracting"
 	ClassificationNeutral     Classification = "neutral"
