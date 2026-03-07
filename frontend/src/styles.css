@@ -142,7 +142,7 @@ code {
     -webkit-touch-callout: none;
     user-select: none;
     overscroll-behavior: none;
-    /* cursor: default; */
+    cursor: default;
   }
   .user-select-allow {
     -webkit-user-select: text !important;
