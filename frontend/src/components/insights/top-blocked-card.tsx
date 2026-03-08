@@ -1,10 +1,10 @@
 import { IconShield, IconArrowRight } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { BlockedAttempt } from "@/lib/mock-data";
+import type { BlockedBreakdown } from "@/../bindings/github.com/focusd-so/focusd/internal/usage/models";
 
 interface TopBlockedCardProps {
-  blockedAttempts: BlockedAttempt[];
+  blockedAttempts: BlockedBreakdown[];
 }
 
 export function TopBlockedCard({ blockedAttempts }: TopBlockedCardProps) {
@@ -38,12 +38,12 @@ export function TopBlockedCard({ blockedAttempts }: TopBlockedCardProps) {
             <p className="text-[10px] text-muted-foreground/60 mt-1">Your blocklist is ready to protect your focus</p>
           </div>
         ) : (
-          topBlocked.map((attempt) => {
+          topBlocked.map((attempt, index) => {
             const widthPct = (attempt.count / maxCount) * 100;
             return (
-              <div key={attempt.id} className="space-y-1">
+              <div key={index} className="space-y-1">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="truncate max-w-[140px]">{attempt.hostname}</span>
+                  <span className="truncate max-w-[140px]">{attempt.name}</span>
                   <span className="text-muted-foreground font-mono">
                     {attempt.count}x
                   </span>

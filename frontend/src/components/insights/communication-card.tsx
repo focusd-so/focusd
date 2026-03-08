@@ -1,10 +1,11 @@
 import { IconMessages, IconArrowRight } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatMinutes, type CommunicationChannel } from "@/lib/mock-data";
+import { formatMinutes } from "@/lib/mock-data";
+import type { CommunicationBreakdown } from "@/../bindings/github.com/focusd-so/focusd/internal/usage/models";
 
 interface CommunicationCardProps {
-  channels: CommunicationChannel[];
+  channels: CommunicationBreakdown[];
 }
 
 const channelTextColors: Record<string, string> = {
@@ -50,17 +51,14 @@ export function CommunicationCard({ channels }: CommunicationCardProps) {
             No communication activity
           </p>
         ) : (
-          channels.slice(0, 3).map((channel) => {
+          channels.slice(0, 3).map((channel, index) => {
             const textColor = channelTextColors[channel.name] || "text-muted-foreground";
             const widthPct = (channel.minutes / maxMinutes) * 100;
 
             return (
-              <div key={channel.id} className="space-y-1">
+              <div key={index} className="space-y-1">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-2">
-                    <span>{channel.icon}</span>
-                    <span className="truncate max-w-[140px]">{channel.name}</span>
-                  </span>
+                  <span className="truncate max-w-[140px]">{channel.name}</span>
                   <span className={`font-mono ${textColor}`}>
                     {formatMinutes(channel.minutes)}
                   </span>

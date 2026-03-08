@@ -1,10 +1,11 @@
 import { IconAlertTriangle, IconArrowRight } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatMinutes, type DistractionItem } from "@/lib/mock-data";
+import { formatMinutes } from "@/lib/mock-data";
+import type { DistractionBreakdown } from "@/../bindings/github.com/focusd-so/focusd/internal/usage/models";
 
 interface TopDistractionsCardProps {
-  distractions: DistractionItem[];
+  distractions: DistractionBreakdown[];
 }
 
 export function TopDistractionsCard({ distractions }: TopDistractionsCardProps) {
@@ -38,10 +39,10 @@ export function TopDistractionsCard({ distractions }: TopDistractionsCardProps) 
             <p className="text-[10px] text-muted-foreground/60 mt-1">Stay focused and keep it that way</p>
           </div>
         ) : (
-          topDistractions.map((distraction) => {
+          topDistractions.map((distraction, index) => {
             const widthPct = (distraction.minutes / maxMinutes) * 100;
             return (
-              <div key={distraction.id} className="space-y-1">
+              <div key={index} className="space-y-1">
                 <div className="flex items-center justify-between text-xs">
                   <span className="truncate max-w-[140px]">{distraction.name}</span>
                   <span className="text-muted-foreground font-mono">

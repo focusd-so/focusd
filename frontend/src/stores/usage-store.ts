@@ -7,6 +7,10 @@ import type {
   DayInsights,
   ProductivityScore,
   UsageAggregation,
+  DistractionBreakdown,
+  BlockedBreakdown,
+  ProjectBreakdown,
+  CommunicationBreakdown,
 } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
 import { TerminationMode, GetUsageListOptions } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
 import {
@@ -42,18 +46,27 @@ export interface UsagePerHourBreakdown {
   SupportiveSeconds: number;
 }
 
-interface DailyUsageSummary {
+export interface DailyUsageSummary {
   headline: string;
-  summary: string;
+  narrative: string;
+  key_pattern: string;
   suggestion: string;
   day_vibe: string;
   wins: string;
+  context_switch_count: number;
+  longest_focus_minutes: number;
+  deep_work_minutes: number;
+  blocked_attempt_count: number;
 }
 
 export interface DailyOverview {
   UsageOverview: UsageOverview | null;
   UsagePerHourBreakdown: UsagePerHourBreakdown[] | null;
   DailyUsageSummary: DailyUsageSummary | null;
+  TopDistractions: DistractionBreakdown[];
+  TopBlocked: BlockedBreakdown[];
+  ProjectBreakdown: ProjectBreakdown[];
+  CommunicationBreakdown: CommunicationBreakdown[];
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -137,7 +150,27 @@ const mapDayInsightsToOverview = (
       SupportiveSeconds: usageOverviewScore.OtherSeconds,
     },
     UsagePerHourBreakdown: usagePerHourBreakdown,
-    DailyUsageSummary: null,
+    DailyUsageSummary: mapLLMDailySummary(insights.LLMDailySummary),
+    TopDistractions: insights.TopDistractions ?? [],
+    TopBlocked: insights.TopBlocked ?? [],
+    ProjectBreakdown: insights.ProjectBreakdown ?? [],
+    CommunicationBreakdown: insights.CommunicationBreakdown ?? [],
+  };
+};
+
+const mapLLMDailySummary = (summary: any): DailyUsageSummary | null => {
+  if (!summary || !summary.Headline) return null;
+  return {
+    headline: summary.Headline ?? "",
+    narrative: summary.Narrative ?? "",
+    key_pattern: summary.KeyPattern ?? "",
+    suggestion: summary.Suggestion ?? "",
+    day_vibe: summary.DayVibe ?? "",
+    wins: summary.Wins ?? "[]",
+    context_switch_count: summary.ContextSwitchCount ?? 0,
+    longest_focus_minutes: summary.LongestFocusMinutes ?? 0,
+    deep_work_minutes: summary.DeepWorkMinutes ?? 0,
+    blocked_attempt_count: summary.BlockedAttemptCount ?? 0,
   };
 };
 

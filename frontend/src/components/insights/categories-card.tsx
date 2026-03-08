@@ -1,13 +1,13 @@
 import { IconFolder, IconArrowRight } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatMinutes, type ProjectStats } from "@/lib/mock-data";
+import { formatMinutes } from "@/lib/mock-data";
+import type { ProjectBreakdown } from "@/../bindings/github.com/focusd-so/focusd/internal/usage/models";
 
 interface CategoriesCardProps {
-  projects: ProjectStats[];
+  projects: ProjectBreakdown[];
 }
 
-// Color palette for projects
 const projectColors = [
   "bg-emerald-500",
   "bg-blue-500",
@@ -18,8 +18,8 @@ const projectColors = [
 ];
 
 export function CategoriesCard({ projects }: CategoriesCardProps) {
-  const totalMinutes = projects.reduce((sum, p) => sum + p.totalMinutes, 0);
-  const maxMinutes = Math.max(...projects.map((p) => p.totalMinutes), 1);
+  const totalMinutes = projects.reduce((sum, p) => sum + p.minutes, 0);
+  const maxMinutes = Math.max(...projects.map((p) => p.minutes), 1);
 
   const topProjects = projects.slice(0, 3);
 
@@ -47,10 +47,10 @@ export function CategoriesCard({ projects }: CategoriesCardProps) {
           </p>
         ) : (
           topProjects.map((project, index) => {
-            const widthPct = (project.totalMinutes / maxMinutes) * 100;
+            const widthPct = (project.minutes / maxMinutes) * 100;
             const colorClass = projectColors[index % projectColors.length];
             return (
-              <div key={project.id} className="space-y-1.5">
+              <div key={index} className="space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
                   <span className="flex items-center gap-2">
                     <span
@@ -61,7 +61,7 @@ export function CategoriesCard({ projects }: CategoriesCardProps) {
                     </span>
                   </span>
                   <span className="text-muted-foreground">
-                    {formatMinutes(project.totalMinutes)}
+                    {formatMinutes(project.minutes)}
                   </span>
                 </div>
                 <div className="h-2 bg-muted/30 rounded-full overflow-hidden">

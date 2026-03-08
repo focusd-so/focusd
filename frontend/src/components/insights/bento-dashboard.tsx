@@ -16,7 +16,6 @@ import {
 import {
   formatMinutes,
   formatDate,
-  getDataForDate,
 } from "@/lib/mock-data";
 import { useUsageStore, isToday } from "@/stores/usage-store";
 import type { UsagePerHourBreakdown } from "@/stores/usage-store";
@@ -175,9 +174,6 @@ export function BentoDashboard() {
   const hourlyBreakdown = (overview?.UsagePerHourBreakdown ?? []).filter(
     (item): item is UsagePerHourBreakdown => item !== null
   );
-
-  // Mock data for new cards (until backend supports these)
-  const mockDayData = getDataForDate(selectedDate);
 
   const canGoNext = !isToday(selectedDate);
 
@@ -363,14 +359,14 @@ export function BentoDashboard() {
 
       {/* Row 3: Time Lost To + Blocked Today */}
       <div className="grid grid-cols-2 gap-4">
-        <TopDistractionsCard distractions={mockDayData.topDistractions} />
-        <TopBlockedCard blockedAttempts={mockDayData.blockedAttempts} />
+        <TopDistractionsCard distractions={overview?.TopDistractions ?? []} />
+        <TopBlockedCard blockedAttempts={overview?.TopBlocked ?? []} />
       </div>
 
       {/* Row 4: Projects + Communication */}
       <div className="grid grid-cols-2 gap-4">
-        <CategoriesCard projects={mockDayData.projects} />
-        <CommunicationCard channels={mockDayData.communicationChannels} />
+        <CategoriesCard projects={overview?.ProjectBreakdown ?? []} />
+        <CommunicationCard channels={overview?.CommunicationBreakdown ?? []} />
       </div>
     </div>
   );

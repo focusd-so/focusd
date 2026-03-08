@@ -12,13 +12,15 @@ import * as usage$0 from "../../../../focusd-so/focusd/internal/usage/models.js"
 
 function configure() {
     Object.freeze(Object.assign($Create.Events, {
-        "protection:status": $$createType0,
-        "usage:update": $$createType1,
+        "daily-summary:ready": $$createType0,
+        "protection:status": $$createType1,
+        "usage:update": $$createType2,
     }));
 }
 
 // Private type creation functions
-const $$createType0 = usage$0.ProtectionPause.createFrom;
-const $$createType1 = usage$0.ApplicationUsage.createFrom;
+const $$createType0 = usage$0.LLMDailySummary.createFrom;
+const $$createType1 = usage$0.ProtectionPause.createFrom;
+const $$createType2 = usage$0.ApplicationUsage.createFrom;
 
 configure();
