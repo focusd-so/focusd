@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
@@ -31,9 +32,17 @@ type Service struct {
 	currentVersion *semver.Version
 	repo           selfupdate.RepositorySlug
 	source         *selfupdate.GitHubSource
+	autoUpdate     func() bool
+	onPending      func(*UpdateInfo)
+
+	checkForUpdateFn func(context.Context) (*UpdateInfo, error)
+	applyUpdateFn    func(context.Context) error
+
+	pendingMu     sync.RWMutex
+	pendingUpdate *UpdateInfo
 }
 
-func NewService(version, owner, repo string) *Service {
+func NewService(version, owner, repo string, autoUpdate func() bool, onPending func(*UpdateInfo)) *Service {
 	source, err := selfupdate.NewGitHubSource(selfupdate.GitHubConfig{})
 	if err != nil {
 		slog.Error("failed to create GitHub source for updater", "error", err)
@@ -46,11 +55,17 @@ func NewService(version, owner, repo string) *Service {
 		return nil
 	}
 
-	return &Service{
+	service := &Service{
 		currentVersion: v,
 		repo:           selfupdate.NewRepositorySlug(owner, repo),
 		source:         source,
+		autoUpdate:     autoUpdate,
+		onPending:      onPending,
 	}
+	service.checkForUpdateFn = service.checkForUpdate
+	service.applyUpdateFn = service.checkAndApply
+
+	return service
 }
 
 func (s *Service) GetCurrentVersion() string {
@@ -60,6 +75,10 @@ func (s *Service) GetCurrentVersion() string {
 // CheckForUpdate queries GitHub for the latest release and returns update info
 // if a newer version is available.
 func (s *Service) CheckForUpdate(ctx context.Context) (*UpdateInfo, error) {
+	return s.checkForUpdate(ctx)
+}
+
+func (s *Service) checkForUpdate(ctx context.Context) (*UpdateInfo, error) {
 	rel, _, err := s.findLatestRelease(ctx)
 	if err != nil {
 		return nil, err
@@ -73,12 +92,26 @@ func (s *Service) CheckForUpdate(ctx context.Context) (*UpdateInfo, error) {
 	}, nil
 }
 
-// ApplyUpdate checks for and applies the latest update immediately (used by
-// the manual "Check for Updates" tray menu item).
-func (s *Service) ApplyUpdate(ctx context.Context) {
-	if err := s.checkAndApply(ctx); err != nil {
-		slog.Error("manual update failed", "error", err)
+func (s *Service) GetPendingUpdate() *UpdateInfo {
+	s.pendingMu.RLock()
+	defer s.pendingMu.RUnlock()
+
+	return cloneUpdateInfo(s.pendingUpdate)
+}
+
+func (s *Service) RefreshPendingUpdate(ctx context.Context) (*UpdateInfo, error) {
+	info, err := s.checkForUpdateFn(ctx)
+	if err != nil {
+		return nil, err
 	}
+
+	s.setPendingUpdate(info)
+	return info, nil
+}
+
+// ApplyUpdate checks for and applies the latest update immediately.
+func (s *Service) ApplyUpdate(ctx context.Context) error {
+	return s.applyUpdateFn(ctx)
 }
 
 // Start runs the silent background update loop. It checks for updates after an
@@ -92,8 +125,8 @@ func (s *Service) Start(ctx context.Context) {
 	}
 
 	for {
-		if err := s.checkAndApply(ctx); err != nil {
-			slog.Error("auto-update check failed", "error", err)
+		if err := s.runScheduledCheck(ctx); err != nil {
+			slog.Error("scheduled update check failed", "error", err)
 		}
 
 		select {
@@ -102,6 +135,16 @@ func (s *Service) Start(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (s *Service) runScheduledCheck(ctx context.Context) error {
+	if s.shouldAutoUpdate() {
+		s.setPendingUpdate(nil)
+		return s.applyUpdateFn(ctx)
+	}
+
+	_, err := s.RefreshPendingUpdate(ctx)
+	return err
 }
 
 func (s *Service) checkAndApply(ctx context.Context) error {
@@ -153,6 +196,45 @@ func (s *Service) checkAndApply(ctx context.Context) error {
 
 	slog.Info("update applied successfully, restarting", "version", rel.GetTagName())
 	return relaunch(appPath)
+}
+
+func (s *Service) shouldAutoUpdate() bool {
+	if s.autoUpdate == nil {
+		return true
+	}
+
+	return s.autoUpdate()
+}
+
+func (s *Service) setPendingUpdate(info *UpdateInfo) {
+	s.pendingMu.Lock()
+	defer s.pendingMu.Unlock()
+
+	if updateInfoEqual(s.pendingUpdate, info) {
+		return
+	}
+
+	s.pendingUpdate = cloneUpdateInfo(info)
+	if s.onPending != nil {
+		s.onPending(cloneUpdateInfo(info))
+	}
+}
+
+func cloneUpdateInfo(info *UpdateInfo) *UpdateInfo {
+	if info == nil {
+		return nil
+	}
+
+	copy := *info
+	return &copy
+}
+
+func updateInfoEqual(a, b *UpdateInfo) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+
+	return a.Version == b.Version && a.ReleaseNotes == b.ReleaseNotes
 }
 
 // findLatestRelease returns the newest non-draft, non-prerelease release that
