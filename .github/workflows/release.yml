@@ -103,6 +103,7 @@ jobs:
           HEX_P1: ${{ secrets.HEX_P1 }}
           HEX_P2: ${{ secrets.HEX_P2 }}
           HEX_P3: ${{ secrets.HEX_P3 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           # Discover signing identity from the imported certificate
           SIGN_IDENTITY=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)"/\1/')
@@ -117,6 +118,7 @@ jobs:
           VERSION_TAG="${GITHUB_REF_NAME}"
           PACKAGE_PATH="github.com/focusd-so/focusd/internal/identity"
           LDFLAGS="-X 'main.Version=${VERSION_TAG}' \
+                   -X 'main.AppleTeamID=${APPLE_TEAM_ID}' \
                    -X '${PACKAGE_PATH}.CompileTimeHexP1=${HEX_P1}' \
                    -X '${PACKAGE_PATH}.CompileTimeHexP2=${HEX_P2}' \
                    -X '${PACKAGE_PATH}.CompileTimeHexP3=${HEX_P3}'"
@@ -138,7 +140,9 @@ jobs:
 
       # ── Create ZIP for auto-updater ─────────────────────────────────
       - name: Create update ZIP
-        run: ditto -c -k --sequesterRsrc --keepParent bin/Focusd.app bin/Focusd.zip
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent bin/Focusd.app bin/Focusd.zip
+          shasum -a 256 bin/Focusd.zip | awk '{print $1}' > bin/Focusd.zip.sha256
 
       # ── Publish GitHub Release ────────────────────────────────────────
       - name: Create GitHub Release
@@ -148,4 +152,5 @@ jobs:
           files: |
             bin/Focusd.dmg
             bin/Focusd.zip
+            bin/Focusd.zip.sha256
           generate_release_notes: true

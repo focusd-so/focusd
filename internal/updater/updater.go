@@ -2,6 +2,8 @@ package updater
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
@@ -17,10 +19,18 @@ import (
 )
 
 const (
-	startupDelay  = 10 * time.Second
-	checkInterval = 6 * time.Hour
-	zipAssetName  = "Focusd.zip"
+	startupDelay    = 10 * time.Second
+	checkInterval   = 6 * time.Hour
+	zipAssetName    = "Focusd.zip"
+	sha256AssetName = "Focusd.zip.sha256"
+	maxDownloadSize = 200 << 20 // 200 MB
 )
+
+var allowedDownloadHosts = map[string]bool{
+	"github.com":                       true,
+	"objects.githubusercontent.com":    true,
+	"github-releases.githubusercontent.com": true,
+}
 
 type UpdateInfo struct {
 	Version      string `json:"version"`
@@ -31,9 +41,10 @@ type Service struct {
 	currentVersion *semver.Version
 	repo           selfupdate.RepositorySlug
 	source         *selfupdate.GitHubSource
+	teamID         string
 }
 
-func NewService(version, owner, repo string) *Service {
+func NewService(version, owner, repo, teamID string) *Service {
 	source, err := selfupdate.NewGitHubSource(selfupdate.GitHubConfig{})
 	if err != nil {
 		slog.Error("failed to create GitHub source for updater", "error", err)
@@ -50,6 +61,7 @@ func NewService(version, owner, repo string) *Service {
 		currentVersion: v,
 		repo:           selfupdate.NewRepositorySlug(owner, repo),
 		source:         source,
+		teamID:         teamID,
 	}
 }
 
@@ -60,7 +72,7 @@ func (s *Service) GetCurrentVersion() string {
 // CheckForUpdate queries GitHub for the latest release and returns update info
 // if a newer version is available.
 func (s *Service) CheckForUpdate(ctx context.Context) (*UpdateInfo, error) {
-	rel, _, err := s.findLatestRelease(ctx)
+	rel, _, _, err := s.findLatestRelease(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +119,7 @@ func (s *Service) Start(ctx context.Context) {
 func (s *Service) checkAndApply(ctx context.Context) error {
 	slog.Info("checking for updates", "current", s.currentVersion)
 
-	rel, asset, err := s.findLatestRelease(ctx)
+	rel, zipAsset, sha256Asset, err := s.findLatestRelease(ctx)
 	if err != nil {
 		return err
 	}
@@ -130,8 +142,17 @@ func (s *Service) checkAndApply(ctx context.Context) error {
 	defer os.RemoveAll(tmpDir)
 
 	zipPath := filepath.Join(tmpDir, zipAssetName)
-	if err := downloadFile(ctx, asset.GetBrowserDownloadURL(), zipPath); err != nil {
+	if err := downloadFile(ctx, zipAsset.GetBrowserDownloadURL(), zipPath); err != nil {
 		return fmt.Errorf("downloading update: %w", err)
+	}
+
+	if sha256Asset != nil {
+		if err := verifySHA256(ctx, zipPath, sha256Asset.GetBrowserDownloadURL()); err != nil {
+			return fmt.Errorf("checksum verification: %w", err)
+		}
+		slog.Info("SHA256 checksum verified")
+	} else {
+		slog.Warn("no SHA256 checksum asset found, skipping checksum verification")
 	}
 
 	extractDir := filepath.Join(tmpDir, "extracted")
@@ -147,6 +168,15 @@ func (s *Service) checkAndApply(ctx context.Context) error {
 		return fmt.Errorf("extracted app not found at %s", newAppPath)
 	}
 
+	if s.teamID != "" {
+		if err := verifyCodeSignature(newAppPath, s.teamID); err != nil {
+			return fmt.Errorf("code signature verification: %w", err)
+		}
+		slog.Info("code signature verified", "teamID", s.teamID)
+	} else {
+		slog.Warn("no team ID configured, skipping code signature verification")
+	}
+
 	if err := replaceApp(appPath, newAppPath); err != nil {
 		return fmt.Errorf("replacing app bundle: %w", err)
 	}
@@ -157,11 +187,11 @@ func (s *Service) checkAndApply(ctx context.Context) error {
 
 // findLatestRelease returns the newest non-draft, non-prerelease release that
 // is newer than the current version and contains a Focusd.zip asset. Returns
-// nil, nil, nil when already up to date.
-func (s *Service) findLatestRelease(ctx context.Context) (selfupdate.SourceRelease, selfupdate.SourceAsset, error) {
+// nil values when already up to date.
+func (s *Service) findLatestRelease(ctx context.Context) (selfupdate.SourceRelease, selfupdate.SourceAsset, selfupdate.SourceAsset, error) {
 	releases, err := s.source.ListReleases(ctx, s.repo)
 	if err != nil {
-		return nil, nil, fmt.Errorf("listing releases: %w", err)
+		return nil, nil, nil, fmt.Errorf("listing releases: %w", err)
 	}
 
 	slog.Info("updater: found releases", "count", len(releases), "current", s.currentVersion)
@@ -183,24 +213,31 @@ func (s *Service) findLatestRelease(ctx context.Context) (selfupdate.SourceRelea
 		slog.Info("updater: version check", "release", v, "current", s.currentVersion, "newer", v.GreaterThan(s.currentVersion))
 
 		if !v.GreaterThan(s.currentVersion) {
-			// Releases are returned newest-first; no point checking older ones
 			slog.Info("updater: already up to date")
-			return nil, nil, nil
+			return nil, nil, nil, nil
 		}
 
-		// This release is newer — look for the zip asset
+		var zipFound selfupdate.SourceAsset
+		var sha256Found selfupdate.SourceAsset
 		var assetNames []string
 		for _, asset := range rel.GetAssets() {
 			assetNames = append(assetNames, asset.GetName())
-			if asset.GetName() == zipAssetName {
-				slog.Info("updater: found zip asset", "tag", tag, "url", asset.GetBrowserDownloadURL())
-				return rel, asset, nil
+			switch asset.GetName() {
+			case zipAssetName:
+				zipFound = asset
+			case sha256AssetName:
+				sha256Found = asset
 			}
+		}
+
+		if zipFound != nil {
+			slog.Info("updater: found zip asset", "tag", tag, "hasSHA256", sha256Found != nil)
+			return rel, zipFound, sha256Found, nil
 		}
 		slog.Warn("updater: newer release has no zip asset, skipping", "tag", tag, "assets", assetNames)
 	}
 
-	return nil, nil, nil
+	return nil, nil, nil, nil
 }
 
 // resolveAppPath walks up from the running executable to find the .app bundle root.
@@ -225,6 +262,19 @@ func resolveAppPath() (string, error) {
 	return "", fmt.Errorf("could not find .app bundle from executable path %s", exe)
 }
 
+var httpClient = &http.Client{
+	Timeout: 5 * time.Minute,
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) > 3 {
+			return fmt.Errorf("too many redirects")
+		}
+		if !allowedDownloadHosts[req.URL.Hostname()] {
+			return fmt.Errorf("redirect to untrusted host: %s", req.URL.Hostname())
+		}
+		return nil
+	},
+}
+
 func downloadFile(ctx context.Context, url, dest string) error {
 	slog.Info("downloading update", "url", url)
 
@@ -233,7 +283,7 @@ func downloadFile(ctx context.Context, url, dest string) error {
 		return err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -249,14 +299,74 @@ func downloadFile(ctx context.Context, url, dest string) error {
 	}
 	defer f.Close()
 
-	if _, err := io.Copy(f, resp.Body); err != nil {
+	n, err := io.Copy(f, io.LimitReader(resp.Body, maxDownloadSize))
+	if err != nil {
 		return err
+	}
+	if n >= maxDownloadSize {
+		return fmt.Errorf("download exceeds maximum allowed size of %d bytes", maxDownloadSize)
 	}
 	return f.Close()
 }
 
-// extractZip uses ditto to extract the zip, preserving macOS metadata,
-// resource forks, and code signatures.
+func verifySHA256(ctx context.Context, filePath, checksumURL string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, checksumURL, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("fetching checksum: unexpected status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024))
+	if err != nil {
+		return err
+	}
+
+	// Format: "<hex>  filename" or just "<hex>"
+	expectedHash := strings.TrimSpace(strings.Fields(string(body))[0])
+
+	f, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return err
+	}
+	actualHash := hex.EncodeToString(h.Sum(nil))
+
+	if !strings.EqualFold(actualHash, expectedHash) {
+		return fmt.Errorf("SHA256 mismatch: expected %s, got %s", expectedHash, actualHash)
+	}
+	return nil
+}
+
+func verifyCodeSignature(appPath, expectedTeamID string) error {
+	verify := exec.Command("codesign", "--verify", "--deep", "--strict", appPath)
+	if out, err := verify.CombinedOutput(); err != nil {
+		return fmt.Errorf("signature invalid: %w: %s", err, out)
+	}
+
+	info := exec.Command("codesign", "-dvv", appPath)
+	out, err := info.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("reading signing info: %w: %s", err, out)
+	}
+	if !strings.Contains(string(out), "TeamIdentifier="+expectedTeamID) {
+		return fmt.Errorf("team ID mismatch in downloaded app, expected %s", expectedTeamID)
+	}
+	return nil
+}
+
 func extractZip(zipPath, destDir string) error {
 	cmd := exec.Command("ditto", "-xk", zipPath, destDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
