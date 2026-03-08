@@ -117,13 +117,13 @@ function HourlyBreakdownChart({
           })}
         </div>
       </div>
-      {/* Hour labels */}
-      <div className="flex justify-between mt-1 text-[10px] text-muted-foreground ml-8">
-        <span>12am</span>
-        <span>6am</span>
-        <span>12pm</span>
-        <span>6pm</span>
-        <span>11pm</span>
+      {/* Hour labels - even hours only (12am, 2am, 4am, ...) */}
+      <div className="flex gap-[2px] mt-1 text-[10px] text-muted-foreground ml-8">
+        {hourlyData.filter((_, i) => i % 2 === 0).map((hour) => (
+          <div key={hour.HourLabel} className="flex-1 min-w-0 text-center truncate">
+            {hour.HourLabel}
+          </div>
+        ))}
       </div>
     </TooltipProvider>
   );
