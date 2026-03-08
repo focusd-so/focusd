@@ -55,13 +55,13 @@ func resolveEndTime(usage ApplicationUsage, usages []ApplicationUsage, i int) in
 }
 
 func splitSecondsPerHour(startUnix, endUnix int64) map[int]int {
-	start := time.Unix(startUnix, 0).UTC()
-	end := time.Unix(endUnix, 0).UTC()
+	start := time.Unix(startUnix, 0)
+	end := time.Unix(endUnix, 0)
 	result := make(map[int]int)
 
 	for cursor := start; cursor.Before(end); {
 		hour := cursor.Hour()
-		nextHour := time.Date(cursor.Year(), cursor.Month(), cursor.Day(), hour+1, 0, 0, 0, time.UTC)
+		nextHour := time.Date(cursor.Year(), cursor.Month(), cursor.Day(), hour+1, 0, 0, 0, time.Local)
 
 		segmentEnd := end
 		if nextHour.Before(end) {
