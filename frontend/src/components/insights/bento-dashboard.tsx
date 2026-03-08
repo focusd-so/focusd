@@ -54,7 +54,10 @@ function HourlyBreakdownChart({
               hour.DistractiveSeconds;
 
             const totalMinutes = totalSeconds / 60;
-            const height = maxMinutes > 0 ? (totalMinutes / maxMinutes) * 100 : 0;
+            const rawHeight = maxMinutes > 0 ? (totalMinutes / maxMinutes) * 100 : 0;
+            // Ensure a minimum height of 5% (4px out of 80px) so tiny bars don't disappear,
+            // matching the h-1 (4px) size of the empty slots.
+            const height = totalMinutes > 0 ? Math.max(rawHeight, 5) : 0;
             const prodPct =
               totalSeconds > 0 ? (hour.ProductiveSeconds / totalSeconds) * 100 : 0;
             const disPct =
