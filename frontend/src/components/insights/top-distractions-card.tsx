@@ -1,4 +1,5 @@
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { IconAlertTriangle, IconArrowRight } from "@tabler/icons-react";
+import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMinutes, type DistractionItem } from "@/lib/mock-data";
 
@@ -10,7 +11,6 @@ export function TopDistractionsCard({ distractions }: TopDistractionsCardProps) 
   const totalMinutes = distractions.reduce((sum, d) => sum + d.minutes, 0);
   const maxMinutes = Math.max(...distractions.map((d) => d.minutes), 1);
 
-  // Show top 5
   const topDistractions = distractions.slice(0, 5);
 
   return (
@@ -21,29 +21,29 @@ export function TopDistractionsCard({ distractions }: TopDistractionsCardProps) 
             <IconAlertTriangle className="w-4 h-4 text-rose-400" />
             <span className="text-rose-400">Time Lost To</span>
           </CardTitle>
-          <span className="text-xs text-muted-foreground">
+          <Link
+            to="/screen-time/screentime"
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-rose-400 transition-colors"
+          >
             {formatMinutes(totalMinutes)}
-          </span>
+            <IconArrowRight className="w-3 h-3" />
+          </Link>
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
         {topDistractions.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-4">
-            No distractions recorded
-          </p>
+          <div className="flex flex-col items-center justify-center py-6 text-center">
+            <IconAlertTriangle className="w-6 h-6 text-rose-400/20 mb-2" />
+            <p className="text-xs text-muted-foreground">No distractions recorded</p>
+            <p className="text-[10px] text-muted-foreground/60 mt-1">Stay focused and keep it that way</p>
+          </div>
         ) : (
-          topDistractions.map((distraction, index) => {
+          topDistractions.map((distraction) => {
             const widthPct = (distraction.minutes / maxMinutes) * 100;
             return (
               <div key={distraction.id} className="space-y-1">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-2">
-                    <span className="text-muted-foreground w-4">{index + 1}.</span>
-                    <span className="truncate max-w-[100px]">{distraction.name}</span>
-                    <span className="text-[10px] text-muted-foreground bg-muted/30 px-1.5 py-0.5 rounded">
-                      {distraction.category}
-                    </span>
-                  </span>
+                  <span className="truncate max-w-[140px]">{distraction.name}</span>
                   <span className="text-muted-foreground font-mono">
                     {formatMinutes(distraction.minutes)}
                   </span>

@@ -199,7 +199,7 @@ export function BentoDashboard() {
   }
 
   return (
-    <div className="p-6 space-y-4 overflow-y-auto h-full">
+    <div className="p-6 space-y-6 overflow-y-auto h-full">
       {/* Date Picker Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -328,7 +328,7 @@ export function BentoDashboard() {
         </Card>
       </div>
 
-      {/* Row 2: Full-width Hourly Breakdown with small blocked badge */}
+      {/* Row 2: Full-width Hourly Breakdown */}
       <Card className="border-border/50">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -341,12 +341,18 @@ export function BentoDashboard() {
                   <span className="w-2 h-2 bg-emerald-500 rounded-full" />
                   Productive
                 </span>
-
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 bg-rose-500 rounded-full" />
                   Distractive
                 </span>
               </div>
+              <Link
+                to="/screen-time/screentime"
+                className="flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 transition-colors"
+              >
+                <IconHistory className="w-3.5 h-3.5" />
+                History
+              </Link>
             </div>
           </div>
         </CardHeader>
@@ -355,40 +361,17 @@ export function BentoDashboard() {
         </CardContent>
       </Card>
 
-      {/* Row 3: Top Blocked + More Insights placeholder */}
-      <div className="grid grid-cols-5 gap-4">
-        <div className="col-span-3">
-          <TopBlockedCard blockedAttempts={mockDayData.blockedAttempts} />
-        </div>
-        <div className="col-span-2">
-          <Link
-            to="/screen-time/screentime"
-            className="block h-full group transition-all"
-          >
-            <div className="bg-gradient-to-br from-violet-500/10 to-purple-600/5 border border-violet-500/20 rounded-xl p-4 flex flex-col justify-center h-full group-hover:bg-violet-500/20 group-hover:border-violet-500/40 transition-all">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-violet-400">Deep Dive</p>
-                <IconHistory className="w-4 h-4 text-violet-400 opacity-50 group-hover:opacity-100 transition-opacity" />
-              </div>
-              <h3 className="text-lg font-semibold group-hover:text-violet-200 transition-colors">Detailed History</h3>
-              <p className="text-xs text-muted-foreground mt-1">View your full activity feed and usage aggregations.</p>
-            </div>
-          </Link>
-        </div>
+      {/* Row 3: Time Lost To + Blocked Today */}
+      <div className="grid grid-cols-2 gap-4">
+        <TopDistractionsCard distractions={mockDayData.topDistractions} />
+        <TopBlockedCard blockedAttempts={mockDayData.blockedAttempts} />
       </div>
 
-      {/* Row 4: Top Distractions + Categories/Projects */}
-      <div className="grid grid-cols-5 gap-4">
-        <div className="col-span-2">
-          <TopDistractionsCard distractions={mockDayData.topDistractions} />
-        </div>
-        <div className="col-span-3">
-          <CategoriesCard projects={mockDayData.projects} />
-        </div>
+      {/* Row 4: Projects + Communication */}
+      <div className="grid grid-cols-2 gap-4">
+        <CategoriesCard projects={mockDayData.projects} />
+        <CommunicationCard channels={mockDayData.communicationChannels} />
       </div>
-
-      {/* Row 5: Communication Channels */}
-      <CommunicationCard channels={mockDayData.communicationChannels} />
     </div>
   );
 }

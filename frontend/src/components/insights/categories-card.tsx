@@ -1,4 +1,5 @@
-import { IconFolder } from "@tabler/icons-react";
+import { IconFolder, IconArrowRight } from "@tabler/icons-react";
+import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMinutes, type ProjectStats } from "@/lib/mock-data";
 
@@ -20,8 +21,7 @@ export function CategoriesCard({ projects }: CategoriesCardProps) {
   const totalMinutes = projects.reduce((sum, p) => sum + p.totalMinutes, 0);
   const maxMinutes = Math.max(...projects.map((p) => p.totalMinutes), 1);
 
-  // Show top 5 projects
-  const topProjects = projects.slice(0, 5);
+  const topProjects = projects.slice(0, 3);
 
   return (
     <Card className="border-border/50">
@@ -31,12 +31,16 @@ export function CategoriesCard({ projects }: CategoriesCardProps) {
             <IconFolder className="w-4 h-4 text-muted-foreground" />
             Projects
           </CardTitle>
-          <span className="text-xs text-muted-foreground">
+          <Link
+            to="/screen-time/screentime"
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
             {formatMinutes(totalMinutes)} total
-          </span>
+            <IconArrowRight className="w-3 h-3" />
+          </Link>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-2">
         {topProjects.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-4">
             No project activity
