@@ -39,8 +39,9 @@ import (
 // made available to the frontend.
 // See https://pkg.go.dev/embed for more information.
 
-// Version is set at build time via -ldflags "-X 'main.Version=v1.2.3'"
+// Version and AppleTeamID are set at build time via -ldflags
 var Version = "dev"
+var AppleTeamID = ""
 
 //go:embed all:frontend/dist
 var assets embed.FS
@@ -197,7 +198,7 @@ func main() {
 
 	var updaterService *updater.Service
 	if isProductionBuild {
-		updaterService = updater.NewService(Version, "focusd-so", "focusd")
+		updaterService = updater.NewService(Version, "focusd-so", "focusd", AppleTeamID)
 	}
 
 	nativeService := native.NewNativeService()
