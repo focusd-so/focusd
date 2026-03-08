@@ -13,6 +13,7 @@ declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
             "authctx:updated": any;
+            "daily-summary:ready": usage$0.LLMDailySummary;
             "protection:status": usage$0.ProtectionPause;
             "usage:update": usage$0.ApplicationUsage;
         }

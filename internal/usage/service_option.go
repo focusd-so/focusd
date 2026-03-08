@@ -45,3 +45,10 @@ func WithProtectionResumed(onProtectionResumed func(pause ProtectionPause)) Opti
 		s.onProtectionResumed = onProtectionResumed
 	}
 }
+
+// WithLLMDailySummaryReady configures the Service with a function to call when a daily LLM summary is generated.
+func WithLLMDailySummaryReady(fn func(summary LLMDailySummary)) Option {
+	return func(s *Service) {
+		s.onLLMDailySummaryReady = fn
+	}
+}

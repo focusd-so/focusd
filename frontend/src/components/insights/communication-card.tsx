@@ -1,19 +1,12 @@
-import { IconMessages } from "@tabler/icons-react";
+import { IconMessages, IconArrowRight } from "@tabler/icons-react";
+import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatMinutes, type CommunicationChannel } from "@/lib/mock-data";
+import { formatMinutes } from "@/lib/mock-data";
+import type { CommunicationBreakdown } from "@/../bindings/github.com/focusd-so/focusd/internal/usage/models";
 
 interface CommunicationCardProps {
-  channels: CommunicationChannel[];
+  channels: CommunicationBreakdown[];
 }
-
-// Background colors for each channel
-const channelColors: Record<string, string> = {
-  Slack: "bg-purple-500/20 border-purple-500/30",
-  Email: "bg-blue-500/20 border-blue-500/30",
-  Zoom: "bg-sky-500/20 border-sky-500/30",
-  Discord: "bg-indigo-500/20 border-indigo-500/30",
-  Teams: "bg-violet-500/20 border-violet-500/30",
-};
 
 const channelTextColors: Record<string, string> = {
   Slack: "text-purple-400",
@@ -21,6 +14,14 @@ const channelTextColors: Record<string, string> = {
   Zoom: "text-sky-400",
   Discord: "text-indigo-400",
   Teams: "text-violet-400",
+};
+
+const channelBarColors: Record<string, string> = {
+  Slack: "bg-purple-500/60",
+  Email: "bg-blue-500/60",
+  Zoom: "bg-sky-500/60",
+  Discord: "bg-indigo-500/60",
+  Teams: "bg-violet-500/60",
 };
 
 export function CommunicationCard({ channels }: CommunicationCardProps) {
@@ -35,41 +36,43 @@ export function CommunicationCard({ channels }: CommunicationCardProps) {
             <IconMessages className="w-4 h-4 text-muted-foreground" />
             Communication
           </CardTitle>
-          <span className="text-xs text-muted-foreground">
+          <Link
+            to="/screen-time/screentime"
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
             {formatMinutes(totalMinutes)} total
-          </span>
+            <IconArrowRight className="w-3 h-3" />
+          </Link>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-5 gap-2">
-          {channels.map((channel) => {
-            const bgColor = channelColors[channel.name] || "bg-muted/20 border-muted/30";
+      <CardContent className="space-y-2">
+        {channels.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-4">
+            No communication activity
+          </p>
+        ) : (
+          channels.slice(0, 3).map((channel, index) => {
             const textColor = channelTextColors[channel.name] || "text-muted-foreground";
-            const heightPct = Math.max(20, (channel.minutes / maxMinutes) * 100);
+            const widthPct = (channel.minutes / maxMinutes) * 100;
 
             return (
-              <div
-                key={channel.id}
-                className={`relative rounded-lg border ${bgColor} p-2 flex flex-col items-center justify-end transition-all hover:scale-105`}
-                style={{ minHeight: "80px" }}
-              >
-                {/* Visual bar indicator */}
-                <div className="absolute bottom-0 left-0 right-0 rounded-b-lg bg-white/5" style={{ height: `${heightPct}%` }} />
-
-                {/* Content */}
-                <div className="relative z-10 text-center">
-                  <span className="text-lg">{channel.icon}</span>
-                  <p className="text-[10px] font-medium mt-1 truncate max-w-full">
-                    {channel.name}
-                  </p>
-                  <p className={`text-xs font-bold ${textColor}`}>
+              <div key={index} className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="truncate max-w-[140px]">{channel.name}</span>
+                  <span className={`font-mono ${textColor}`}>
                     {formatMinutes(channel.minutes)}
-                  </p>
+                  </span>
+                </div>
+                <div className="h-1.5 bg-muted/20 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${channelBarColors[channel.name] || "bg-muted-foreground/40"}`}
+                    style={{ width: `${widthPct}%` }}
+                  />
                 </div>
               </div>
             );
-          })}
-        </div>
+          })
+        )}
       </CardContent>
     </Card>
   );

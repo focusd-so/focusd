@@ -285,6 +285,7 @@ var exactBlockOnlyCategory = hostnameCategory{
 	hostnames: []string{
 		"x.com",
 		"linkedin.com",
+		"reddit.com",
 	},
 }
 
@@ -301,7 +302,6 @@ var ambiguousHostnameCategory = hostnameCategory{
 	hostnames: []string{
 		"youtube.com",
 		"youtu.be",
-		"reddit.com",
 		"pinterest.com",
 		"medium.com",
 		"news.ycombinator.com",
@@ -321,6 +321,7 @@ var alwaysProductiveCategories = []hostnameCategory{
 		tags:      []string{"development", "programming", "productive"},
 		hostnames: []string{
 			"github.com",
+			"cursor.com",
 			"gitlab.com",
 			"bitbucket.org",
 			"stackoverflow.com",
@@ -393,6 +394,8 @@ var alwaysProductiveCategories = []hostnameCategory{
 		reasoning: "Productivity tool - work-related activity",
 		tags:      []string{"productivity", "work", "tools"},
 		hostnames: []string{
+			// Anti-embarrassment, imgine self-blocking
+			"focusd.so",
 			// Google Workspace
 			"drive.google.com",
 			"docs.google.com",

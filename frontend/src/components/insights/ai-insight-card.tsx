@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { IconSparkles, IconChevronDown, IconChevronUp, IconBulb, IconTrophy } from "@tabler/icons-react";
+import { IconSparkles, IconChevronDown, IconChevronUp, IconBulb, IconTrophy, IconEye, IconArrowsShuffle, IconTarget } from "@tabler/icons-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -7,14 +7,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-// DailyUsageSummary defined locally - insights service was removed from backend
-interface DailyUsageSummary {
-  headline: string;
-  summary: string;
-  suggestion: string;
-  day_vibe: string;
-  wins: string;
-}
+import type { DailyUsageSummary } from "@/stores/usage-store";
 
 interface LLMInsightCardProps {
   dailyUsageSummary: DailyUsageSummary;
@@ -34,8 +27,9 @@ export function LLMInsightCard({ dailyUsageSummary, isYesterday = false }: LLMIn
     }
   }, [dailyUsageSummary?.wins]);
 
-  const headline = dailyUsageSummary?.headline || "Daily LLM Insight";
-  const mainSummary = dailyUsageSummary?.summary || "";
+  const headline = dailyUsageSummary?.headline || "Daily Insight";
+  const narrative = dailyUsageSummary?.narrative || "";
+  const keyPattern = dailyUsageSummary?.key_pattern || "";
   const suggestion = dailyUsageSummary?.suggestion || "";
   const dayVibe = dailyUsageSummary?.day_vibe || "";
 
@@ -69,21 +63,55 @@ export function LLMInsightCard({ dailyUsageSummary, isYesterday = false }: LLMIn
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          {/* Main Summary */}
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground leading-relaxed">
-              {mainSummary}
+              {narrative}
             </p>
+          </div>
+
+          {/* Stat badges */}
+          <div className="flex gap-3 flex-wrap">
+            {dailyUsageSummary.context_switch_count > 0 && (
+              <span className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-muted/50 text-muted-foreground">
+                <IconArrowsShuffle className="w-3 h-3" />
+                {dailyUsageSummary.context_switch_count} context switches
+              </span>
+            )}
+            {dailyUsageSummary.deep_work_minutes > 0 && (
+              <span className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-400">
+                <IconTarget className="w-3 h-3" />
+                {dailyUsageSummary.deep_work_minutes}m deep work
+              </span>
+            )}
+            {dailyUsageSummary.longest_focus_minutes > 0 && (
+              <span className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-blue-500/10 text-blue-400">
+                <IconTarget className="w-3 h-3" />
+                {dailyUsageSummary.longest_focus_minutes}m longest focus
+              </span>
+            )}
           </div>
 
           <CollapsibleContent className="space-y-4">
             <div className="border-t border-violet-500/20 pt-3 space-y-4">
+              {/* Key Pattern */}
+              {keyPattern && (
+                <div className="space-y-1">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                    <IconEye className="w-3 h-3 text-violet-400" />
+                    Key Pattern
+                  </p>
+                  <p className="text-sm text-violet-300/90">
+                    {keyPattern}
+                  </p>
+                </div>
+              )}
+
               {/* Wins */}
               {wins.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                     <IconTrophy className="w-3 h-3 text-amber-400" />
-                    Today's Wins
+                    Wins
                   </p>
                   <ul className="space-y-1">
                     {wins.map((win, i) => (

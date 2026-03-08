@@ -24,8 +24,9 @@ type Service struct {
 	appBlocker func(appName, title, reason string, tags []string, browserURL *string)
 
 	// events
-	onProtectionPaused  func(pause ProtectionPause)
-	onProtectionResumed func(pause ProtectionPause)
+	onProtectionPaused     func(pause ProtectionPause)
+	onProtectionResumed    func(pause ProtectionPause)
+	onLLMDailySummaryReady func(summary LLMDailySummary)
 
 	// mu serializes title change processing to prevent race conditions
 	// when multiple events fire concurrently
@@ -43,6 +44,7 @@ func NewService(ctx context.Context, db *gorm.DB, options ...Option) (*Service, 
 		&ProtectionPause{},
 		&ProtectionWhitelist{},
 		&SandboxExecutionLog{},
+		&LLMDailySummary{},
 	); err != nil {
 		return nil, fmt.Errorf("failed to migrate usage tables: %w", err)
 	}
@@ -67,10 +69,13 @@ func (s *Service) scheduleJobs(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(1 * time.Hour):
-				if err := s.removeOldSandboxExecutionLogs(ctx); err != nil {
-					slog.Error("failed to remove old sandbox execution logs", "error", err)
-				}
+		case <-time.After(1 * time.Hour):
+			if err := s.removeOldSandboxExecutionLogs(ctx); err != nil {
+				slog.Error("failed to remove old sandbox execution logs", "error", err)
+			}
+			if err := s.GenerateLLMDailySummaryIfNeeded(ctx); err != nil {
+				slog.Error("failed to generate daily summary", "error", err)
+			}
 			}
 		}
 	}()

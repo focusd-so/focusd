@@ -10,6 +10,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"os/exec"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -55,6 +56,7 @@ func init() {
 	// and provide a strongly typed JS/TS API for them.
 	application.RegisterEvent[usage.ApplicationUsage]("usage:update")
 	application.RegisterEvent[usage.ProtectionPause]("protection:status")
+	application.RegisterEvent[usage.LLMDailySummary]("daily-summary:ready")
 	application.RegisterEvent[any]("authctx:updated")
 }
 
@@ -167,6 +169,15 @@ func main() {
 		}),
 		usage.WithGenaiClient(genaiClient),
 		usage.WithSettingsService(settingsService),
+		usage.WithLLMDailySummaryReady(func(summary usage.LLMDailySummary) {
+			slog.Info("daily LLM summary ready", "date", summary.Date, "headline", summary.Headline)
+			if wailsAppPtr != nil {
+				wailsAppPtr.Event.Emit("daily-summary:ready", summary)
+			}
+			exec.Command("osascript", "-e",
+				fmt.Sprintf(`display notification "%s" with title "Focusd" subtitle "Daily Summary"`,
+					summary.Headline)).Run()
+		}),
 	)
 	if err != nil {
 		log.Fatal("failed to create usage service: %w", err)
