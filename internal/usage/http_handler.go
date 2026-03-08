@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"time"
 
+	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
+	"github.com/focusd-so/focusd/internal/identity"
+
 	"github.com/go-chi/chi/v5"
 )
 
@@ -29,6 +32,16 @@ type UnwhitelistRequest struct {
 
 func (s *Service) RegisterHTTPHandlers(r *chi.Mux) {
 	r.Group(func(r chi.Router) {
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if identity.GetAccountTier() == apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE {
+					http.Error(w, `{"error": "This local API feature requires a Focusd Plus or Pro plan."}`, http.StatusForbidden)
+					return
+				}
+				next.ServeHTTP(w, r)
+			})
+		})
+
 		r.Post("/pause", func(w http.ResponseWriter, r *http.Request) {
 			var pauseRequest PauseRequets
 
