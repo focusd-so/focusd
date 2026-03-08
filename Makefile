@@ -25,9 +25,14 @@ build:
 cli:
 	go build -ldflags "$(LDFLAGS)" -o bin/focusd-cli cmd/main.go
 	
-.PHONY: dev
-dev:
+server:
+	go run cmd/main.go serve 
+
+wails3:
 	wails3 dev --port 17000 LDFLAGS="$(LDFLAGS)"
+
+.PHONY: dev
+dev: server wails3 &> /dev/null &
 
 .PHONY: tidy
 tidy:

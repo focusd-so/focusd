@@ -26,6 +26,8 @@ import { TopDistractionsCard } from "./top-distractions-card";
 import { CategoriesCard } from "./categories-card";
 import { CommunicationCard } from "./communication-card";
 
+const MIN_SECONDS_FOR_INSIGHTS = 3600;
+
 // Hourly breakdown chart component
 function HourlyBreakdownChart({
   hourlyData,
@@ -159,10 +161,14 @@ export function BentoDashboard() {
 
   const isLoading = isStoreLoading || isQueryLoading;
 
-  // Real data from backend (values are in seconds, convert to minutes for display)
+  const productiveSeconds = overview?.UsageOverview?.ProductiveSeconds ?? 0;
+  const distractiveSeconds = overview?.UsageOverview?.DistractiveSeconds ?? 0;
+  const totalTrackedSeconds = productiveSeconds + distractiveSeconds;
+  const hasEnoughData = totalTrackedSeconds >= MIN_SECONDS_FOR_INSIGHTS;
+
   const focusScore = Math.round(overview?.UsageOverview?.ProductivityScore ?? 0);
-  const productiveMinutes = Math.round((overview?.UsageOverview?.ProductiveSeconds ?? 0) / 60);
-  const distractiveMinutes = Math.round((overview?.UsageOverview?.DistractiveSeconds ?? 0) / 60);
+  const productiveMinutes = Math.round(productiveSeconds / 60);
+  const distractiveMinutes = Math.round(distractiveSeconds / 60);
 
   // Get hourly breakdown from backend (already in UsagePerHourBreakdown format with seconds)
   // Filter out any null values that may come from the backend
@@ -243,37 +249,50 @@ export function BentoDashboard() {
                 <p className="text-xs font-bold uppercase tracking-widest text-blue-400">
                   Focus Score
                 </p>
-                <p className="text-5xl font-bold text-blue-400 mt-1">
-                  {focusScore}%
-                </p>
-                <p className="text-xs text-muted-foreground mt-2">
-                  When I chose between work and distraction, I won {focusScore}% of the time
-                </p>
+                {hasEnoughData ? (
+                  <>
+                    <p className="text-5xl font-bold text-blue-400 mt-1">
+                      {focusScore}%
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      When I chose between work and distraction, I won {focusScore}% of the time
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-3xl font-bold text-muted-foreground/40 mt-1">--</p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Requires at least 1h of activity
+                    </p>
+                  </>
+                )}
               </div>
-              <div className="w-24 h-24">
-                <svg viewBox="0 0 100 100" className="transform -rotate-90">
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="40"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="8"
-                    className="text-blue-500/20"
-                  />
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="40"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="8"
-                    strokeDasharray={`${focusScore * 2.51} 251`}
-                    strokeLinecap="round"
-                    className="text-blue-500"
-                  />
-                </svg>
-              </div>
+              {hasEnoughData && (
+                <div className="w-24 h-24">
+                  <svg viewBox="0 0 100 100" className="transform -rotate-90">
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="40"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="8"
+                      className="text-blue-500/20"
+                    />
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="40"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="8"
+                      strokeDasharray={`${focusScore * 2.51} 251`}
+                      strokeLinecap="round"
+                      className="text-blue-500"
+                    />
+                  </svg>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

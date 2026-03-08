@@ -19,7 +19,6 @@ import (
 
 	"connectrpc.com/connect"
 	"connectrpc.com/validate"
-	"github.com/joho/godotenv"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/net/http2"
@@ -52,10 +51,6 @@ var Command = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		if err := godotenv.Load(); err != nil {
-			return fmt.Errorf("failed to load .env file: %w", err)
-		}
-
 		gormDB, err := setupDatabase(cmd.String("turso-db-url"), cmd.String("turso-db-token"))
 		if err != nil {
 			return fmt.Errorf("failed to setup database: %w", err)
