@@ -231,7 +231,7 @@ export function BentoDashboard() {
       </div>
 
       {/* Row 0: LLM Summary (At the top if it exists) */}
-      {overview?.DailyUsageSummary && overview.DailyUsageSummary.headline && (
+      {overview?.DailyUsageSummary && (
         <LLMInsightCard
           dailyUsageSummary={overview.DailyUsageSummary}
           isYesterday={isYesterday(selectedDate)}

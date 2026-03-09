@@ -159,18 +159,18 @@ const mapDayInsightsToOverview = (
 };
 
 const mapLLMDailySummary = (summary: any): DailyUsageSummary | null => {
-  if (!summary || !summary.Headline) return null;
+  if (!summary || (!summary.headline && !summary.narrative)) return null;
   return {
-    headline: summary.Headline ?? "",
-    narrative: summary.Narrative ?? "",
-    key_pattern: summary.KeyPattern ?? "",
-    suggestion: summary.Suggestion ?? "",
-    day_vibe: summary.DayVibe ?? "",
-    wins: summary.Wins ?? "[]",
-    context_switch_count: summary.ContextSwitchCount ?? 0,
-    longest_focus_minutes: summary.LongestFocusMinutes ?? 0,
-    deep_work_minutes: summary.DeepWorkMinutes ?? 0,
-    blocked_attempt_count: summary.BlockedAttemptCount ?? 0,
+    headline: summary.headline ?? "",
+    narrative: summary.narrative ?? "",
+    key_pattern: summary.key_pattern ?? "",
+    suggestion: summary.suggestion ?? "",
+    day_vibe: summary.day_vibe ?? "",
+    wins: summary.wins ?? "[]",
+    context_switch_count: summary.context_switch_count ?? 0,
+    longest_focus_minutes: summary.longest_focus_minutes ?? 0,
+    deep_work_minutes: summary.deep_work_minutes ?? 0,
+    blocked_attempt_count: summary.blocked_attempt_count ?? 0,
   };
 };
 

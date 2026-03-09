@@ -64,18 +64,26 @@ func NewService(ctx context.Context, db *gorm.DB, options ...Option) (*Service, 
 }
 
 func (s *Service) scheduleJobs(ctx context.Context) {
+	fn := func(ctx context.Context) error {
+		if err := s.removeOldSandboxExecutionLogs(ctx); err != nil {
+			slog.Error("failed to remove old sandbox execution logs", "error", err)
+		}
+		if err := s.GenerateLLMDailySummaryIfNeeded(ctx); err != nil {
+			slog.Error("failed to generate daily summary", "error", err)
+		}
+
+		return nil
+	}
+
+	fn(ctx)
+
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				return
-		case <-time.After(1 * time.Hour):
-			if err := s.removeOldSandboxExecutionLogs(ctx); err != nil {
-				slog.Error("failed to remove old sandbox execution logs", "error", err)
-			}
-			if err := s.GenerateLLMDailySummaryIfNeeded(ctx); err != nil {
-				slog.Error("failed to generate daily summary", "error", err)
-			}
+			case <-time.After(1 * time.Hour):
+				fn(ctx)
 			}
 		}
 	}()
