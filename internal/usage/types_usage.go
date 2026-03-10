@@ -32,6 +32,10 @@ const (
 	ClassificationSystem      Classification = "system"
 )
 
+func (c Classification) IsProductiveOrDistracting() bool {
+	return c == ClassificationProductive || c == ClassificationDistracting
+}
+
 type TerminationDecision struct {
 	Mode      TerminationMode
 	Reasoning string
