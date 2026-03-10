@@ -4,9 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMinutes } from "@/lib/mock-data";
 import type { CommunicationBreakdown } from "@/../bindings/github.com/focusd-so/focusd/internal/usage/models";
 
-interface CommunicationCardProps {
-  channels: CommunicationBreakdown[];
-}
 
 const channelTextColors: Record<string, string> = {
   Slack: "text-purple-400",
@@ -24,8 +21,8 @@ const channelBarColors: Record<string, string> = {
   Teams: "bg-violet-500/60",
 };
 
-export function CommunicationCard({ channels }: CommunicationCardProps) {
-  const totalMinutes = channels.reduce((sum, c) => sum + c.minutes, 0);
+export function CommunicationCard({ channels }: { channels: CommunicationBreakdown[] }) {
+  // const totalMinutes = channels.reduce((sum, c) => sum + c.minutes, 0);
   const maxMinutes = Math.max(...channels.map((c) => c.minutes), 1);
 
   return (
@@ -40,7 +37,7 @@ export function CommunicationCard({ channels }: CommunicationCardProps) {
             to="/screen-time/screentime"
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
-            {formatMinutes(totalMinutes)} total
+            {/* {formatMinutes(totalMinutes)} total */}
             <IconArrowRight className="w-3 h-3" />
           </Link>
         </div>
@@ -51,8 +48,8 @@ export function CommunicationCard({ channels }: CommunicationCardProps) {
             No communication activity
           </p>
         ) : (
-          channels.slice(0, 3).map((channel, index) => {
-            const textColor = channelTextColors[channel.name] || "text-muted-foreground";
+          channels.slice(0, 5).map((channel, index) => {
+            const textColor = channelTextColors[channel.channel] || "text-muted-foreground";
             const widthPct = (channel.minutes / maxMinutes) * 100;
 
             return (
@@ -65,7 +62,7 @@ export function CommunicationCard({ channels }: CommunicationCardProps) {
                 </div>
                 <div className="h-1.5 bg-muted/20 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all ${channelBarColors[channel.name] || "bg-muted-foreground/40"}`}
+                    className={`h-full rounded-full transition-all ${channelBarColors[channel.channel] || "bg-muted-foreground/40"}`}
                     style={{ width: `${widthPct}%` }}
                   />
                 </div>

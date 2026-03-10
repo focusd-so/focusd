@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -19,7 +19,7 @@ import {
   formatDate,
 } from "@/lib/mock-data";
 import { useUsageStore, isToday } from "@/stores/usage-store";
-import type { UsagePerHourBreakdown } from "@/stores/usage-store";
+import type { ProductivityScore, CommunicationBreakdown } from "@/../bindings/github.com/focusd-so/focusd/internal/usage/models";
 import { LLMInsightCard } from "./ai-insight-card";
 import { TopBlockedCard } from "./top-blocked-card";
 import { TopDistractionsCard } from "./top-distractions-card";
@@ -29,18 +29,56 @@ import { CommunicationCard } from "./communication-card";
 const MIN_SECONDS_FOR_INSIGHTS = 3600;
 
 const SERIES = [
-  { key: "productive", field: "ProductiveSeconds", label: "Productive", bg: "bg-emerald-500/80", dot: "bg-emerald-500", text: "text-emerald-400" },
-  { key: "distractive", field: "DistractiveSeconds", label: "Distractive", bg: "bg-rose-500/80", dot: "bg-rose-500", text: "text-rose-400" },
-  { key: "idle", field: "IdleSeconds", label: "Idle", bg: "bg-zinc-400/60", dot: "bg-zinc-400", text: "text-zinc-400" },
-  { key: "other", field: "SupportiveSeconds", label: "Other", bg: "bg-amber-400/60", dot: "bg-amber-400", text: "text-amber-400" },
+  { key: "productive", field: "productive_seconds", label: "Productive", bg: "bg-emerald-500/80", dot: "bg-emerald-500", text: "text-emerald-400" },
+  { key: "distractive", field: "distractive_seconds", label: "Distractive", bg: "bg-rose-500/80", dot: "bg-rose-500", text: "text-rose-400" },
+  { key: "idle", field: "idle_seconds", label: "Idle", bg: "bg-zinc-400/60", dot: "bg-zinc-400", text: "text-zinc-400" },
+  { key: "other", field: "other_seconds", label: "Other", bg: "bg-amber-400/60", dot: "bg-amber-400", text: "text-amber-400" },
 ] as const;
+
+type SeriesField = (typeof SERIES)[number]["field"];
+
+interface HourlySlot extends Record<SeriesField, number> {
+  HourLabel: string;
+}
+
+const formatHourLabel = (hour: number): string => {
+  const suffix = hour >= 12 ? "pm" : "am";
+  const normalizedHour = hour % 12 === 0 ? 12 : hour % 12;
+  return `${normalizedHour}${suffix}`;
+};
+
+const buildHourlySlots = (breakdown: Record<string, ProductivityScore> | null | undefined): HourlySlot[] => {
+  const map = breakdown ?? {};
+  return Array.from({ length: 24 }, (_, hour) => {
+    const score = map[String(hour)];
+    return {
+      HourLabel: formatHourLabel(hour),
+      productive_seconds: score?.productive_seconds ?? 0,
+      distractive_seconds: score?.distractive_seconds ?? 0,
+      idle_seconds: score?.idle_seconds ?? 0,
+      other_seconds: score?.other_seconds ?? 0,
+    };
+  });
+};
+
+/**
+ * Converts the backend communication map to a sorted array.
+ * Groups by channel name (A-Z) and then sorts by minutes (descending).
+ */
+const buildSortedChannels = (
+  breakdown: Record<string, CommunicationBreakdown | undefined> | null | undefined
+): CommunicationBreakdown[] => {
+  return Object.values(breakdown ?? {})
+    .filter((c): c is CommunicationBreakdown => c != null)
+    .sort((a, b) => a.channel.localeCompare(b.channel) || b.minutes - a.minutes);
+};
 
 type SeriesKey = (typeof SERIES)[number]["key"];
 
 function HourlyBreakdownChart({
   hourlyData,
 }: {
-  hourlyData: UsagePerHourBreakdown[];
+  hourlyData: HourlySlot[];
 }) {
   const [visible, setVisible] = useState<Record<SeriesKey, boolean>>({
     productive: true,
@@ -76,48 +114,103 @@ function HourlyBreakdownChart({
 
             if (totalMinutes === 0) {
               return (
-                <div key={hour.HourLabel} className="flex-1 h-full flex items-end">
-                  <div className="w-full h-1 bg-muted/20 rounded-t" />
-                </div>
+                <Tooltip key={hour.HourLabel}>
+                  <TooltipTrigger asChild>
+                    <div className="flex-1 h-full flex items-end cursor-default">
+                      <div className="w-full h-full border border-dashed border-muted-foreground/10 rounded bg-muted/5" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent className="bg-popover/80 backdrop-blur-md border-muted/20 shadow-xl px-3 py-2">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                        {hour.HourLabel}
+                      </span>
+                      <span className="text-xs text-muted-foreground/80 font-medium">
+                        No activity tracked
+                      </span>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
               );
             }
 
             // Stacking order top-to-bottom: distractive, other, idle, productive
             const segments = [
-              { ...SERIES[1], seconds: visible.distractive ? hour.DistractiveSeconds : 0 },
-              { ...SERIES[3], seconds: visible.other ? hour.SupportiveSeconds : 0 },
-              { ...SERIES[2], seconds: visible.idle ? hour.IdleSeconds : 0 },
-              { ...SERIES[0], seconds: visible.productive ? hour.ProductiveSeconds : 0 },
+              { ...SERIES[1], seconds: visible.distractive ? hour.distractive_seconds : 0 },
+              { ...SERIES[3], seconds: visible.other ? hour.other_seconds : 0 },
+              { ...SERIES[2], seconds: visible.idle ? hour.idle_seconds : 0 },
+              { ...SERIES[0], seconds: visible.productive ? hour.productive_seconds : 0 },
             ].filter((seg) => seg.seconds > 0);
 
             return (
               <Tooltip key={hour.HourLabel}>
                 <TooltipTrigger asChild>
-                  <div
-                    className="flex-1 flex flex-col"
-                    style={{ height: `${Math.min(100, height)}%` }}
-                  >
-                    {segments.map((seg, i) => (
-                      <div
-                        key={seg.key}
-                        className={`w-full ${seg.bg} ${i === segments.length - 1 ? "rounded-b" : ""}`}
-                        style={{ height: `${(seg.seconds / totalSeconds) * 100}%` }}
-                      />
-                    ))}
+                  <div className="flex-1 h-full flex flex-col">
+                    {/* Dashed placeholder for untracked portion of the hour */}
+                    <div
+                      className="w-full border border-dashed border-muted-foreground/10 rounded-t bg-muted/5"
+                      style={{ height: `${Math.max(0, 100 - Math.min(100, height))}%` }}
+                    />
+                    {/* Actual activity segments */}
+                    <div
+                      className="w-full flex flex-col"
+                      style={{ height: `${Math.min(100, height)}%` }}
+                    >
+                      {segments.map((seg, i) => (
+                        <div
+                          key={seg.key}
+                          className={`w-full ${seg.bg} ${i === segments.length - 1 ? "rounded-b" : ""}`}
+                          style={{ height: `${(seg.seconds / totalSeconds) * 100}%` }}
+                        />
+                      ))}
+                    </div>
                   </div>
                 </TooltipTrigger>
-                <TooltipContent>
-                  <div className="text-xs space-y-1">
-                    <p className="font-medium">{hour.HourLabel}</p>
-                    {SERIES.map((s) => {
-                      const val = hour[s.field] ?? 0;
-                      if (val === 0) return null;
-                      return (
-                        <p key={s.key} className={s.text}>
-                          {s.label}: {Math.round(val / 60)}m
-                        </p>
-                      );
-                    })}
+                <TooltipContent className="bg-popover/90 backdrop-blur-md border-muted/20 shadow-2xl px-3 py-2.5 min-w-[140px]">
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider border-b border-muted/10 pb-1.5">
+                      {hour.HourLabel}
+                    </p>
+                    <div className="space-y-1.5">
+                      {SERIES.map((s) => {
+                        const val = hour[s.field] ?? 0;
+                        if (val === 0) return null;
+                        return (
+                          <div key={s.key} className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+                              <span className="text-xs font-medium text-foreground/90">
+                                {s.label}
+                              </span>
+                            </div>
+                            <span className={`text-xs font-mono font-medium ${s.text}`}>
+                              {Math.round(val / 60)}m
+                            </span>
+                          </div>
+                        );
+                      })}
+                      {(() => {
+                        const trackedMinutes = SERIES.reduce(
+                          (sum, s) => sum + (hour[s.field] ?? 0) / 60,
+                          0
+                        );
+                        const untrackedMinutes = Math.round(60 - trackedMinutes);
+                        if (untrackedMinutes <= 1) return null;
+                        return (
+                          <div className="flex items-center justify-between gap-4 pt-1 border-t border-muted/5 mt-1">
+                            <div className="flex items-center gap-2">
+                              <div className="w-1.5 h-1.5 rounded-full bg-muted/40" />
+                              <span className="text-xs font-medium text-muted-foreground">
+                                Untracked
+                              </span>
+                            </div>
+                            <span className="text-xs font-mono font-medium text-muted-foreground/80">
+                              {untrackedMinutes}m
+                            </span>
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </TooltipContent>
               </Tooltip>
@@ -184,19 +277,19 @@ export function BentoDashboard() {
 
   const isLoading = isStoreLoading || isQueryLoading;
 
-  const productiveSeconds = overview?.UsageOverview?.ProductiveSeconds ?? 0;
-  const distractiveSeconds = overview?.UsageOverview?.DistractiveSeconds ?? 0;
+  const productiveSeconds = overview?.productivity_score?.productive_seconds ?? 0;
+  const distractiveSeconds = overview?.productivity_score?.distractive_seconds ?? 0;
   const totalTrackedSeconds = productiveSeconds + distractiveSeconds;
   const hasEnoughData = totalTrackedSeconds >= MIN_SECONDS_FOR_INSIGHTS;
 
-  const focusScore = Math.round(overview?.UsageOverview?.ProductivityScore ?? 0);
+  const focusScore = Math.round(overview?.productivity_score?.productivity_score ?? 0);
   const productiveMinutes = Math.round(productiveSeconds / 60);
   const distractiveMinutes = Math.round(distractiveSeconds / 60);
 
-  // Get hourly breakdown from backend (already in UsagePerHourBreakdown format with seconds)
-  // Filter out any null values that may come from the backend
-  const hourlyBreakdown = (overview?.UsagePerHourBreakdown ?? []).filter(
-    (item): item is UsagePerHourBreakdown => item !== null
+  // Build 24-slot hourly breakdown from the backend's per-hour map
+  const hourlyBreakdown = useMemo(
+    () => buildHourlySlots(overview?.productivity_per_hour_breakdown as Record<string, ProductivityScore> | undefined),
+    [overview?.productivity_per_hour_breakdown]
   );
 
   const canGoNext = !isToday(selectedDate);
@@ -252,9 +345,9 @@ export function BentoDashboard() {
       </div>
 
       {/* Row 0: LLM Summary (At the top if it exists) */}
-      {overview?.DailyUsageSummary && (
+      {overview?.llm_daily_summary && (
         <LLMInsightCard
-          dailyUsageSummary={overview.DailyUsageSummary}
+          dailyUsageSummary={overview.llm_daily_summary}
           isYesterday={isYesterday(selectedDate)}
         />
       )}
@@ -373,14 +466,14 @@ export function BentoDashboard() {
 
       {/* Row 3: Time Lost To + Blocked Today */}
       <div className="grid grid-cols-2 gap-4">
-        <TopDistractionsCard distractions={overview?.TopDistractions ?? []} />
-        <TopBlockedCard blockedAttempts={overview?.TopBlocked ?? []} />
+        <TopDistractionsCard distractions={overview?.top_distractions ?? []} />
+        <TopBlockedCard blockedAttempts={overview?.top_blocked ?? []} />
       </div>
 
       {/* Row 4: Projects + Communication */}
       <div className="grid grid-cols-2 gap-4">
-        <CategoriesCard projects={overview?.ProjectBreakdown ?? []} />
-        <CommunicationCard channels={overview?.CommunicationBreakdown ?? []} />
+        <CategoriesCard projects={overview?.project_breakdown ?? []} />
+        <CommunicationCard channels={buildSortedChannels(overview?.communication_breakdown)} />
       </div>
     </div>
   );

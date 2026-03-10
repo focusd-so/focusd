@@ -5,12 +5,7 @@ import type {
   ProtectionWhitelist,
   ProtectionPause,
   DayInsights,
-  ProductivityScore,
   UsageAggregation,
-  DistractionBreakdown,
-  BlockedBreakdown,
-  ProjectBreakdown,
-  CommunicationBreakdown,
 } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
 import { TerminationMode, GetUsageListOptions } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
 import {
@@ -27,48 +22,7 @@ import {
 } from "../../bindings/github.com/focusd-so/focusd/internal/usage/service";
 import { Duration } from "../../bindings/time/models";
 
-export interface BlockedItem {
-  usage: ApplicationUsage;
-  count: number;
-}
 
-interface UsageOverview {
-  ProductivityScore: number;
-  ProductiveSeconds: number;
-  DistractiveSeconds: number;
-  SupportiveSeconds: number;
-}
-
-export interface UsagePerHourBreakdown {
-  HourLabel: string;
-  ProductiveSeconds: number;
-  DistractiveSeconds: number;
-  IdleSeconds: number;
-  SupportiveSeconds: number;
-}
-
-export interface DailyUsageSummary {
-  headline: string;
-  narrative: string;
-  key_pattern: string;
-  suggestion: string;
-  day_vibe: string;
-  wins: string;
-  context_switch_count: number;
-  longest_focus_minutes: number;
-  deep_work_minutes: number;
-  blocked_attempt_count: number;
-}
-
-export interface DailyOverview {
-  UsageOverview: UsageOverview | null;
-  UsagePerHourBreakdown: UsagePerHourBreakdown[] | null;
-  DailyUsageSummary: DailyUsageSummary | null;
-  TopDistractions: DistractionBreakdown[];
-  TopBlocked: BlockedBreakdown[];
-  ProjectBreakdown: ProjectBreakdown[];
-  CommunicationBreakdown: CommunicationBreakdown[];
-}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -87,103 +41,12 @@ const getYesterday = (): Date => {
   return yesterday;
 };
 
-const formatHourLabel = (hour: number): string => {
-  const suffix = hour >= 12 ? "pm" : "am";
-  const normalizedHour = hour % 12 === 0 ? 12 : hour % 12;
-  return `${normalizedHour}${suffix}`;
-};
-
-const normalizeProductivityScore = (
-  score: ProductivityScore | null | undefined
-): ProductivityScore => {
-  return {
-    ProductiveSeconds: score?.ProductiveSeconds ?? 0,
-    DistractiveSeconds: score?.DistractiveSeconds ?? 0,
-    IdleSeconds: score?.IdleSeconds ?? 0,
-    OtherSeconds: score?.OtherSeconds ?? 0,
-    ProductivityScore: score?.ProductivityScore ?? 0,
-  };
-};
-
-const mapDayInsightsToOverview = (
-  insights: DayInsights
-): DailyOverview => {
-  const usageOverviewScore = normalizeProductivityScore(insights.ProductivityScore);
-  const hourlyTotals = new Map<number, ProductivityScore>();
-
-  const hourlyBreakdown = insights.ProductivityPerHourBreakdown ?? {};
-  Object.entries(hourlyBreakdown).forEach(([hourKey, score]) => {
-    const parsedHour = parseInt(hourKey, 10);
-    const safeScore = normalizeProductivityScore(score);
-
-    const current = hourlyTotals.get(parsedHour);
-    if (!current) {
-      hourlyTotals.set(parsedHour, safeScore);
-      return;
-    }
-
-    hourlyTotals.set(parsedHour, {
-      ProductiveSeconds: current.ProductiveSeconds + safeScore.ProductiveSeconds,
-      DistractiveSeconds: current.DistractiveSeconds + safeScore.DistractiveSeconds,
-      IdleSeconds: current.IdleSeconds + safeScore.IdleSeconds,
-      OtherSeconds: current.OtherSeconds + safeScore.OtherSeconds,
-      ProductivityScore: 0,
-    });
-  });
-
-  const usagePerHourBreakdown: UsagePerHourBreakdown[] = Array.from(
-    { length: 24 },
-    (_, hourIndex) => {
-      const score = normalizeProductivityScore(hourlyTotals.get(hourIndex));
-
-      return {
-        HourLabel: formatHourLabel(hourIndex),
-        ProductiveSeconds: score.ProductiveSeconds,
-        DistractiveSeconds: score.DistractiveSeconds,
-        IdleSeconds: score.IdleSeconds,
-        SupportiveSeconds: score.OtherSeconds,
-      };
-    }
-  );
-
-  return {
-    UsageOverview: {
-      ProductivityScore: usageOverviewScore.ProductivityScore,
-      ProductiveSeconds: usageOverviewScore.ProductiveSeconds,
-      DistractiveSeconds: usageOverviewScore.DistractiveSeconds,
-      SupportiveSeconds: usageOverviewScore.OtherSeconds,
-    },
-    UsagePerHourBreakdown: usagePerHourBreakdown,
-    DailyUsageSummary: mapLLMDailySummary(insights.LLMDailySummary),
-    TopDistractions: insights.TopDistractions ?? [],
-    TopBlocked: insights.TopBlocked ?? [],
-    ProjectBreakdown: insights.ProjectBreakdown ?? [],
-    CommunicationBreakdown: insights.CommunicationBreakdown ?? [],
-  };
-};
-
-const mapLLMDailySummary = (summary: any): DailyUsageSummary | null => {
-  if (!summary || (!summary.headline && !summary.narrative)) return null;
-  return {
-    headline: summary.headline ?? "",
-    narrative: summary.narrative ?? "",
-    key_pattern: summary.key_pattern ?? "",
-    suggestion: summary.suggestion ?? "",
-    day_vibe: summary.day_vibe ?? "",
-    wins: summary.wins ?? "[]",
-    context_switch_count: summary.context_switch_count ?? 0,
-    longest_focus_minutes: summary.longest_focus_minutes ?? 0,
-    deep_work_minutes: summary.deep_work_minutes ?? 0,
-    blocked_attempt_count: summary.blocked_attempt_count ?? 0,
-  };
-};
-
 // ── Store interface ─────────────────────────────────────────────────────────
 
 interface UsageState {
   // Activity tracking
   recentUsages: ApplicationUsage[];
-  blockedItems: Map<string, BlockedItem>;
+  blockedItems: Map<string, { usage: ApplicationUsage; count: number }>;
   isSubscribed: boolean;
 
   // Whitelist (allowed items)
@@ -195,7 +58,7 @@ interface UsageState {
 
   // Insights
   selectedDate: Date;
-  overview: DailyOverview | null;
+  overview: DayInsights | null;
   isLoading: boolean;
   error: string | null;
 
@@ -208,7 +71,7 @@ interface UsageState {
   addUsage: (usage: ApplicationUsage) => void;
   initSubscription: () => void;
   fetchRecentUsages: () => Promise<void>;
-  getBlockedItemsList: () => BlockedItem[];
+  getBlockedItemsList: () => { usage: ApplicationUsage; count: number }[];
   getActiveUsages: () => ApplicationUsage[];
 
   // Whitelist actions
@@ -319,7 +182,7 @@ export const useUsageStore = create<UsageState>()((set, get) => ({
         GetUsageList(recentUsagesOptions),
         GetUsageList(blockedItemsOptions),
       ]);
-      const blockedItemsMap = new Map<string, BlockedItem>();
+      const blockedItemsMap = new Map<string, { usage: ApplicationUsage; count: number }>();
       blockedItems.forEach((usage: ApplicationUsage) => {
         const key = usage.application?.hostname || usage.application?.bundle_id || String(usage.id);
         const existing = blockedItemsMap.get(key);
@@ -424,8 +287,7 @@ export const useUsageStore = create<UsageState>()((set, get) => ({
 
     try {
       set({ isLoading: true, error: null });
-      const insights = await GetDayInsights(targetDate);
-      const overview = mapDayInsightsToOverview(insights);
+      const overview = await GetDayInsights(targetDate);
       set({ overview, isLoading: false, error: null });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to fetch overview data";

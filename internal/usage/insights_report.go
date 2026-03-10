@@ -20,6 +20,15 @@ func (s *Service) GetDayInsights(date time.Time) (DayInsights, error) {
 	score := ProductivityScore{}
 	hourly := make(ProductivityPerHourBreakdown)
 
+	insights := DayInsights{
+		ProductivityScore:            score,
+		ProductivityPerHourBreakdown: hourly,
+		TopDistractions:              buildDistractionBreakdown(usages),
+		TopBlocked:                   buildBlockedBreakdown(usages),
+		ProjectBreakdown:             buildProjectBreakdown(usages),
+		CommunicationBreakdown:       make(map[string]CommunicationBreakdown),
+	}
+
 	for i, usage := range usages {
 		end := resolveEndTime(usage, usages, i)
 		if end <= usage.StartedAt {
@@ -35,6 +44,19 @@ func (s *Service) GetDayInsights(date time.Time) (DayInsights, error) {
 			entry.addSeconds(usage.Classification, secs, isIdle)
 			hourly[hour] = entry
 		}
+
+		commChannel := fromPtr(usage.DetectedCommunicationChannel)
+
+		if commChannel != "" {
+
+			key := fmt.Sprintf("%s:%s", commChannel, usage.Application.Name)
+
+			entry := insights.CommunicationBreakdown[key]
+			entry.Name = commChannel
+			entry.Channel = commChannel
+			entry.Minutes += dur / 60
+			insights.CommunicationBreakdown[key] = entry
+		}
 	}
 
 	score.ProductivityScore = calculateProductivityScore(score.ProductiveSeconds, score.DistractiveSeconds)
@@ -43,14 +65,8 @@ func (s *Service) GetDayInsights(date time.Time) (DayInsights, error) {
 		hourly[hour] = s
 	}
 
-	insights := DayInsights{
-		ProductivityScore:            score,
-		ProductivityPerHourBreakdown: hourly,
-		TopDistractions:              buildDistractionBreakdown(usages),
-		TopBlocked:                   buildBlockedBreakdown(usages),
-		ProjectBreakdown:             buildProjectBreakdown(usages),
-		CommunicationBreakdown:       buildCommunicationBreakdown(usages),
-	}
+	insights.ProductivityScore = score
+	insights.ProductivityPerHourBreakdown = hourly
 
 	var summary LLMDailySummary
 	if err := s.db.Where("date = ?", date.Format("2006-01-02")).First(&summary).Error; err == nil {
@@ -183,27 +199,4 @@ func hasTag(tags []ApplicationUsageTags, tag string) bool {
 		}
 	}
 	return false
-}
-
-func buildCommunicationBreakdown(usages []ApplicationUsage) []CommunicationBreakdown {
-	seconds := make(map[string]int)
-	for i, u := range usages {
-		isCommunication := (u.DetectedCommunicationChannel != nil && *u.DetectedCommunicationChannel != "") ||
-			hasTag(u.Tags, "communication")
-		if !isCommunication {
-			continue
-		}
-		end := resolveEndTime(u, usages, i)
-		if end <= u.StartedAt {
-			continue
-		}
-		seconds[usageDisplayName(u)] += int(end - u.StartedAt)
-	}
-
-	out := make([]CommunicationBreakdown, 0, len(seconds))
-	for name, secs := range seconds {
-		out = append(out, CommunicationBreakdown{Name: name, Minutes: secs / 60})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Minutes > out[j].Minutes })
-	return out
 }

@@ -3,9 +3,15 @@ package usage
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 func (s *Service) classifyApplication(ctx context.Context, appName, title string, url *string) (*ClassificationResponse, error) {
+	switch strings.ToLower(appName) {
+	case "slack":
+		return s.classifySlackApp(ctx, appName, title)
+	}
+
 	var (
 		instructions = `
 You are a Software Engineering Application Intent Classifier. Your job is to determine if the user is actively doing work related to their software engineering job or seeking entertainment/distraction.
@@ -65,3 +71,65 @@ Executable Path: %s
 
 	return response, nil
 }
+
+// classifySlackApp classifies Slack desktop application activity using the window title.
+// Titles typically look like: "Slack | #engineering | Acme Corp" or "Slack - #random - Workspace"
+func (s *Service) classifySlackApp(ctx context.Context, appName, title string) (*ClassificationResponse, error) {
+	var (
+		instructions = `
+You are a Slack Software Engineer Intent Classifier. Your job is to determine if the user is engaged in productive work communication, general organizational activity, or distracted by non-essential chatter. You will receive the desktop window title — this is your main signal.
+
+# Classification Logic
+
+## **productive**
+**Criteria:** Direct work communication, project discussions, incident response, technical collaboration, or focused async work.
+**Indicators:**
+- Work-related channels: #engineering, #product, #design, #support, #incidents, #deploys, #standup, #sprint-*, #dev-*, #backend, #frontend, #infra, #security, #ops, #platform, #release-*, #bug-*, #feature-*, #project-*, #review-*, #ci-*, #monitoring, #alerts, #on-call
+- DMs discussing work tasks (inferred from title context)
+- Threads with technical discussions
+- Huddles or calls (likely meetings)
+- Canvas or document collaboration
+- Any channel name that clearly relates to a specific project, team function, or work task
+
+## **neutral**
+**Criteria:** General organizational communication that is neither clearly productive nor distracting. Company-wide or team-wide channels used for announcements and coordination.
+**Indicators:**
+- General channels: #general, #announcements, #company, #all-hands, #team-*, #org-*, #office-*, #hr, #it-support, #helpdesk, #onboarding, #welcome
+- Channels that serve organizational purposes without being directly about project work
+- Workspace home page or search without specific channel context
+- Browsing channel list without engaging (title contains "Browse channels" or similar)
+
+## **distracting**
+**Criteria:** Social channels, watercooler chat, entertainment, or passive browsing without clear work purpose.
+**Indicators:**
+- Social/fun channels: #random, #watercooler, #pets, #food, #memes, #off-topic, #fun-*, #chat-*, #social-*, #music, #gaming, #sports, #books, #movies, #travel, #fitness, #jokes, #dogs, #cats, #photos
+- Content consumption channels: #links, #articles, #videos, #interesting-*, #cool-*
+- Any channel name that suggests entertainment, socializing, or non-work activity
+
+# Output Format
+
+Return a JSON object with the following keys:
+1. "classification": "productive" (work communication), "neutral" (general org channels), or "distracting" (social/entertainment).
+2. "reasoning": Brief explanation.
+3. "tags": Array of strings from ONLY these options: ["communication", "entertainment", "time-sink", "content-consumption"].
+4. "confidence_score": Float (0.0 - 1.0)
+5. "detected_communication_channel": The channel or DM name extracted from the title (e.g., "#engineering", "#random", "DM with John", "thread in #product"). Return empty string if unable to determine.
+`
+		inputTmpl = `
+The user is currently using the Slack desktop application. Classify their activity based on the following information:
+
+Application Name: %s
+Window Title: %s
+`
+	)
+
+	input := fmt.Sprintf(inputTmpl, appName, title)
+
+	response, err := s.classifyWithGemini(ctx, instructions, input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to classify with Gemini: %w", err)
+	}
+
+	return response, nil
+}
+
