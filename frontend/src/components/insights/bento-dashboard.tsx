@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -27,52 +28,67 @@ import { CommunicationCard } from "./communication-card";
 
 const MIN_SECONDS_FOR_INSIGHTS = 3600;
 
-// Hourly breakdown chart component
+const SERIES = [
+  { key: "productive", field: "ProductiveSeconds", label: "Productive", bg: "bg-emerald-500/80", dot: "bg-emerald-500", text: "text-emerald-400" },
+  { key: "distractive", field: "DistractiveSeconds", label: "Distractive", bg: "bg-rose-500/80", dot: "bg-rose-500", text: "text-rose-400" },
+  { key: "idle", field: "IdleSeconds", label: "Idle", bg: "bg-zinc-400/60", dot: "bg-zinc-400", text: "text-zinc-400" },
+  { key: "other", field: "SupportiveSeconds", label: "Other", bg: "bg-amber-400/60", dot: "bg-amber-400", text: "text-amber-400" },
+] as const;
+
+type SeriesKey = (typeof SERIES)[number]["key"];
+
 function HourlyBreakdownChart({
   hourlyData,
 }: {
   hourlyData: UsagePerHourBreakdown[];
 }) {
-  // Fixed 1-hour scale for Y-axis
+  const [visible, setVisible] = useState<Record<SeriesKey, boolean>>({
+    productive: true,
+    distractive: true,
+    idle: false,
+    other: false,
+  });
+
   const maxMinutes = 60;
+
+  const toggle = (key: SeriesKey) =>
+    setVisible((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const activeSeries = SERIES.filter((s) => visible[s.key]);
 
   return (
     <TooltipProvider>
       <div className="flex">
-        {/* Y-axis labels - fixed 1 hour scale */}
         <div className="flex flex-col justify-between h-20 mr-2 text-[10px] text-muted-foreground text-right min-w-fit">
           <span>1h</span>
           <span>30m</span>
           <span>0</span>
         </div>
-        {/* Bars */}
         <div className="flex items-end gap-[2px] h-20 flex-1 overflow-hidden">
           {hourlyData.map((hour) => {
-            // Only use Productive + Distractive
-            const totalSeconds =
-              hour.ProductiveSeconds +
-              hour.DistractiveSeconds;
-
+            const totalSeconds = activeSeries.reduce(
+              (sum, s) => sum + (hour[s.field] ?? 0),
+              0
+            );
             const totalMinutes = totalSeconds / 60;
             const rawHeight = maxMinutes > 0 ? (totalMinutes / maxMinutes) * 100 : 0;
-            // Ensure a minimum height of 5% (4px out of 80px) so tiny bars don't disappear,
-            // matching the h-1 (4px) size of the empty slots.
             const height = totalMinutes > 0 ? Math.max(rawHeight, 5) : 0;
-            const prodPct =
-              totalSeconds > 0 ? (hour.ProductiveSeconds / totalSeconds) * 100 : 0;
-            const disPct =
-              totalSeconds > 0 ? (hour.DistractiveSeconds / totalSeconds) * 100 : 0;
 
             if (totalMinutes === 0) {
               return (
-                <div
-                  key={hour.HourLabel}
-                  className="flex-1 h-full flex items-end"
-                >
+                <div key={hour.HourLabel} className="flex-1 h-full flex items-end">
                   <div className="w-full h-1 bg-muted/20 rounded-t" />
                 </div>
               );
             }
+
+            // Stacking order top-to-bottom: distractive, other, idle, productive
+            const segments = [
+              { ...SERIES[1], seconds: visible.distractive ? hour.DistractiveSeconds : 0 },
+              { ...SERIES[3], seconds: visible.other ? hour.SupportiveSeconds : 0 },
+              { ...SERIES[2], seconds: visible.idle ? hour.IdleSeconds : 0 },
+              { ...SERIES[0], seconds: visible.productive ? hour.ProductiveSeconds : 0 },
+            ].filter((seg) => seg.seconds > 0);
 
             return (
               <Tooltip key={hour.HourLabel}>
@@ -81,35 +97,27 @@ function HourlyBreakdownChart({
                     className="flex-1 flex flex-col"
                     style={{ height: `${Math.min(100, height)}%` }}
                   >
-                    {/* Distractive (top - red) */}
-                    {disPct > 0 && (
+                    {segments.map((seg, i) => (
                       <div
-                        className="w-full bg-rose-500/80"
-                        style={{ height: `${disPct}%` }}
+                        key={seg.key}
+                        className={`w-full ${seg.bg} ${i === segments.length - 1 ? "rounded-b" : ""}`}
+                        style={{ height: `${(seg.seconds / totalSeconds) * 100}%` }}
                       />
-                    )}
-
-                    {/* Productive (bottom - emerald) */}
-                    {prodPct > 0 && (
-                      <div
-                        className="w-full bg-emerald-500/80 rounded-b"
-                        style={{ height: `${prodPct}%` }}
-                      />
-                    )}
+                    ))}
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
                   <div className="text-xs space-y-1">
-                    <p className="font-medium">
-                      {hour.HourLabel}
-                    </p>
-                    <p className="text-emerald-400">
-                      Productive: {Math.round(hour.ProductiveSeconds / 60)}m
-                    </p>
-
-                    <p className="text-rose-400">
-                      Distractive: {Math.round(hour.DistractiveSeconds / 60)}m
-                    </p>
+                    <p className="font-medium">{hour.HourLabel}</p>
+                    {SERIES.map((s) => {
+                      const val = hour[s.field] ?? 0;
+                      if (val === 0) return null;
+                      return (
+                        <p key={s.key} className={s.text}>
+                          {s.label}: {Math.round(val / 60)}m
+                        </p>
+                      );
+                    })}
                   </div>
                 </TooltipContent>
               </Tooltip>
@@ -117,12 +125,25 @@ function HourlyBreakdownChart({
           })}
         </div>
       </div>
-      {/* Hour labels - even hours only (12am, 2am, 4am, ...) */}
       <div className="flex gap-[2px] mt-1 text-[10px] text-muted-foreground ml-8">
         {hourlyData.filter((_, i) => i % 2 === 0).map((hour) => (
           <div key={hour.HourLabel} className="flex-1 min-w-0 text-center truncate">
             {hour.HourLabel}
           </div>
+        ))}
+      </div>
+      {/* Legend toggles */}
+      <div className="flex items-center gap-3 mt-2 ml-8">
+        {SERIES.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => toggle(s.key)}
+            className={`flex items-center gap-1 text-[10px] transition-opacity ${visible[s.key] ? "opacity-100" : "opacity-40"}`}
+          >
+            <span className={`w-2 h-2 rounded-full ${visible[s.key] ? s.dot : "bg-muted-foreground/40"}`} />
+            {s.label}
+          </button>
         ))}
       </div>
     </TooltipProvider>
@@ -335,16 +356,6 @@ export function BentoDashboard() {
               Activity Throughout the Day
             </CardTitle>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-4 text-[10px]">
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 bg-emerald-500 rounded-full" />
-                  Productive
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 bg-rose-500 rounded-full" />
-                  Distractive
-                </span>
-              </div>
               <Link
                 to="/screen-time/screentime"
                 className="flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 transition-colors"

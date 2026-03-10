@@ -27,11 +27,12 @@ func (s *Service) GetDayInsights(date time.Time) (DayInsights, error) {
 		}
 
 		dur := int(end - usage.StartedAt)
-		score.addSeconds(usage.Classification, dur)
+		isIdle := usage.Application.Name == IdleApplicationName
+		score.addSeconds(usage.Classification, dur, isIdle)
 
 		for hour, secs := range splitSecondsPerHour(usage.StartedAt, end) {
 			entry := hourly[hour]
-			entry.addSeconds(usage.Classification, secs)
+			entry.addSeconds(usage.Classification, secs, isIdle)
 			hourly[hour] = entry
 		}
 	}
