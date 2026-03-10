@@ -43,6 +43,7 @@ export interface UsagePerHourBreakdown {
   HourLabel: string;
   ProductiveSeconds: number;
   DistractiveSeconds: number;
+  IdleSeconds: number;
   SupportiveSeconds: number;
 }
 
@@ -98,6 +99,7 @@ const normalizeProductivityScore = (
   return {
     ProductiveSeconds: score?.ProductiveSeconds ?? 0,
     DistractiveSeconds: score?.DistractiveSeconds ?? 0,
+    IdleSeconds: score?.IdleSeconds ?? 0,
     OtherSeconds: score?.OtherSeconds ?? 0,
     ProductivityScore: score?.ProductivityScore ?? 0,
   };
@@ -123,6 +125,7 @@ const mapDayInsightsToOverview = (
     hourlyTotals.set(parsedHour, {
       ProductiveSeconds: current.ProductiveSeconds + safeScore.ProductiveSeconds,
       DistractiveSeconds: current.DistractiveSeconds + safeScore.DistractiveSeconds,
+      IdleSeconds: current.IdleSeconds + safeScore.IdleSeconds,
       OtherSeconds: current.OtherSeconds + safeScore.OtherSeconds,
       ProductivityScore: 0,
     });
@@ -137,6 +140,7 @@ const mapDayInsightsToOverview = (
         HourLabel: formatHourLabel(hourIndex),
         ProductiveSeconds: score.ProductiveSeconds,
         DistractiveSeconds: score.DistractiveSeconds,
+        IdleSeconds: score.IdleSeconds,
         SupportiveSeconds: score.OtherSeconds,
       };
     }

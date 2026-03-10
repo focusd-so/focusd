@@ -33,11 +33,16 @@ type CommunicationBreakdown struct {
 type ProductivityScore struct {
 	ProductiveSeconds  int
 	DistractiveSeconds int
+	IdleSeconds        int
 	OtherSeconds       int
 	ProductivityScore  int
 }
 
-func (p *ProductivityScore) addSeconds(classification Classification, seconds int) {
+func (p *ProductivityScore) addSeconds(classification Classification, seconds int, isIdle bool) {
+	if isIdle {
+		p.IdleSeconds += seconds
+		return
+	}
 	switch classification {
 	case ClassificationProductive:
 		p.ProductiveSeconds += seconds

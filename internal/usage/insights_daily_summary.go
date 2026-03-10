@@ -10,11 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/genai"
+
 	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
 	"github.com/focusd-so/focusd/internal/identity"
-
-	"google.golang.org/genai"
-	"gorm.io/gorm"
 )
 
 const (
@@ -51,8 +50,6 @@ OUTPUT (strict JSON, no markdown fences):
   "day_vibe": "locked-in | productive | balanced | scattered | recovering | rough"
 }`
 
-// GenerateLLMDailySummaryIfNeeded checks if it's time to generate yesterday's summary
-// and produces one if it doesn't already exist.
 func (s *Service) GenerateLLMDailySummaryIfNeeded(ctx context.Context) error {
 	if s.genaiClient == nil {
 		return nil
@@ -64,37 +61,61 @@ func (s *Service) GenerateLLMDailySummaryIfNeeded(ctx context.Context) error {
 	}
 
 	yesterday := now.AddDate(0, 0, -1)
-	dateStr := yesterday.Format("2006-01-02")
+	startDate := s.resolveBackfillStart(yesterday)
 
-	var existing LLMDailySummary
-	if err := s.db.Where("date = ?", dateStr).First(&existing).Error; err == nil {
-		return nil // already generated
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return fmt.Errorf("failed to check existing summary: %w", err)
+	for d := startDate; !d.After(yesterday); d = d.AddDate(0, 0, 1) {
+		if err := s.generateDailySummaryForDate(ctx, d); err != nil {
+			slog.Error("failed to generate daily summary",
+				"date", d.Format("2006-01-02"), "error", err)
+		}
+	}
+	return nil
+}
+
+// resolveBackfillStart returns the first date that needs a summary.
+// If previous summaries exist, returns the day after the most recent one.
+// On first run (empty table), returns yesterday so only one day is processed.
+func (s *Service) resolveBackfillStart(yesterday time.Time) time.Time {
+	var last LLMDailySummary
+	if err := s.db.Order("date DESC").First(&last).Error; err != nil {
+		return yesterday
 	}
 
-	input, err := s.computeLLMDaySummaryInput(yesterday)
+	lastDate, err := time.Parse("2006-01-02", last.Date)
+	if err != nil {
+		return yesterday
+	}
+
+	return lastDate.AddDate(0, 0, 1)
+}
+
+func (s *Service) generateDailySummaryForDate(ctx context.Context, date time.Time) error {
+	dateStr := date.Format("2006-01-02")
+
+	input, err := s.computeLLMDaySummaryInput(date)
 	if err != nil {
 		return fmt.Errorf("failed to compute summary input: %w", err)
 	}
 
-	totalTracked := (input.TotalProductiveMinutes + input.TotalDistractiveMinutes) * 60
-	if totalTracked < minSecondsForSummary {
-		slog.Info("not enough data for daily summary", "date", dateStr, "tracked_minutes", input.TotalProductiveMinutes+input.TotalDistractiveMinutes)
-		return nil
+	var summary = LLMDailySummary{
+		Headline:            "Not Enough Data",
+		DayVibe:             "insufficient-data",
+		Date:                dateStr,
+		CreatedAt:           time.Now().Unix(),
+		ContextSwitchCount:  input.ContextSwitchCount,
+		LongestFocusMinutes: input.LongestFocusStretchMin,
+		DeepWorkMinutes:     input.DeepWorkTotalMinutes,
+		BlockedAttemptCount: input.BlockedAttemptCount,
 	}
 
-	summary, err := s.generateLLMDailySummary(ctx, input)
-	if err != nil {
-		return fmt.Errorf("failed to generate LLM summary: %w", err)
-	}
+	if input.hasMinimumData() {
+		tempSummary, err := s.generateLLMDailySummary(ctx, input)
+		if err != nil {
+			return fmt.Errorf("failed to generate LLM summary: %w", err)
+		}
 
-	summary.Date = dateStr
-	summary.ContextSwitchCount = input.ContextSwitchCount
-	summary.LongestFocusMinutes = input.LongestFocusStretchMin
-	summary.DeepWorkMinutes = input.DeepWorkTotalMinutes
-	summary.BlockedAttemptCount = input.BlockedAttemptCount
-	summary.CreatedAt = time.Now().Unix()
+		summary = tempSummary
+	}
 
 	if err := s.db.Create(&summary).Error; err != nil {
 		return fmt.Errorf("failed to save daily summary: %w", err)
@@ -102,60 +123,41 @@ func (s *Service) GenerateLLMDailySummaryIfNeeded(ctx context.Context) error {
 
 	slog.Info("daily summary generated", "date", dateStr, "headline", summary.Headline)
 
-	if s.onLLMDailySummaryReady != nil {
+	if s.onLLMDailySummaryReady != nil && summary.DayVibe != "insufficient-data" {
 		s.onLLMDailySummaryReady(summary)
 	}
 
 	return nil
 }
 
+// computeLLMDaySummaryInput builds the structured input for the LLM daily summary.
+// It aggregates app usage for a given date into productivity metrics, deep work sessions,
+// distraction cascades, and per-app/per-hour breakdowns — all fed to the LLM for narrative generation.
 func (s *Service) computeLLMDaySummaryInput(date time.Time) (LLMDaySummaryInput, error) {
+
+	// Get usages and sort them by started at
 	usages, err := s.GetUsageList(GetUsageListOptions{Date: &date})
 	if err != nil {
 		return LLMDaySummaryInput{}, fmt.Errorf("failed to get usage list: %w", err)
 	}
-
-	// GetUsageList returns DESC order, we need ASC for chronological walking
-	sort.Slice(usages, func(i, j int) bool {
-		return usages[i].StartedAt < usages[j].StartedAt
-	})
-
-	input := LLMDaySummaryInput{
-		Date: date.Format("2006-01-02"),
-	}
+	sort.Slice(usages, func(i, j int) bool { return usages[i].StartedAt < usages[j].StartedAt })
 
 	var (
 		productiveSecs  int
 		distractiveSecs int
-		contextSwitches int
+		contextSwitches int            // productive↔distracting transitions
 		prevClass       Classification
 
-		// deep work tracking
-		currentDeepStart int64
-		currentDeepSecs  int
-		currentDeepApp   string
-		deepSessions     []LLMDeepWorkSession
-
-		// longest focus stretch
-		currentFocusSecs int
-		longestFocusSecs int
-
-		// distraction cascade tracking
-		cascadeStart   int64
-		cascadeApps    []string
-		cascadeSecs    int
-		cascadeTrigger string
-		cascades       []LLMDistractionCascade
-
-		// per-app aggregation
 		appProductiveSecs  = make(map[string]int)
 		appProductiveVisit = make(map[string]int)
 		appDistractSecs    = make(map[string]int)
 		appDistractVisit   = make(map[string]int)
-
-		// per-hour aggregation
 		hourProductiveSecs = make(map[int]int)
 		hourDistractSecs   = make(map[int]int)
+
+		deep    deepWorkTracker      // emits sessions ≥ 25 min
+		focus   focusStretchTracker
+		cascade cascadeTracker
 	)
 
 	for i, u := range usages {
@@ -165,7 +167,6 @@ func (s *Service) computeLLMDaySummaryInput(date time.Time) (LLMDaySummaryInput,
 		}
 		dur := int(end - u.StartedAt)
 		appName := u.Application.Name
-
 		startHour := time.Unix(u.StartedAt, 0).Hour()
 
 		switch u.Classification {
@@ -174,149 +175,107 @@ func (s *Service) computeLLMDaySummaryInput(date time.Time) (LLMDaySummaryInput,
 			appProductiveSecs[appName] += dur
 			appProductiveVisit[appName]++
 			hourProductiveSecs[startHour] += dur
-
-			// deep work tracking: extend or start
-			if currentDeepStart == 0 {
-				currentDeepStart = u.StartedAt
-				currentDeepApp = appName
-			}
-			currentDeepSecs += dur
-
-			// focus stretch
-			currentFocusSecs += dur
-			if currentFocusSecs > longestFocusSecs {
-				longestFocusSecs = currentFocusSecs
-			}
-
-			// end any distraction cascade
-			if len(cascadeApps) > 0 {
-				cascades = append(cascades, LLMDistractionCascade{
-					TriggerTime:    time.Unix(cascadeStart, 0).Format("3:04pm"),
-					TriggerApp:     cascadeTrigger,
-					CascadeApps:    uniqueStrings(cascadeApps),
-					TotalMinutes:   cascadeSecs / 60,
-					ReturnedToWork: time.Unix(u.StartedAt, 0).Format("3:04pm"),
-				})
-				cascadeApps = nil
-				cascadeSecs = 0
-			}
+			deep.processProductive(u.StartedAt, dur, appName)
+			focus.addProductive(dur)
+			cascade.endCascade(u.StartedAt)
 
 		case ClassificationDistracting:
 			distractiveSecs += dur
 			appDistractSecs[appName] += dur
 			appDistractVisit[appName]++
 			hourDistractSecs[startHour] += dur
-
-			// flush deep work session if it met the threshold
-			if currentDeepSecs >= deepWorkThresholdSecs {
-				deepSessions = append(deepSessions, LLMDeepWorkSession{
-					Start:   time.Unix(currentDeepStart, 0).Format("3:04pm"),
-					End:     time.Unix(u.StartedAt, 0).Format("3:04pm"),
-					App:     currentDeepApp,
-					Minutes: currentDeepSecs / 60,
-				})
-			}
-			currentDeepStart = 0
-			currentDeepSecs = 0
-			currentDeepApp = ""
-
-			// reset focus stretch
-			currentFocusSecs = 0
-
-			// distraction cascade tracking
-			if len(cascadeApps) == 0 {
-				cascadeStart = u.StartedAt
-				cascadeTrigger = appName
-			}
-			cascadeApps = append(cascadeApps, appName)
-			cascadeSecs += dur
+			deep.processDistracting(u.StartedAt)
+			focus.reset()
+			cascade.addDistracting(u.StartedAt, dur, appName)
 		}
 
-		// context switches (only between productive <-> distracting)
-		if prevClass != "" && u.Classification != prevClass &&
-			(u.Classification == ClassificationProductive || u.Classification == ClassificationDistracting) &&
-			(prevClass == ClassificationProductive || prevClass == ClassificationDistracting) {
-			contextSwitches++
-		}
-		if u.Classification == ClassificationProductive || u.Classification == ClassificationDistracting {
+		if u.Classification.IsProductiveOrDistracting() {
+			if prevClass != "" && u.Classification != prevClass {
+				contextSwitches++
+			}
 			prevClass = u.Classification
 		}
 	}
 
-	// flush final deep work session
-	if currentDeepSecs >= deepWorkThresholdSecs {
-		lastEnd := time.Now()
-		if len(usages) > 0 {
-			last := usages[len(usages)-1]
-			e := resolveEndTime(last, usages, len(usages)-1)
-			if e > 0 {
-				lastEnd = time.Unix(e, 0)
-			}
+	// Flush trackers for any in-progress sessions at end of day
+	lastEnd := time.Now()
+	if len(usages) > 0 {
+		last := usages[len(usages)-1]
+		if e := resolveEndTime(last, usages, len(usages)-1); e > 0 {
+			lastEnd = time.Unix(e, 0)
 		}
-		deepSessions = append(deepSessions, LLMDeepWorkSession{
-			Start:   time.Unix(currentDeepStart, 0).Format("3:04pm"),
-			End:     lastEnd.Format("3:04pm"),
-			App:     currentDeepApp,
-			Minutes: currentDeepSecs / 60,
-		})
+	}
+	deep.flush(lastEnd)
+	cascade.flush()
+
+	input := LLMDaySummaryInput{
+		Date:                    date.Format("2006-01-02"),
+		TotalProductiveMinutes:  productiveSecs / 60,
+		TotalDistractiveMinutes: distractiveSecs / 60,
+		FocusScore:              calculateProductivityScore(productiveSecs, distractiveSecs),
+		ContextSwitchCount:      contextSwitches,
+		LongestFocusStretchMin:  focus.longestMinutes(),
+		DeepWorkSessions:        deep.sessions,
+		DeepWorkTotalMinutes:    deep.totalMinutes(),
+		DistractionCascades:     cascade.cascades,
+		TopDistractions:         topApps(appDistractSecs, appDistractVisit, 5),
+		TopProductiveApps:       topApps(appProductiveSecs, appProductiveVisit, 5),
+		MostProductiveHours:     peakHour(hourProductiveSecs),
+		MostDistractiveHours:    peakHour(hourDistractSecs),
 	}
 
-	// flush final cascade
-	if len(cascadeApps) > 1 {
-		cascades = append(cascades, LLMDistractionCascade{
-			TriggerTime:  time.Unix(cascadeStart, 0).Format("3:04pm"),
-			TriggerApp:   cascadeTrigger,
-			CascadeApps:  uniqueStrings(cascadeApps),
-			TotalMinutes: cascadeSecs / 60,
-		})
-	}
+	s.enrichWithDBStats(&input, date)
 
-	deepWorkTotal := 0
-	for _, ds := range deepSessions {
-		deepWorkTotal += ds.Minutes
-	}
+	return input, nil
+}
 
-	input.TotalProductiveMinutes = productiveSecs / 60
-	input.TotalDistractiveMinutes = distractiveSecs / 60
-	input.FocusScore = calculateProductivityScore(productiveSecs, distractiveSecs)
-	input.ContextSwitchCount = contextSwitches
-	input.LongestFocusStretchMin = longestFocusSecs / 60
-	input.DeepWorkSessions = deepSessions
-	input.DeepWorkTotalMinutes = deepWorkTotal
-	input.DistractionCascades = cascades
-	input.TopDistractions = topApps(appDistractSecs, appDistractVisit, 5)
-	input.TopProductiveApps = topApps(appProductiveSecs, appProductiveVisit, 5)
-	input.MostProductiveHours = peakHour(hourProductiveSecs)
-	input.MostDistractiveHours = peakHour(hourDistractSecs)
-
-	// blocked attempts
+func (s *Service) enrichWithDBStats(input *LLMDaySummaryInput, date time.Time) {
 	blockMode := TerminationModeBlock
 	blockedUsages, err := s.GetUsageList(GetUsageListOptions{Date: &date, TerminationMode: &blockMode})
 	if err == nil {
 		input.BlockedAttemptCount = len(blockedUsages)
 	}
 
-	// protection pauses
 	dayStart := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.Local).Unix()
 	dayEnd := dayStart + 86400
 	var pauseCount int64
 	s.db.Model(&ProtectionPause{}).Where("created_at >= ? AND created_at < ?", dayStart, dayEnd).Count(&pauseCount)
 	input.ProtectionPauseCount = int(pauseCount)
 
-	// 7-day trend
 	input.AvgFocusScoreLast7Days, input.FocusScoreTrend = s.computeFocusTrend(date)
-
-	return input, nil
 }
 
 func (s *Service) generateLLMDailySummary(ctx context.Context, input LLMDaySummaryInput) (LLMDailySummary, error) {
-	if s.genaiClient == nil {
-		return LLMDailySummary{}, errors.New("genai client not configured")
-	}
-
 	inputJSON, err := json.Marshal(input)
 	if err != nil {
 		return LLMDailySummary{}, fmt.Errorf("failed to marshal input: %w", err)
+	}
+
+	text, err := s.generateDailySummaryWithGemini(ctx, llmDailySummaryPrompt, string(inputJSON))
+	if err != nil {
+		return LLMDailySummary{}, err
+	}
+
+	var parsed llmDailySummaryResponse
+	if err := json.Unmarshal([]byte(text), &parsed); err != nil {
+		return LLMDailySummary{}, fmt.Errorf("failed to parse LLM response: %w", err)
+	}
+
+	winsJSON, _ := json.Marshal(parsed.Wins)
+
+	return LLMDailySummary{
+		Headline:   parsed.Headline,
+		Narrative:  parsed.Narrative,
+		KeyPattern: parsed.KeyPattern,
+		Wins:       string(winsJSON),
+		Suggestion: parsed.Suggestion,
+		DayVibe:    parsed.DayVibe,
+	}, nil
+}
+
+func (s *Service) generateDailySummaryWithGemini(ctx context.Context, systemPrompt, input string) (string, error) {
+	if s.genaiClient == nil {
+		return "", errors.New("genai client not configured")
 	}
 
 	// Use a more capable model for summaries since this runs once per day
@@ -338,42 +297,28 @@ func (s *Service) generateLLMDailySummary(ctx context.Context, input LLMDaySumma
 		{
 			Role: "user",
 			Parts: []*genai.Part{
-				genai.NewPartFromText(string(inputJSON)),
+				genai.NewPartFromText(input),
 			},
 		},
 	}, &genai.GenerateContentConfig{
 		SystemInstruction: &genai.Content{
 			Parts: []*genai.Part{
-				genai.NewPartFromText(llmDailySummaryPrompt),
+				genai.NewPartFromText(systemPrompt),
 			},
 		},
 	})
 	if err != nil {
-		return LLMDailySummary{}, fmt.Errorf("gemini call failed: %w", err)
+		return "", fmt.Errorf("gemini call failed: %w", err)
 	}
 
 	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
-		return LLMDailySummary{}, errors.New("empty response from Gemini")
+		return "", errors.New("empty response from Gemini")
 	}
 
 	text := resp.Candidates[0].Content.Parts[0].Text
 	text = strings.NewReplacer("```json", "", "`", "").Replace(text)
 
-	var parsed llmDailySummaryResponse
-	if err := json.Unmarshal([]byte(text), &parsed); err != nil {
-		return LLMDailySummary{}, fmt.Errorf("failed to parse LLM response: %w", err)
-	}
-
-	winsJSON, _ := json.Marshal(parsed.Wins)
-
-	return LLMDailySummary{
-		Headline:   parsed.Headline,
-		Narrative:  parsed.Narrative,
-		KeyPattern: parsed.KeyPattern,
-		Wins:       string(winsJSON),
-		Suggestion: parsed.Suggestion,
-		DayVibe:    parsed.DayVibe,
-	}, nil
+	return text, nil
 }
 
 // computeFocusTrend looks at the last 7 days and returns the average score + trend direction.
