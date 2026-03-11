@@ -73,7 +73,7 @@ const buildSortedChannels = (
 ): CommunicationBreakdown[] => {
   return Object.values(breakdown ?? {})
     .filter((c): c is CommunicationBreakdown => c != null)
-    .sort((a, b) => a.channel.localeCompare(b.channel) || b.duration_seconds - a.duration_seconds);
+    .sort((a, b) => b.duration_seconds - a.duration_seconds);
 };
 
 const buildSortedDistractions = (

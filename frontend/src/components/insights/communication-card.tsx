@@ -1,6 +1,7 @@
-import { IconMessages, IconArrowRight } from "@tabler/icons-react";
+import { IconMessages, IconArrowRight, IconInfoCircle } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDuration } from "@/lib/mock-data";
 import type { CommunicationBreakdown } from "@/../bindings/github.com/focusd-so/focusd/internal/usage/models";
 
@@ -32,6 +33,16 @@ export function CommunicationCard({ channels }: { channels: CommunicationBreakdo
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <IconMessages className="w-4 h-4 text-muted-foreground" />
             Communication
+            <TooltipProvider>
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <IconInfoCircle className="w-3.5 h-3.5 text-muted-foreground/50 hover:text-muted-foreground cursor-help transition-colors" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-[250px] text-xs text-muted-foreground bg-popover/90 backdrop-blur-md px-3 py-2 border-muted/20 shadow-xl">
+                  Channels and conversation names are automatically inferred by AI from your messaging apps (e.g., Slack).
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </CardTitle>
           <Link
             to="/screen-time/screentime"
@@ -55,7 +66,12 @@ export function CommunicationCard({ channels }: { channels: CommunicationBreakdo
             return (
               <div key={index} className="space-y-1">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="truncate max-w-[140px]">{channel.name}</span>
+                  <span
+                    className="truncate max-w-[300px]"
+                    title={`${channel.name} | ${channel.channel}`}
+                  >
+                    {channel.name} | {channel.channel}
+                  </span>
                   <span className={`font-mono ${textColor}`}>
                     {formatDuration(channel.duration_seconds)}
                   </span>

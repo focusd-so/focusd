@@ -1,6 +1,7 @@
-import { IconFolder, IconArrowRight } from "@tabler/icons-react";
+import { IconFolder, IconArrowRight, IconInfoCircle } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDuration } from "@/lib/mock-data";
 
 interface CategoriesCardProps {
@@ -29,6 +30,16 @@ export function CategoriesCard({ projects }: CategoriesCardProps) {
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <IconFolder className="w-4 h-4 text-muted-foreground" />
             Projects
+            <TooltipProvider>
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <IconInfoCircle className="w-3.5 h-3.5 text-muted-foreground/50 hover:text-muted-foreground cursor-help transition-colors" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-[250px] text-xs text-muted-foreground bg-popover/90 backdrop-blur-md px-3 py-2 border-muted/20 shadow-xl">
+                  Project names are automatically inferred by AI from your application window titles (e.g., from your code editor or terminal).
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </CardTitle>
           <Link
             to="/screen-time/screentime"

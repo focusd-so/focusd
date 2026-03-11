@@ -93,7 +93,7 @@ func (s *Service) IdleChanged(ctx context.Context, isIdle bool) error {
 
 // TitleChanged is called when the title of the current application changes,
 // whether it's a new application or the same application title has changed
-func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle, appName, icon string, bundleID, url *string) error {
+func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle, appName, icon string, bundleID, url, appCategory *string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -113,7 +113,7 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 		return fmt.Errorf("failed to close current application usage: %w", err)
 	}
 
-	application, err := s.getOrCreateApplication(ctx, appName, icon, bundleID, url)
+	application, err := s.getOrCreateApplication(ctx, appName, icon, bundleID, url, appCategory)
 	if err != nil {
 		return fmt.Errorf("failed to get or create application: %w", err)
 	}
@@ -240,7 +240,7 @@ func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage
 	}
 
 	slog.Info("classifying application usage with LLM")
-	resp, err := s.ClassifyWithLLM(ctx, applicationUsage.Application.Name, applicationUsage.WindowTitle, applicationUsage.BrowserURL)
+	resp, err := s.ClassifyWithLLM(ctx, applicationUsage.Application.Name, applicationUsage.WindowTitle, applicationUsage.BrowserURL, applicationUsage.Application.BundleID, applicationUsage.Application.AppCategory)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify application usage with LLM: %w", err)
 	}
@@ -285,7 +285,7 @@ func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage
 // Returns:
 //   - Application: The found or newly created application record
 //   - error: Any error encountered during database operations or favicon fetching
-func (s *Service) getOrCreateApplication(ctx context.Context, name, icon string, bundleID, rawURL *string) (Application, error) {
+func (s *Service) getOrCreateApplication(ctx context.Context, name, icon string, bundleID, rawURL, appCategory *string) (Application, error) {
 	// Handle web applications (browser tabs with URLs)
 
 	rawURLValue := fromPtr(rawURL)
@@ -340,6 +340,8 @@ func (s *Service) getOrCreateApplication(ctx context.Context, name, icon string,
 			}
 		}
 
+		application.AppCategory = appCategory
+
 		if err := s.db.Save(&application).Error; err != nil {
 			return Application{}, fmt.Errorf("failed to create application: %w", err)
 		}
@@ -369,6 +371,8 @@ func (s *Service) getOrCreateApplication(ctx context.Context, name, icon string,
 		// Update the icon for existing apps that don't have one yet
 		application.Icon = &icon
 	}
+
+	application.AppCategory = appCategory
 
 	// Persist the application (creates new or updates existing)
 	if err := s.db.Save(&application).Error; err != nil {

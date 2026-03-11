@@ -32,7 +32,8 @@ type Application struct {
 	Domain   *string `json:"domain"`
 
 	// darwin only
-	BundleID *string `json:"bundle_id"`
+	BundleID    *string `json:"bundle_id"`
+	AppCategory *string `json:"app_category"` // LSApplicationCategoryType, e.g. "public.app-category.developer-tools"
 }
 
 func (a Application) TableName() string {

@@ -6,11 +6,14 @@ import (
 	"strings"
 )
 
-func (s *Service) classifyApplication(ctx context.Context, appName, title string, url *string) (*ClassificationResponse, error) {
+func (s *Service) classifyApplication(ctx context.Context, appName, title string, bundleID, appCategory *string) (*ClassificationResponse, error) {
 	switch strings.ToLower(appName) {
 	case "slack":
 		return s.classifySlackApp(ctx, appName, title)
 	}
+
+	bundleIDValue := fromPtr(bundleID)
+	appCategoryValue := fromPtr(appCategory)
 
 	var (
 		instructions = `
@@ -40,7 +43,20 @@ You are a Software Engineering Application Intent Classifier. Your job is to det
 **Includes:**
 - Email, Calendar, Notes, general file managers.
 - General communication apps without context (Slack, Teams).
-- System settings or OS utilities.
+- System settings or OS utilities.	
+
+# Metadata Signals
+
+**Bundle ID** (when provided) is a precise, machine-readable identifier for the app (e.g. "com.apple.dt.Xcode", "com.spotify.client"). Use it as a strong classification signal.
+
+**App Store Category** (when provided) is Apple's own pre-assigned category for the app. Treat it as the strongest available signal:
+- "public.app-category.developer-tools" -> productive
+- "public.app-category.games" -> distracting
+- "public.app-category.entertainment" -> distracting
+- "public.app-category.social-networking" -> distracting
+- "public.app-category.music" -> distracting (unless context suggests otherwise)
+- "public.app-category.productivity" / "public.app-category.business" -> likely productive or neutral
+- "public.app-category.utilities" -> neutral
 
 Return a JSON object with the following keys:
 1. "classification": "productive", "neutral", or "distracting".
@@ -48,22 +64,20 @@ Return a JSON object with the following keys:
 3. "tags": Array of strings from ONLY these options: ["coding", "docs", "debug", "communication", "terminal", "planning", "learning", "entertainment", "news", "social", "shopping", "terminal", "other"].
    - IMPORTANT: Be extremely conservative with the "communication" tag. Only use it when there is actual messaging, emailing, or chatting happening. Do NOT use it for reading code reviews, terminal multiplexers, or project management.
 4. "confidence_score": Float (0.0 - 1.0)
+5. "detected_project": If the window title clearly implies a project name. Return null if no project can be reliably inferred.
+6. "detected_communication_channel": If the window title clearly implies a communication channel and the app has communication tag in the tags array, extract just the channel name (e.g. "engineering", "random"). Return null if no channel can be reliably inferred.
 `
 		inputTmpl = `
 The user is currently using an application. Classify the activity based on the following information:
 
 Application Name: %s
 Window Title: %s
-Executable Path: %s
+Bundle ID: %s
+App Store Category: %s
 `
 	)
 
-	urlValue := ""
-	if url != nil {
-		urlValue = *url
-	}
-
-	input := fmt.Sprintf(inputTmpl, appName, title, urlValue)
+	input := fmt.Sprintf(inputTmpl, appName, title, bundleIDValue, appCategoryValue)
 
 	response, err := s.classifyWithGemini(ctx, instructions, input)
 	if err != nil {
