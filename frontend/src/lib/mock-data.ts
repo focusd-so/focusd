@@ -462,9 +462,21 @@ export const mockAppUsage: AppUsageStats[] = [
 
 // Helper to format minutes as "Xh Ym"
 export function formatMinutes(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = Math.round(minutes % 60);
-  if (h > 0) return `${h}h ${m}m`;
+  return formatDuration(minutes * 60);
+}
+
+// Helper to format duration in a human readable way
+export function formatDuration(seconds: number): string {
+  if (seconds < 60) {
+    return `${Math.round(seconds)}s`;
+  }
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+
+  if (h > 0) {
+    if (m > 0) return `${h}h ${m}m`;
+    return `${h}h`;
+  }
   return `${m}m`;
 }
 

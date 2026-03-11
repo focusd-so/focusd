@@ -18,10 +18,10 @@ const (
 	TerminationModeSourceWhitelist   TerminationModeSource = "whitelist"
 	TerminationModeSourcePaused      TerminationModeSource = "paused"
 
-	ClassificationSourceUserSet     ClassificationSource = "user_set"
-	ClassificationSourceObviously   ClassificationSource = "obviously"
-	ClassificationSourceCloudLLM    ClassificationSource = "llm"
-	ClassificationSourceCustomRules ClassificationSource = "custom_rules"
+	ClassificationSourceUserSet        ClassificationSource = "user_set"
+	ClassificationSourceObviously      ClassificationSource = "obviously"
+	ClassificationSourceCustomRules    ClassificationSource = "custom_rules"
+	ClassificationSourceCloudLLMGemini ClassificationSource = "llm_gemini"
 
 	IdleApplicationName = "Idle"
 

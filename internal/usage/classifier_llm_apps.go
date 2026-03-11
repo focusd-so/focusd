@@ -45,7 +45,8 @@ You are a Software Engineering Application Intent Classifier. Your job is to det
 Return a JSON object with the following keys:
 1. "classification": "productive", "neutral", or "distracting".
 2. "reasoning": Brief explanation.
-3. "tags": Array of strings from ONLY these options: ["coding", "docs", "debug", "communication", "planning", "learning", "entertainment", "news", "social", "shopping", "other"].
+3. "tags": Array of strings from ONLY these options: ["coding", "docs", "debug", "communication", "terminal", "planning", "learning", "entertainment", "news", "social", "shopping", "terminal", "other"].
+   - IMPORTANT: Be extremely conservative with the "communication" tag. Only use it when there is actual messaging, emailing, or chatting happening. Do NOT use it for reading code reviews, terminal multiplexers, or project management.
 4. "confidence_score": Float (0.0 - 1.0)
 `
 		inputTmpl = `
@@ -113,7 +114,7 @@ Return a JSON object with the following keys:
 2. "reasoning": Brief explanation.
 3. "tags": Array of strings from ONLY these options: ["communication", "entertainment", "time-sink", "content-consumption"].
 4. "confidence_score": Float (0.0 - 1.0)
-5. "detected_communication_channel": The channel or DM name extracted from the title (e.g., "#engineering", "#random", "DM with John", "thread in #product"). Return empty string if unable to determine.
+5. "detected_communication_channel": The channel or DM name extracted from the title 
 `
 		inputTmpl = `
 The user is currently using the Slack desktop application. Classify their activity based on the following information:
@@ -132,4 +133,3 @@ Window Title: %s
 
 	return response, nil
 }
-

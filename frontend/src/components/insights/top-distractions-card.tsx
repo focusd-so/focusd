@@ -1,16 +1,15 @@
 import { IconAlertTriangle, IconArrowRight } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatMinutes } from "@/lib/mock-data";
-import type { DistractionBreakdown } from "@/../bindings/github.com/focusd-so/focusd/internal/usage/models";
+import { formatDuration } from "@/lib/mock-data";
 
 interface TopDistractionsCardProps {
-  distractions: DistractionBreakdown[];
+  distractions: { name: string; duration_seconds: number }[];
 }
 
 export function TopDistractionsCard({ distractions }: TopDistractionsCardProps) {
-  const totalMinutes = distractions.reduce((sum, d) => sum + d.minutes, 0);
-  const maxMinutes = Math.max(...distractions.map((d) => d.minutes), 1);
+  const totalSeconds = distractions.reduce((sum, d) => sum + d.duration_seconds, 0);
+  const maxSeconds = Math.max(...distractions.map((d) => d.duration_seconds), 1);
 
   const topDistractions = distractions.slice(0, 5);
 
@@ -26,7 +25,7 @@ export function TopDistractionsCard({ distractions }: TopDistractionsCardProps) 
             to="/screen-time/screentime"
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-rose-400 transition-colors"
           >
-            {formatMinutes(totalMinutes)}
+            {formatDuration(totalSeconds)}
             <IconArrowRight className="w-3 h-3" />
           </Link>
         </div>
@@ -40,13 +39,13 @@ export function TopDistractionsCard({ distractions }: TopDistractionsCardProps) 
           </div>
         ) : (
           topDistractions.map((distraction, index) => {
-            const widthPct = (distraction.minutes / maxMinutes) * 100;
+            const widthPct = (distraction.duration_seconds / maxSeconds) * 100;
             return (
               <div key={index} className="space-y-1">
                 <div className="flex items-center justify-between text-xs">
                   <span className="truncate max-w-[140px]">{distraction.name}</span>
                   <span className="text-muted-foreground font-mono">
-                    {formatMinutes(distraction.minutes)}
+                    {formatDuration(distraction.duration_seconds)}
                   </span>
                 </div>
                 <div className="h-1.5 bg-rose-500/10 rounded-full overflow-hidden">

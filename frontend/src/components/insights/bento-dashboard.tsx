@@ -15,11 +15,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  formatMinutes,
+  formatDuration,
   formatDate,
 } from "@/lib/mock-data";
 import { useUsageStore, isToday } from "@/stores/usage-store";
-import type { ProductivityScore, CommunicationBreakdown } from "@/../bindings/github.com/focusd-so/focusd/internal/usage/models";
+import type {
+  ProductivityScore,
+  CommunicationBreakdown,
+} from "@/../bindings/github.com/focusd-so/focusd/internal/usage/models";
 import { LLMInsightCard } from "./ai-insight-card";
 import { TopBlockedCard } from "./top-blocked-card";
 import { TopDistractionsCard } from "./top-distractions-card";
@@ -70,7 +73,34 @@ const buildSortedChannels = (
 ): CommunicationBreakdown[] => {
   return Object.values(breakdown ?? {})
     .filter((c): c is CommunicationBreakdown => c != null)
-    .sort((a, b) => a.channel.localeCompare(b.channel) || b.minutes - a.minutes);
+    .sort((a, b) => a.channel.localeCompare(b.channel) || b.duration_seconds - a.duration_seconds);
+};
+
+const buildSortedDistractions = (
+  breakdown: Record<string, number | undefined> | null | undefined
+): { name: string; duration_seconds: number }[] => {
+  return Object.entries(breakdown ?? {})
+    .filter((entry): entry is [string, number] => typeof entry[1] === "number")
+    .map(([name, duration_seconds]) => ({ name, duration_seconds }))
+    .sort((a, b) => b.duration_seconds - a.duration_seconds);
+};
+
+const buildSortedBlocked = (
+  breakdown: Record<string, number | undefined> | null | undefined
+): { name: string; count: number }[] => {
+  return Object.entries(breakdown ?? {})
+    .filter((entry): entry is [string, number] => typeof entry[1] === "number")
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+};
+
+const buildSortedProjects = (
+  breakdown: Record<string, number | undefined> | null | undefined
+): { name: string; duration_seconds: number }[] => {
+  return Object.entries(breakdown ?? {})
+    .filter((entry): entry is [string, number] => typeof entry[1] === "number")
+    .map(([name, duration_seconds]) => ({ name, duration_seconds }))
+    .sort((a, b) => b.duration_seconds - a.duration_seconds);
 };
 
 type SeriesKey = (typeof SERIES)[number]["key"];
@@ -184,7 +214,7 @@ function HourlyBreakdownChart({
                               </span>
                             </div>
                             <span className={`text-xs font-mono font-medium ${s.text}`}>
-                              {Math.round(val / 60)}m
+                              {formatDuration(val)}
                             </span>
                           </div>
                         );
@@ -205,7 +235,7 @@ function HourlyBreakdownChart({
                               </span>
                             </div>
                             <span className="text-xs font-mono font-medium text-muted-foreground/80">
-                              {untrackedMinutes}m
+                              {formatDuration(untrackedMinutes * 60)}
                             </span>
                           </div>
                         );
@@ -283,8 +313,6 @@ export function BentoDashboard() {
   const hasEnoughData = totalTrackedSeconds >= MIN_SECONDS_FOR_INSIGHTS;
 
   const focusScore = Math.round(overview?.productivity_score?.productivity_score ?? 0);
-  const productiveMinutes = Math.round(productiveSeconds / 60);
-  const distractiveMinutes = Math.round(distractiveSeconds / 60);
 
   // Build 24-slot hourly breakdown from the backend's per-hour map
   const hourlyBreakdown = useMemo(
@@ -417,7 +445,7 @@ export function BentoDashboard() {
               Productive
             </p>
             <p className="text-3xl font-bold text-emerald-400 mt-1">
-              {formatMinutes(productiveMinutes)}
+              {formatDuration(productiveSeconds)}
             </p>
             <p className="text-xs text-muted-foreground mt-2">
               Deep focus time
@@ -432,7 +460,7 @@ export function BentoDashboard() {
               Distractive
             </p>
             <p className="text-3xl font-bold text-rose-400 mt-1">
-              {formatMinutes(distractiveMinutes)}
+              {formatDuration(distractiveSeconds)}
             </p>
             <p className="text-xs text-muted-foreground mt-2">
               Time lost
@@ -466,13 +494,13 @@ export function BentoDashboard() {
 
       {/* Row 3: Time Lost To + Blocked Today */}
       <div className="grid grid-cols-2 gap-4">
-        <TopDistractionsCard distractions={overview?.top_distractions ?? []} />
-        <TopBlockedCard blockedAttempts={overview?.top_blocked ?? []} />
+        <TopDistractionsCard distractions={buildSortedDistractions(overview?.top_distractions)} />
+        <TopBlockedCard blockedAttempts={buildSortedBlocked(overview?.top_blocked)} />
       </div>
 
       {/* Row 4: Projects + Communication */}
       <div className="grid grid-cols-2 gap-4">
-        <CategoriesCard projects={overview?.project_breakdown ?? []} />
+        <CategoriesCard projects={buildSortedProjects(overview?.project_breakdown)} />
         <CommunicationCard channels={buildSortedChannels(overview?.communication_breakdown)} />
       </div>
     </div>

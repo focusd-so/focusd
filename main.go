@@ -10,9 +10,9 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
-	"os/exec"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/go-chi/chi/v5"
@@ -193,6 +193,11 @@ func main() {
 			return
 		}
 
+		var url *string
+		if event.URL != "" {
+			url = &event.URL
+		}
+
 		err := usageService.TitleChanged(
 			ctx,
 			event.ExecutablePath,
@@ -200,7 +205,7 @@ func main() {
 			event.AppName,
 			event.Icon,
 			&event.BundleID,
-			&event.URL,
+			url,
 		)
 		if err != nil {
 			slog.Error("failed to handle title change", "error", err)

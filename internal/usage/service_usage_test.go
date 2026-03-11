@@ -294,7 +294,7 @@ func TestService_TitleChanged_PropogateClassificationFromLLM(t *testing.T) {
 	require.NoError(t, db.Preload("Tags").Where("ended_at IS NULL").First(&readApplicationUsage).Error)
 
 	require.Equal(t, usage.ClassificationProductive, readApplicationUsage.Classification)
-	require.Equal(t, usage.ClassificationSourceCloudLLM, readApplicationUsage.ClassificationSource)
+	require.Equal(t, usage.ClassificationSourceCloudLLMGemini, readApplicationUsage.ClassificationSource)
 	require.Equal(t, "Productive work communication", readApplicationUsage.ClassificationReasoning)
 	require.Equal(t, float32(0.95), readApplicationUsage.ClassificationConfidence)
 

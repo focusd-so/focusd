@@ -1,7 +1,7 @@
 import { IconMessages, IconArrowRight } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatMinutes } from "@/lib/mock-data";
+import { formatDuration } from "@/lib/mock-data";
 import type { CommunicationBreakdown } from "@/../bindings/github.com/focusd-so/focusd/internal/usage/models";
 
 
@@ -23,7 +23,7 @@ const channelBarColors: Record<string, string> = {
 
 export function CommunicationCard({ channels }: { channels: CommunicationBreakdown[] }) {
   // const totalMinutes = channels.reduce((sum, c) => sum + c.minutes, 0);
-  const maxMinutes = Math.max(...channels.map((c) => c.minutes), 1);
+  const maxSeconds = Math.max(...channels.map((c) => c.duration_seconds), 1);
 
   return (
     <Card className="border-border/50">
@@ -50,14 +50,14 @@ export function CommunicationCard({ channels }: { channels: CommunicationBreakdo
         ) : (
           channels.slice(0, 5).map((channel, index) => {
             const textColor = channelTextColors[channel.channel] || "text-muted-foreground";
-            const widthPct = (channel.minutes / maxMinutes) * 100;
+            const widthPct = (channel.duration_seconds / maxSeconds) * 100;
 
             return (
               <div key={index} className="space-y-1">
                 <div className="flex items-center justify-between text-xs">
                   <span className="truncate max-w-[140px]">{channel.name}</span>
                   <span className={`font-mono ${textColor}`}>
-                    {formatMinutes(channel.minutes)}
+                    {formatDuration(channel.duration_seconds)}
                   </span>
                 </div>
                 <div className="h-1.5 bg-muted/20 rounded-full overflow-hidden">

@@ -79,6 +79,32 @@ func (a *ApplicationUsage) TableName() string {
 	return "application_usage"
 }
 
+func (a *ApplicationUsage) IsCommunicationUsage() bool {
+	if fromPtr(a.DetectedCommunicationChannel) != "" {
+		return true
+	}
+
+	for _, tag := range a.Tags {
+		if tag.Tag == "communication" {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (a *ApplicationUsage) CommunicationChannel() string {
+	return fromPtr(a.DetectedCommunicationChannel)
+}
+
+func (a *ApplicationUsage) HasDetectedProject() bool {
+	return a.GetDetectedProject() != ""
+}
+
+func (a *ApplicationUsage) GetDetectedProject() string {
+	return fromPtr(a.DetectedProject)
+}
+
 // Same returns true if the application usage is the same as the given application usage
 //
 // Application usage is considered the same if:
