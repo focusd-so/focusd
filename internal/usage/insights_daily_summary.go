@@ -123,8 +123,12 @@ func (s *Service) generateDailySummaryForDate(ctx context.Context, date time.Tim
 
 	slog.Info("daily summary generated", "date", dateStr, "headline", summary.Headline)
 
-	if s.onLLMDailySummaryReady != nil && summary.DayVibe != "insufficient-data" {
-		s.onLLMDailySummaryReady(summary)
+	if summary.DayVibe != "insufficient-data" {
+		s.eventsMu.RLock()
+		for _, fn := range s.onLLMDailySummaryReady {
+			fn(summary)
+		}
+		s.eventsMu.RUnlock()
 	}
 
 	return nil
@@ -145,7 +149,7 @@ func (s *Service) computeLLMDaySummaryInput(date time.Time) (LLMDaySummaryInput,
 	var (
 		productiveSecs  int
 		distractiveSecs int
-		contextSwitches int            // productive↔distracting transitions
+		contextSwitches int // productive↔distracting transitions
 		prevClass       Classification
 
 		appProductiveSecs  = make(map[string]int)
@@ -155,7 +159,7 @@ func (s *Service) computeLLMDaySummaryInput(date time.Time) (LLMDaySummaryInput,
 		hourProductiveSecs = make(map[int]int)
 		hourDistractSecs   = make(map[int]int)
 
-		deep    deepWorkTracker      // emits sessions ≥ 25 min
+		deep    deepWorkTracker // emits sessions ≥ 25 min
 		focus   focusStretchTracker
 		cascade cascadeTracker
 	)
@@ -227,6 +231,13 @@ func (s *Service) computeLLMDaySummaryInput(date time.Time) (LLMDaySummaryInput,
 	s.enrichWithDBStats(&input, date)
 
 	return input, nil
+}
+
+// OnLLMDailySummaryReady subscribes a callback to the daily summary ready event.
+func (s *Service) OnLLMDailySummaryReady(fn func(summary LLMDailySummary)) {
+	s.eventsMu.Lock()
+	defer s.eventsMu.Unlock()
+	s.onLLMDailySummaryReady = append(s.onLLMDailySummaryReady, fn)
 }
 
 func (s *Service) enrichWithDBStats(input *LLMDaySummaryInput, date time.Time) {

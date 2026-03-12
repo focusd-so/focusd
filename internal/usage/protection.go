@@ -55,9 +55,11 @@ func (s *Service) PauseProtection(durationSeconds int, reason string) (Protectio
 		return ProtectionPause{}, err
 	}
 
-	if s.onProtectionPaused != nil {
-		s.onProtectionPaused(protectionPause)
+	s.eventsMu.RLock()
+	for _, fn := range s.onProtectionPaused {
+		fn(protectionPause)
 	}
+	s.eventsMu.RUnlock()
 
 	return protectionPause, nil
 }
@@ -99,11 +101,27 @@ func (s *Service) ResumeProtection(reason string) (ProtectionPause, error) {
 		return ProtectionPause{}, err
 	}
 
-	if s.onProtectionResumed != nil {
-		s.onProtectionResumed(protectionPause)
+	s.eventsMu.RLock()
+	for _, fn := range s.onProtectionResumed {
+		fn(protectionPause)
 	}
+	s.eventsMu.RUnlock()
 
 	return protectionPause, nil
+}
+
+// OnProtectionPause subscribes a callback to the protection paused event.
+func (s *Service) OnProtectionPause(fn func(pause ProtectionPause)) {
+	s.eventsMu.Lock()
+	defer s.eventsMu.Unlock()
+	s.onProtectionPaused = append(s.onProtectionPaused, fn)
+}
+
+// OnProtectionResumed subscribes a callback to the protection resumed event.
+func (s *Service) OnProtectionResumed(fn func(pause ProtectionPause)) {
+	s.eventsMu.Lock()
+	defer s.eventsMu.Unlock()
+	s.onProtectionResumed = append(s.onProtectionResumed, fn)
 }
 
 // GetProtectionStatus retrieves the current protection pause status.

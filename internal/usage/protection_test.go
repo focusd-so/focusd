@@ -79,23 +79,23 @@ func TestProtection_PauseProtectionEventsFired(t *testing.T) {
 		onProtectionResumedCalled = false
 	)
 
-	service, _ := setUpService(
-		t,
-		usage.WithProtectionPaused(func(pause usage.ProtectionPause) {
-			onProtectionPausedCalled = true
-			require.NotEqual(t, int64(0), pause.ResumedAt)
-			// this will still be initial requested duration
-			require.Equal(t, 10, pause.ActualDurationSeconds)
-			require.Equal(t, "protection paused for 10s expired", pause.ResumedReason)
-		}),
-		usage.WithProtectionResumed(func(pause usage.ProtectionPause) {
-			onProtectionResumedCalled = true
-			require.NotEqual(t, int64(0), pause.ResumedAt)
-			// this is the actual duration calculated after the resume
-			require.Equal(t, 3, pause.ActualDurationSeconds)
-			require.Equal(t, "just because", pause.ResumedReason)
-		}),
-	)
+	service, _ := setUpService(t)
+
+	service.OnProtectionPause(func(pause usage.ProtectionPause) {
+		onProtectionPausedCalled = true
+		require.NotEqual(t, int64(0), pause.ResumedAt)
+		// this will still be initial requested duration
+		require.Equal(t, 10, pause.ActualDurationSeconds)
+		require.Equal(t, "protection paused for 10s expired", pause.ResumedReason)
+	})
+
+	service.OnProtectionResumed(func(pause usage.ProtectionPause) {
+		onProtectionResumedCalled = true
+		require.NotEqual(t, int64(0), pause.ResumedAt)
+		// this is the actual duration calculated after the resume
+		require.Equal(t, 3, pause.ActualDurationSeconds)
+		require.Equal(t, "just because", pause.ResumedReason)
+	})
 
 	_, err := service.PauseProtection(10, "test")
 

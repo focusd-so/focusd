@@ -31,24 +31,3 @@ func WithGenaiClient(genaiClient *genai.Client) Option {
 		s.genaiClient = genaiClient
 	}
 }
-
-// WithProtectionPaused configures the Service with a function to call when protection is paused.
-func WithProtectionPaused(onProtectionPaused func(pause ProtectionPause)) Option {
-	return func(s *Service) {
-		s.onProtectionPaused = onProtectionPaused
-	}
-}
-
-// WithProtectionResumed configures the Service with a function to call when protection is resumed.
-func WithProtectionResumed(onProtectionResumed func(pause ProtectionPause)) Option {
-	return func(s *Service) {
-		s.onProtectionResumed = onProtectionResumed
-	}
-}
-
-// WithLLMDailySummaryReady configures the Service with a function to call when a daily LLM summary is generated.
-func WithLLMDailySummaryReady(fn func(summary LLMDailySummary)) Option {
-	return func(s *Service) {
-		s.onLLMDailySummaryReady = fn
-	}
-}

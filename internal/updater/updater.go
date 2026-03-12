@@ -27,8 +27,8 @@ const (
 )
 
 var allowedDownloadHosts = map[string]bool{
-	"github.com":                       true,
-	"objects.githubusercontent.com":    true,
+	"github.com":                            true,
+	"objects.githubusercontent.com":         true,
 	"github-releases.githubusercontent.com": true,
 }
 

@@ -24,16 +24,15 @@ type Service struct {
 	appBlocker func(appName, title, reason string, tags []string, browserURL *string)
 
 	// events
-	onProtectionPaused     func(pause ProtectionPause)
-	onProtectionResumed    func(pause ProtectionPause)
-	onLLMDailySummaryReady func(summary LLMDailySummary)
+	eventsMu               sync.RWMutex
+	onProtectionPaused     []func(pause ProtectionPause)
+	onProtectionResumed    []func(pause ProtectionPause)
+	onLLMDailySummaryReady []func(summary LLMDailySummary)
+	onUsageUpdated         []func(usage *ApplicationUsage)
 
 	// mu serializes title change processing to prevent race conditions
 	// when multiple events fire concurrently
 	mu sync.Mutex
-
-	// channel to receive usage updates
-	UsageUpdates chan *ApplicationUsage
 }
 
 func NewService(ctx context.Context, db *gorm.DB, options ...Option) (*Service, error) {
@@ -50,8 +49,7 @@ func NewService(ctx context.Context, db *gorm.DB, options ...Option) (*Service, 
 	}
 
 	service := &Service{
-		db:           db,
-		UsageUpdates: make(chan *ApplicationUsage, 10), // buffer of 10 to prevent blocking
+		db: db,
 	}
 
 	for _, option := range options {
@@ -94,4 +92,11 @@ func (s *Service) removeOldSandboxExecutionLogs(ctx context.Context) error {
 	sevenDaysAgo := time.Now().Add(-7 * 24 * time.Hour)
 
 	return s.db.Where("created_at < ?", sevenDaysAgo).Delete(&SandboxExecutionLog{}).Error
+}
+
+// OnUsageUpdated subscribes a callback to the usage updated event.
+func (s *Service) OnUsageUpdated(fn func(usage *ApplicationUsage)) {
+	s.eventsMu.Lock()
+	defer s.eventsMu.Unlock()
+	s.onUsageUpdated = append(s.onUsageUpdated, fn)
 }

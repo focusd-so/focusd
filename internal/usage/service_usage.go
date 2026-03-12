@@ -127,9 +127,11 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 		Application: application,
 	}
 
-	if s.UsageUpdates != nil {
-		s.UsageUpdates <- &applicationUsage
+	s.eventsMu.RLock()
+	for _, fn := range s.onUsageUpdated {
+		fn(&applicationUsage)
 	}
+	s.eventsMu.RUnlock()
 
 	// save the application usage
 	if err := s.db.Save(&applicationUsage).Error; err != nil {
@@ -203,9 +205,11 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 		s.appBlocker(applicationUsage.Application.Name, applicationUsage.WindowTitle, termReason, tags, applicationUsage.BrowserURL)
 	}
 
-	if s.UsageUpdates != nil {
-		s.UsageUpdates <- &applicationUsage
+	s.eventsMu.RLock()
+	for _, fn := range s.onUsageUpdated {
+		fn(&applicationUsage)
 	}
+	s.eventsMu.RUnlock()
 
 	return nil
 }
@@ -414,9 +418,11 @@ func (s *Service) closeApplicationUsage(app *ApplicationUsage) error {
 		return fmt.Errorf("failed to update application usage: %w", err)
 	}
 
-	if s.UsageUpdates != nil {
-		s.UsageUpdates <- app
+	s.eventsMu.RLock()
+	for _, fn := range s.onUsageUpdated {
+		fn(app)
 	}
+	s.eventsMu.RUnlock()
 
 	return nil
 }

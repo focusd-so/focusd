@@ -127,22 +127,8 @@ func main() {
 		slog.Error("failed to create genai client", "error", err)
 	}
 
-	var wailsAppPtr *application.App
-
 	usageService, err := usage.NewService(
 		ctx, db,
-		usage.WithProtectionPaused(func(pause usage.ProtectionPause) {
-			slog.Info("protection has been paused", "reason", pause.Reason)
-			if wailsAppPtr != nil {
-				wailsAppPtr.Event.Emit("protection:status", pause)
-			}
-		}),
-		usage.WithProtectionResumed(func(pause usage.ProtectionPause) {
-			slog.Info("protection has been resumed", "reason", pause.Reason)
-			if wailsAppPtr != nil {
-				wailsAppPtr.Event.Emit("protection:status", pause)
-			}
-		}),
 		usage.WithAppBlocker(func(appName, title, reason string, tags []string, browserURL *string) {
 			client := extension.HasClient(appName)
 
@@ -169,15 +155,6 @@ func main() {
 		}),
 		usage.WithGenaiClient(genaiClient),
 		usage.WithSettingsService(settingsService),
-		usage.WithLLMDailySummaryReady(func(summary usage.LLMDailySummary) {
-			slog.Info("daily LLM summary ready", "date", summary.Date, "headline", summary.Headline)
-			if wailsAppPtr != nil {
-				wailsAppPtr.Event.Emit("daily-summary:ready", summary)
-			}
-			exec.Command("osascript", "-e",
-				fmt.Sprintf(`display notification "%s" with title "Focusd" subtitle "Daily Summary"`,
-					summary.Headline)).Run()
-		}),
 	)
 	if err != nil {
 		log.Fatal("failed to create usage service: %w", err)
@@ -254,22 +231,28 @@ func main() {
 		},
 	})
 
+	usageService.OnProtectionPause(func(pause usage.ProtectionPause) {
+		wailsApp.Event.Emit("protection:status", pause)
+	})
+
+	usageService.OnProtectionResumed(func(pause usage.ProtectionPause) {
+		wailsApp.Event.Emit("protection:status", pause)
+	})
+
+	usageService.OnLLMDailySummaryReady(func(summary usage.LLMDailySummary) {
+		wailsApp.Event.Emit("daily-summary:ready", summary)
+
+		// TODO: use proper system api to send a notification
+		exec.Command("osascript", "-e",
+			fmt.Sprintf(`display notification "%s" with title "Focusd" subtitle "Daily Summary"`,
+				summary.Headline)).Run()
+	})
+
 	wailsApp.OnShutdown(cancel)
 
-	wailsAppPtr = wailsApp
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case usage := <-usageService.UsageUpdates:
-				if wailsAppPtr != nil {
-					wailsAppPtr.Event.Emit("usage:update", *usage)
-				}
-			}
-		}
-	}()
+	usageService.OnUsageUpdated(func(appUsage *usage.ApplicationUsage) {
+		wailsApp.Event.Emit("usage:update", *appUsage)
+	})
 
 	native.OnIdleChange(func(idleSeconds float64) {
 		usageService.IdleChanged(ctx, idleSeconds > 120)
@@ -391,11 +374,11 @@ func setupLogging() (io.Closer, error) {
 	if _, err := os.Stat("go.mod"); err == nil {
 		logPath = logName
 	} else {
-		configDir, err := os.UserConfigDir()
+		configDir, err := os.UserHomeDir()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get user config dir: %w", err)
 		}
-		appDir := filepath.Join(configDir, "focusd")
+		appDir := filepath.Join(configDir, ".focusd")
 		if err := os.MkdirAll(appDir, 0755); err != nil {
 			return nil, fmt.Errorf("failed to create app config dir: %w", err)
 		}
