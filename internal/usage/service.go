@@ -7,19 +7,12 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/genai"
 	"gorm.io/gorm"
-
-	"github.com/focusd-so/focusd/internal/settings"
 )
 
 type Service struct {
 	// external services and dependencies
-	db          *gorm.DB
-	genaiClient *genai.Client
-
-	// internal services and dependencies
-	settingsService *settings.Service
+	db *gorm.DB
 
 	appBlocker func(appName, title, reason string, tags []string, browserURL *string)
 
@@ -92,11 +85,4 @@ func (s *Service) removeOldSandboxExecutionLogs(ctx context.Context) error {
 	sevenDaysAgo := time.Now().Add(-7 * 24 * time.Hour)
 
 	return s.db.Where("created_at < ?", sevenDaysAgo).Delete(&SandboxExecutionLog{}).Error
-}
-
-// OnUsageUpdated subscribes a callback to the usage updated event.
-func (s *Service) OnUsageUpdated(fn func(usage *ApplicationUsage)) {
-	s.eventsMu.Lock()
-	defer s.eventsMu.Unlock()
-	s.onUsageUpdated = append(s.onUsageUpdated, fn)
 }

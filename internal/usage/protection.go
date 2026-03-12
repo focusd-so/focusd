@@ -3,7 +3,6 @@ package usage
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"gorm.io/gorm"
@@ -108,20 +107,6 @@ func (s *Service) ResumeProtection(reason string) (ProtectionPause, error) {
 	s.eventsMu.RUnlock()
 
 	return protectionPause, nil
-}
-
-// OnProtectionPause subscribes a callback to the protection paused event.
-func (s *Service) OnProtectionPause(fn func(pause ProtectionPause)) {
-	s.eventsMu.Lock()
-	defer s.eventsMu.Unlock()
-	s.onProtectionPaused = append(s.onProtectionPaused, fn)
-}
-
-// OnProtectionResumed subscribes a callback to the protection resumed event.
-func (s *Service) OnProtectionResumed(fn func(pause ProtectionPause)) {
-	s.eventsMu.Lock()
-	defer s.eventsMu.Unlock()
-	s.onProtectionResumed = append(s.onProtectionResumed, fn)
 }
 
 // GetProtectionStatus retrieves the current protection pause status.
@@ -319,27 +304,16 @@ func (s *Service) CalculateTerminationMode(ctx context.Context, appUsage *Applic
 }
 
 func (s *Service) calculateTerminationModeWithCustomRules(_ context.Context, appUsage *ApplicationUsage) (TerminationDecision, error) {
-	if s.settingsService == nil {
-		slog.Warn("settings service is nil, skipping custom rules termination mode calculation")
-
-		return TerminationDecision{}, nil
-	}
-
 	sandboxCtx := createSandboxContext(appUsage.Application.Name, appUsage.BrowserURL)
 	sandboxCtx.Classification = string(appUsage.Classification)
 
-	// Get the latest custom rules code
-	customRules, err := s.settingsService.GetLatest(settings.SettingsKeyCustomRules)
-	if err != nil {
-		return TerminationDecision{}, err
-	}
-
-	if customRules == nil || customRules.Value == "" {
+	customRules := settings.GetCustomRulesJS()
+	if customRules == "" {
 		return TerminationDecision{Mode: TerminationModeNone}, nil
 	}
 
 	// Create a new sandbox with the custom rules code
-	sb, err := newSandbox(customRules.Value)
+	sb, err := newSandbox(customRules)
 	if err != nil {
 		return TerminationDecision{}, err
 	}

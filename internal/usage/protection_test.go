@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"github.com/focusd-so/focusd/internal/settings"
 	"github.com/focusd-so/focusd/internal/usage"
 )
 
@@ -271,17 +271,9 @@ func setUpServiceWithSettings(t *testing.T, customRules string) (*usage.Service,
 
 	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 
-	settingsService, err := settings.NewService(db, "test")
-	require.NoError(t, err)
+	viper.SetDefault("custom_rules_js", []string{customRules})
 
-	err = settingsService.Save(settings.SettingsKeyCustomRules, customRules)
-	require.NoError(t, err)
-
-	service, err := usage.NewService(
-		context.Background(),
-		db,
-		usage.WithSettingsService(settingsService),
-	)
+	service, err := usage.NewService(context.Background(), db)
 	require.NoError(t, err)
 
 	return service, db

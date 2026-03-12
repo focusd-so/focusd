@@ -2,15 +2,11 @@ package usage_test
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"google.golang.org/genai"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
@@ -249,61 +245,4 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 	return f(r)
-}
-
-func TestService_TitleChanged_PropogateClassificationFromLLM(t *testing.T) {
-	// Classification response that the mocked LLM returns.
-	// Note: "classification_source" is intentionally omitted here because the real
-	// LLM prompt does not ask for it. The backend (classifyWithGemini) must set it
-	// explicitly to ClassificationSourceCloudLLM after unmarshalling.
-	classificationJSON := `{"classification":"productive","reasoning":"Productive work communication","confidence_score":0.95,"tags":["work","communication"]}`
-
-	// Wrap in a valid Gemini API response envelope (candidates[].content.parts[].text)
-	geminiResponse := fmt.Sprintf(`{"candidates":[{"content":{"parts":[{"text":%q}],"role":"model"}}]}`, classificationJSON)
-
-	genaiClient, err := genai.NewClient(context.Background(), &genai.ClientConfig{
-		APIKey:  "test-key",
-		Backend: genai.BackendGeminiAPI,
-		HTTPClient: &http.Client{
-			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				return &http.Response{
-					StatusCode: 200,
-					Body:       io.NopCloser(strings.NewReader(geminiResponse)),
-					Header:     http.Header{"Content-Type": []string{"application/json"}},
-				}, nil
-			}),
-		},
-	})
-	require.NoError(t, err, "failed to create genai client")
-
-	service, db := setUpService(t, usage.WithGenaiClient(genaiClient))
-
-	url := "https://example.com/docs"
-	err = service.TitleChanged(context.Background(),
-		"/Applications/Safari.app/Contents/MacOS/Safari",
-		"Safari",
-		"Example Docs",
-		"",
-		nil,
-		&url,
-		nil,
-	)
-	require.NoError(t, err, "failed to change title")
-
-	// Read the application usage and verify classification was propagated from LLM
-	var readApplicationUsage usage.ApplicationUsage
-	require.NoError(t, db.Preload("Tags").Where("ended_at IS NULL").First(&readApplicationUsage).Error)
-
-	require.Equal(t, usage.ClassificationProductive, readApplicationUsage.Classification)
-	require.NotNil(t, readApplicationUsage.ClassificationSource)
-	require.Equal(t, usage.ClassificationSourceCloudLLMGemini, *readApplicationUsage.ClassificationSource)
-	require.NotNil(t, readApplicationUsage.ClassificationReasoning)
-	require.Equal(t, "Productive work communication", *readApplicationUsage.ClassificationReasoning)
-	require.NotNil(t, readApplicationUsage.ClassificationConfidence)
-	require.Equal(t, float32(0.95), *readApplicationUsage.ClassificationConfidence)
-
-	// Verify tags were propagated
-	require.Len(t, readApplicationUsage.Tags, 2)
-	require.Equal(t, "work", readApplicationUsage.Tags[0].Tag)
-	require.Equal(t, "communication", readApplicationUsage.Tags[1].Tag)
 }

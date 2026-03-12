@@ -2,21 +2,14 @@ package usage
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strings"
 	"time"
 
-	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
-	"github.com/focusd-so/focusd/internal/identity"
-
 	"golang.org/x/net/publicsuffix"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/genai"
 )
 
 func (s *Service) classifyWebsite(ctx context.Context, url, title string) (*ClassificationResponse, error) {
@@ -25,27 +18,27 @@ func (s *Service) classifyWebsite(ctx context.Context, url, title string) (*Clas
 
 	switch domain {
 	case "youtube.com", "youtu.be", "yt.be":
-		return s.classifyYoutube(ctx, url, title)
+		return classifyYoutube(ctx, url, title)
 	case "reddit.com":
-		return s.classifyReddit(ctx, url, title)
+		return classifyReddit(ctx, url, title)
 	case "linkedin.com":
-		return s.classifyLinkedin(ctx, url, title)
+		return classifyLinkedin(ctx, url, title)
 	case "medium.com":
-		return s.classifyMedium(ctx, url, title)
+		return classifyMedium(ctx, url, title)
 	case "x.com", "twitter.com":
-		return s.classifyTwitter(ctx, url, title)
+		return classifyTwitter(ctx, url, title)
 	case "ycombinator.com":
-		return s.classifyHackerNews(ctx, url, title)
+		return classifyHackerNews(ctx, url, title)
 	case "substack.com":
-		return s.classifySubstack(ctx, url, title)
+		return classifySubstack(ctx, url, title)
 	case "slack.com":
-		return s.classifySlack(ctx, url, title)
+		return classifySlack(ctx, url, title)
 	}
 
-	return s.classifyGeneric(ctx, url, title)
+	return classifyGeneric(ctx, url, title)
 }
 
-func (s *Service) classifyGeneric(ctx context.Context, url, title string) (*ClassificationResponse, error) {
+func classifyGeneric(ctx context.Context, url, title string) (*ClassificationResponse, error) {
 	// Attempt to fetch main content for better context, but proceed even if it fails
 	// or if the site blocks scrapers.
 	var mainContent string
@@ -110,7 +103,7 @@ Main Content (truncated): %s
 
 	input := fmt.Sprintf(inputTmpl, url, title, mainContent)
 
-	response, err := s.classifyWithGemini(ctx, instructions, input)
+	response, err := classify(ctx, instructions, input)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify with Gemini: %w", err)
 	}
@@ -118,7 +111,7 @@ Main Content (truncated): %s
 	return response, nil
 }
 
-func (s *Service) classifyYoutube(ctx context.Context, url, title string) (*ClassificationResponse, error) {
+func classifyYoutube(ctx context.Context, url, title string) (*ClassificationResponse, error) {
 	httpClient := &http.Client{Timeout: 3000 * time.Millisecond}
 
 	metaData, err := extractOpenGraph(httpClient, url)
@@ -244,7 +237,7 @@ Tags: %s
 
 	input := fmt.Sprintf(inputTmpl, url, title, description, strings.Join(tags, ", "))
 
-	response, err := s.classifyWithGemini(ctx, instructions, input)
+	response, err := classify(ctx, instructions, input)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify with Gemini: %w", err)
 	}
@@ -252,7 +245,7 @@ Tags: %s
 	return response, nil
 }
 
-func (s *Service) classifyReddit(ctx context.Context, url, title string) (*ClassificationResponse, error) {
+func classifyReddit(ctx context.Context, url, title string) (*ClassificationResponse, error) {
 	mainContent, err := fetchMainContent(ctx, url)
 	if err != nil {
 		slog.Error("failed to fetch main content", "error", err)
@@ -301,7 +294,7 @@ Main Content (if available): %s
 
 	input := fmt.Sprintf(inputTmpl, url, title, mainContent)
 
-	response, err := s.classifyWithGemini(ctx, instructions, input)
+	response, err := classify(ctx, instructions, input)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify with Gemini: %w", err)
 	}
@@ -309,7 +302,7 @@ Main Content (if available): %s
 	return response, nil
 }
 
-func (s *Service) classifyLinkedin(ctx context.Context, url, title string) (*ClassificationResponse, error) {
+func classifyLinkedin(ctx context.Context, url, title string) (*ClassificationResponse, error) {
 
 	var (
 		ogTitle       = title
@@ -457,7 +450,7 @@ Main Content (if available): %s
 
 	input := fmt.Sprintf(inputTmpl, url, ogTitle, ogDescription, mainContent)
 
-	response, err := s.classifyWithGemini(ctx, instructions, input)
+	response, err := classify(ctx, instructions, input)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify with Gemini: %w", err)
 	}
@@ -468,7 +461,7 @@ Main Content (if available): %s
 // classifyMedium classifies Medium articles using only the URL and browser tab title.
 // Medium is behind Cloudflare managed challenges so server-side content fetching is not possible.
 // The URL slug and title are usually descriptive enough for accurate classification.
-func (s *Service) classifyMedium(ctx context.Context, url, title string) (*ClassificationResponse, error) {
+func classifyMedium(ctx context.Context, url, title string) (*ClassificationResponse, error) {
 	var (
 		instructions = `
 You are a Medium Software Engineer Intent Classifier. Your job is to determine if the user is actively doing work related to their software engineering job or seeking entertainment/distraction. Be RESTRICTIVE: only clearly work-related technical content is productive.
@@ -513,7 +506,7 @@ Title: %s
 
 	input := fmt.Sprintf(inputTmpl, url, title)
 
-	response, err := s.classifyWithGemini(ctx, instructions, input)
+	response, err := classify(ctx, instructions, input)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify with Gemini: %w", err)
 	}
@@ -525,7 +518,7 @@ Title: %s
 // X/Twitter is behind auth walls for server-side fetching, so OpenGraph and content extraction
 // are not reliable. The browser tab title contains the tweet text for status pages, which is
 // a strong signal for classification.
-func (s *Service) classifyTwitter(ctx context.Context, url, title string) (*ClassificationResponse, error) {
+func classifyTwitter(ctx context.Context, url, title string) (*ClassificationResponse, error) {
 	var (
 		instructions = `
 You are an X/Twitter Software Engineer Intent Classifier. Your job is to determine if the user is actively doing work related to their software engineering job or seeking entertainment/distraction. Be RESTRICTIVE: only clearly work-related technical content is productive.
@@ -576,7 +569,7 @@ Title: %s
 
 	input := fmt.Sprintf(inputTmpl, url, title)
 
-	response, err := s.classifyWithGemini(ctx, instructions, input)
+	response, err := classify(ctx, instructions, input)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify with Gemini: %w", err)
 	}
@@ -584,7 +577,7 @@ Title: %s
 	return response, nil
 }
 
-func (s *Service) classifyHackerNews(ctx context.Context, url, title string) (*ClassificationResponse, error) {
+func classifyHackerNews(ctx context.Context, url, title string) (*ClassificationResponse, error) {
 	mainContent, err := fetchMainContent(ctx, url)
 	if err != nil {
 		slog.Error("failed to fetch main content", "error", err)
@@ -641,7 +634,7 @@ Main Content (if available): %s
 
 	input := fmt.Sprintf(inputTmpl, url, title, mainContent)
 
-	response, err := s.classifyWithGemini(ctx, instructions, input)
+	response, err := classify(ctx, instructions, input)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify with Gemini: %w", err)
 	}
@@ -651,7 +644,7 @@ Main Content (if available): %s
 
 // classifySubstack classifies Substack newsletter articles using OpenGraph metadata and content extraction.
 // Substack pages are generally scrapable without heavy Cloudflare challenges.
-func (s *Service) classifySubstack(ctx context.Context, url, title string) (*ClassificationResponse, error) {
+func classifySubstack(ctx context.Context, url, title string) (*ClassificationResponse, error) {
 	httpClient := &http.Client{Timeout: 3000 * time.Millisecond}
 
 	var (
@@ -741,7 +734,7 @@ Main Content (if available): %s
 
 	input := fmt.Sprintf(inputTmpl, url, ogTitle, ogDescription, mainContent)
 
-	response, err := s.classifyWithGemini(ctx, instructions, input)
+	response, err := classify(ctx, instructions, input)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify with Gemini: %w", err)
 	}
@@ -752,122 +745,8 @@ Main Content (if available): %s
 // classifySlack classifies Slack activity using the browser tab title (or window title for desktop).
 // No HTTP fetching is needed — the title contains the channel/DM name which is the primary signal.
 // Titles typically look like: "#engineering - Acme Corp Slack" or "Slack | #random | My Workspace"
-func (s *Service) classifySlack(ctx context.Context, url, title string) (*ClassificationResponse, error) {
-	var (
-		instructions = `
-You are a Slack Software Engineer Intent Classifier. Your job is to determine if the user is engaged in productive work communication, general organizational activity, or distracted by non-essential chatter. You will primarily receive the browser tab title (or desktop window title) — this is your main signal.
+func classifySlack(ctx context.Context, url, title string) (*ClassificationResponse, error) {
+	input := fmt.Sprintf("Slack web title: %s\nURL: %s", title, url)
 
-# Classification Logic
-
-## **productive**
-**Criteria:** Direct work communication, project discussions, incident response, technical collaboration, or focused async work.
-**Indicators:**
-- Work-related channels: #engineering, #product, #design, #support, #incidents, #deploys, #standup, #sprint-*, #dev-*, #backend, #frontend, #infra, #security, #ops, #platform, #release-*, #bug-*, #feature-*, #project-*, #review-*, #ci-*, #monitoring, #alerts, #on-call
-- DMs discussing work tasks (inferred from title context)
-- Threads with technical discussions
-- Huddles or calls (likely meetings)
-- Canvas or document collaboration
-- Any channel name that clearly relates to a specific project, team function, or work task
-
-## **neutral**
-**Criteria:** General organizational communication that is neither clearly productive nor distracting. Company-wide or team-wide channels used for announcements and coordination.
-**Indicators:**
-- General channels: #general, #announcements, #company, #all-hands, #team-*, #org-*, #office-*, #hr, #it-support, #helpdesk, #onboarding, #welcome
-- Channels that serve organizational purposes without being directly about project work
-- Workspace home page or search without specific channel context
-- Browsing channel list without engaging (title contains "Browse channels" or similar)
-
-## **distracting**
-**Criteria:** Social channels, watercooler chat, entertainment, or passive browsing without clear work purpose.
-**Indicators:**
-- Social/fun channels: #random, #watercooler, #pets, #food, #memes, #off-topic, #fun-*, #chat-*, #social-*, #music, #gaming, #sports, #books, #movies, #travel, #fitness, #jokes, #dogs, #cats, #photos
-- Content consumption channels: #links, #articles, #videos, #interesting-*, #cool-*
-- Any channel name that suggests entertainment, socializing, or non-work activity
-
-# Output Format
-
-Return a JSON object with the following keys:
-1. "classification": "productive" (work communication), "neutral" (general org channels), or "distracting" (social/entertainment).
-2. "reasoning": Brief explanation.
-3. "tags": Array of strings from ONLY these options: ["communication", "entertainment", "time-sink", "content-consumption"].
-4. "confidence_score": Float (0.0 - 1.0)
-5. "detected_communication_channel": The channel or DM name extracted from the title (e.g., "#engineering", "#random", "DM with John", "thread in #product"). Return empty string if unable to determine.
-`
-		inputTmpl = `
-The user is currently using Slack. Classify their activity based on the following information:
-
-URL (if available): %s
-Title: %s
-`
-	)
-
-	input := fmt.Sprintf(inputTmpl, url, title)
-
-	response, err := s.classifyWithGemini(ctx, instructions, input)
-	if err != nil {
-		return nil, fmt.Errorf("failed to classify with Gemini: %w", err)
-	}
-
-	return response, nil
-}
-
-func (s *Service) classifyWithGemini(ctx context.Context, instructions, input string) (*ClassificationResponse, error) {
-	if s.genaiClient == nil {
-		return nil, errors.New("genai client not configured")
-	}
-
-	// Since this is latency sensitive, we use the fastest model available for each tier.
-	models := map[apiv1.DeviceHandshakeResponse_AccountTier]string{
-		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_UNSPECIFIED: "gemini-2.5-flash-lite",
-		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE:        "gemini-2.5-flash-lite",
-		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_TRIAL:       "gemini-2.5-flash-lite",
-		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS:        "gemini-3.1-flash-lite-preview",
-		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PRO:         "gemini-3.1-flash-lite-preview",
-	}
-
-	tier := identity.GetAccountTier()
-	if !slices.Contains([]apiv1.DeviceHandshakeResponse_AccountTier{apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE, apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS}, tier) {
-		slog.Warn("tier is not pro, using free model", "tier", tier)
-
-		tier = apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE
-	}
-
-	resp, err := s.genaiClient.Models.GenerateContent(ctx, models[tier], []*genai.Content{
-		{
-			Role: "user",
-			Parts: []*genai.Part{
-				genai.NewPartFromText(input),
-			},
-		},
-	}, &genai.GenerateContentConfig{
-		SystemInstruction: &genai.Content{
-			Parts: []*genai.Part{
-				genai.NewPartFromText(instructions),
-			},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
-		return nil, errors.New("empty response from Gemini")
-	}
-
-	text := resp.Candidates[0].Content.Parts[0].Text
-
-	replacer := strings.NewReplacer("```json", "", "`", "")
-	text = replacer.Replace(text)
-
-	slog.Info("Website classification response", "resp", text)
-
-	var response ClassificationResponse
-
-	if err := json.Unmarshal([]byte(text), &response); err != nil {
-		return nil, err
-	}
-
-	response.ClassificationSource = ClassificationSourceCloudLLMGemini
-
-	return &response, nil
+	return classifySlackActivity(ctx, input)
 }

@@ -20,7 +20,6 @@ import (
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
-	"google.golang.org/genai"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -64,6 +63,16 @@ func init() {
 // and starts a goroutine that emits a time-based event every second. It subsequently runs the application and
 // logs any error that might occur.
 func main() {
+	userdir, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatalf("failed to get user home directory: %v", err)
+	}
+
+	configDir := filepath.Join(userdir, ".focusd")
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		log.Fatalf("failed to create config directory: %v", err)
+	}
+
 	// Configure logging
 	logCloser, err := setupLogging()
 	if err != nil {
@@ -88,44 +97,22 @@ func main() {
 		log.Fatal("failed to setup web server: %w", err)
 	}
 
-	settingsService, err := settings.NewService(db, Version)
+	settingsService, err := settings.NewService(configDir)
 	if err != nil {
 		log.Fatal("failed to create settings service: %w", err)
 	}
 
-	// Resolve the API base URL based on build type.
-	apiBaseURL := "http://localhost:8089"
-	if isProductionBuild {
-		apiBaseURL = "https://api.focusd.so"
-	}
-
 	// This client is used to perform the handshake and get the token. It is not authenticated.
 	// It should only be used to perform the handshake and get the token.
-	apiUntrustedClient := api.NewClient(apiBaseURL)
+	apiUntrustedClient := api.NewClient(settings.APIBaseURL())
 
 	if err := identity.ScheduleHandshake(ctx, apiUntrustedClient); err != nil {
 		slog.Error("failed to schedule handshake", "error", err)
 	}
 
-	apiAuthenticatedClient := api.NewClient(apiBaseURL, api.NewSigningInterceptor())
+	apiAuthenticatedClient := api.NewClient(settings.APIBaseURL(), api.NewSigningInterceptor())
 
 	identityService := identity.NewService(apiAuthenticatedClient)
-
-	genaiClient, err := genai.NewClient(ctx, &genai.ClientConfig{
-		HTTPOptions: genai.HTTPOptions{
-			BaseURL: apiBaseURL + "/api/v1/gemini",
-		},
-		HTTPClient: &http.Client{
-			Transport: api.NewSigningRoundTripper(nil),
-		},
-		Backend: genai.BackendGeminiAPI,
-		// Since this is required to create the client, we are stubbing it for now.
-		// All the request will be going through api.focusd.so proxy.
-		APIKey: "stubbed",
-	})
-	if err != nil {
-		slog.Error("failed to create genai client", "error", err)
-	}
 
 	usageService, err := usage.NewService(
 		ctx, db,
@@ -153,8 +140,6 @@ func main() {
 				return
 			}
 		}),
-		usage.WithGenaiClient(genaiClient),
-		usage.WithSettingsService(settingsService),
 	)
 	if err != nil {
 		log.Fatal("failed to create usage service: %w", err)
@@ -201,7 +186,7 @@ func main() {
 	})
 
 	var updaterService *updater.Service
-	if isProductionBuild {
+	if settings.IsProductionBuild() {
 		updaterService = updater.NewService(Version, "focusd-so", "focusd", AppleTeamID)
 	}
 

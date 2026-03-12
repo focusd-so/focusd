@@ -2,25 +2,16 @@ package usage
 
 import (
 	"context"
+	"encoding/base64"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-
-	"github.com/focusd-so/focusd/internal/settings"
 )
-
-func setupSettingsService(t *testing.T) *settings.Service {
-	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-
-	service, err := settings.NewService(db, "test")
-	require.NoError(t, err, "failed to create settings service")
-
-	return service
-}
 
 func setUpService(t *testing.T, options ...Option) (*Service, *gorm.DB) {
 	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
@@ -142,10 +133,10 @@ export function classify(ctx: Context): ClassificationDecision | undefined {
 `
 
 func TestClassifyCustomRules_Application(t *testing.T) {
-	settingsService := setupSettingsService(t)
-	require.NoError(t, settingsService.Save(settings.SettingsKeyCustomRules, customRulesApps))
+	encoded := base64.StdEncoding.EncodeToString([]byte(customRulesApps))
+	viper.SetDefault("custom_rules_js", []string{encoded})
 
-	service, _ := setUpService(t, WithSettingsService(settingsService))
+	service, _ := setUpService(t)
 
 	// match Slack app
 	response, err := service.ClassifyCustomRules(context.Background(), "Slack", nil, nil)
@@ -162,10 +153,10 @@ func TestClassifyCustomRules_Application(t *testing.T) {
 }
 
 func TestClassifyCustomRules_Application_Time(t *testing.T) {
-	settingsService := setupSettingsService(t)
-	require.NoError(t, settingsService.Save(settings.SettingsKeyCustomRules, customRulesApps))
+	encoded := base64.StdEncoding.EncodeToString([]byte(customRulesApps))
+	viper.SetDefault("custom_rules_js", []string{encoded})
 
-	service, _ := setUpService(t, WithSettingsService(settingsService))
+	service, _ := setUpService(t)
 
 	sandboxCtx := sandboxContext{
 		AppName: "Discord",
@@ -199,10 +190,10 @@ func TestClassifyCustomRules_Application_Time(t *testing.T) {
 }
 
 func TestClassifyCustomRules_Application_MinutesSinceLastBlock(t *testing.T) {
-	settingsService := setupSettingsService(t)
-	require.NoError(t, settingsService.Save(settings.SettingsKeyCustomRules, customRulesApps))
+	encoded := base64.StdEncoding.EncodeToString([]byte(customRulesApps))
+	viper.SetDefault("custom_rules_js", []string{encoded})
 
-	service, _ := setUpService(t, WithSettingsService(settingsService))
+	service, _ := setUpService(t)
 
 	minutesSinceLastBlock := 21
 	minutesUsedSinceLastBlock := 3
@@ -223,10 +214,10 @@ func TestClassifyCustomRules_Application_MinutesSinceLastBlock(t *testing.T) {
 }
 
 func TestClassifyCustomRules_ExecutionLogs(t *testing.T) {
-	settingsService := setupSettingsService(t)
-	require.NoError(t, settingsService.Save(settings.SettingsKeyCustomRules, customRulesApps))
+	encoded := base64.StdEncoding.EncodeToString([]byte(customRulesApps))
+	viper.SetDefault("custom_rules_js", []string{encoded})
 
-	service, db := setUpService(t, WithSettingsService(settingsService))
+	service, db := setUpService(t)
 
 	// match Productive time
 	sandboxCtx := sandboxContext{
@@ -245,10 +236,10 @@ func TestClassifyCustomRules_ExecutionLogs(t *testing.T) {
 }
 
 func TestClassifyCustomRules_MinutesUsedInPeriod(t *testing.T) {
-	settingsService := setupSettingsService(t)
-	require.NoError(t, settingsService.Save(settings.SettingsKeyCustomRules, customRulesWithMinutesUsedInPeriod))
+	encoded := base64.StdEncoding.EncodeToString([]byte(customRulesWithMinutesUsedInPeriod))
+	viper.SetDefault("custom_rules_js", []string{encoded})
 
-	service, _ := setUpService(t, WithSettingsService(settingsService))
+	service, _ := setUpService(t)
 
 	var calledWithMinutes int64
 
@@ -297,10 +288,10 @@ func TestClassifyCustomRules_MinutesUsedInPeriod(t *testing.T) {
 }
 
 func TestClassifyCustomRules_MinutesUsedInPeriod_NilFunction(t *testing.T) {
-	settingsService := setupSettingsService(t)
-	require.NoError(t, settingsService.Save(settings.SettingsKeyCustomRules, customRulesWithMinutesUsedInPeriod))
+	encoded := base64.StdEncoding.EncodeToString([]byte(customRulesWithMinutesUsedInPeriod))
+	viper.SetDefault("custom_rules_js", []string{encoded})
 
-	service, _ := setUpService(t, WithSettingsService(settingsService))
+	service, _ := setUpService(t)
 
 	// Test with nil MinutesUsedInPeriod - should default to 0 and classify as Neutral
 	sandboxCtx := sandboxContext{
@@ -319,10 +310,10 @@ func TestClassifyCustomRules_MinutesUsedInPeriod_NilFunction(t *testing.T) {
 }
 
 func TestClassifyCustomRules_Website(t *testing.T) {
-	settingsService := setupSettingsService(t)
-	require.NoError(t, settingsService.Save(settings.SettingsKeyCustomRules, customRulesWebsite))
+	encoded := base64.StdEncoding.EncodeToString([]byte(customRulesWebsite))
+	viper.SetDefault("custom_rules_js", []string{encoded})
 
-	service, _ := setUpService(t, WithSettingsService(settingsService))
+	service, _ := setUpService(t)
 
 	// Test case 1: Domain matching - youtube.com from www.youtube.com
 	sandboxCtx := sandboxContext{

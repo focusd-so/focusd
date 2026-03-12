@@ -1,11 +1,5 @@
 package usage
 
-import (
-	"google.golang.org/genai"
-
-	"github.com/focusd-so/focusd/internal/settings"
-)
-
 // Option is a function that configures a Service.
 type Option func(*Service)
 
@@ -13,21 +7,5 @@ type Option func(*Service)
 func WithAppBlocker(appBlocker func(appName, title, reason string, tags []string, browserURL *string)) Option {
 	return func(s *Service) {
 		s.appBlocker = appBlocker
-	}
-}
-
-// WithSettingsService configures the Service with a SettingsService interface
-// to allow accessing settings from the database.
-func WithSettingsService(settingsService *settings.Service) Option {
-	return func(s *Service) {
-		s.settingsService = settingsService
-	}
-}
-
-// WithGenaiClient configures the Service with a GenaiClient interface
-// to allow using the Genai client.
-func WithGenaiClient(genaiClient *genai.Client) Option {
-	return func(s *Service) {
-		s.genaiClient = genaiClient
 	}
 }

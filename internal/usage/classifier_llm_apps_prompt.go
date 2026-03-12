@@ -1,29 +1,7 @@
 package usage
 
-import (
-	"context"
-	"fmt"
-	"strings"
-)
-
-type AppClassifier func(ctx context.Context, appName, title string, bundleID, appCategory *string) (*ClassificationResponse, error)
-
-var classifiers = map[string]AppClassifier{
-	"slack": classifySlackApp,
-}
-
-func (s *Service) classifyApplication(ctx context.Context, appName, title string, bundleID, appCategory *string) (*ClassificationResponse, error) {
-	if classifier, ok := classifiers[strings.ToLower(appName)]; ok {
-		return classifier(ctx, appName, title, bundleID, appCategory)
-	}
-
-	return classifyGenericApplication(ctx, appName, title, bundleID, appCategory)
-}
-
-func classifyGenericApplication(ctx context.Context, appName, title string, bundleID, appCategory *string) (*ClassificationResponse, error) {
-
-	var (
-		instructions = `
+var (
+	instructionGenericApplicationClassification = `
 You are a Software Engineering Application Intent Classifier. Your job is to determine if the user is actively doing work related to their software engineering job or seeking entertainment/distraction.
 
 # Classification Logic
@@ -71,35 +49,44 @@ Return a JSON object with the following keys:
 3. "tags": Array of strings from ONLY these options: ["coding", "docs", "debug", "communication", "terminal", "planning", "learning", "entertainment", "news", "social", "shopping", "terminal", "other"].
    - IMPORTANT: Be extremely conservative with the "communication" tag. Only use it when there is actual messaging, emailing, or chatting happening. Do NOT use it for reading code reviews, terminal multiplexers, or project management.
 4. "confidence_score": Float (0.0 - 1.0)
-5. "detected_project": If the window title clearly implies a project name. Return null if no project can be reliably inferred.
-6. "detected_communication_channel": If the window title clearly implies a communication channel and the app has communication tag in the tags array, extract just the channel name (e.g. "engineering", "random"). Return null if no channel can be reliably inferred.
-`
-		inputTmpl = `
-The user is currently using an application. Classify the activity based on the following information:
+	`
 
-Application Name: %s
-Window Title: %s
-Bundle ID: %s
-App Store Category: %s
-`
-	)
+	instructionSlackApplicationClassification = `
+	You are a Slack Software Engineer Intent Classifier. Your job is to determine if the user is engaged in productive work communication, general organizational activity, or distracted by non-essential chatter. You will receive the desktop window title — this is your main signal.
 
-	bundleIDValue := fromPtr(bundleID)
-	appCategoryValue := fromPtr(appCategory)
+# Classification Logic
 
-	input := fmt.Sprintf(inputTmpl, appName, title, bundleIDValue, appCategoryValue)
+## **productive**
+**Criteria:** Direct work communication, project discussions, incident response, technical collaboration, or focused async work.
+**Indicators:**
+- Work-related channels: #engineering, #product, #design, #support, #incidents, #deploys, #standup, #sprint-*, #dev-*, #backend, #frontend, #infra, #security, #ops, #platform, #release-*, #bug-*, #feature-*, #project-*, #review-*, #ci-*, #monitoring, #alerts, #on-call
+- DMs discussing work tasks (inferred from title context)
+- Threads with technical discussions
+- Huddles or calls (likely meetings)
+- Canvas or document collaboration
+- Any channel name that clearly relates to a specific project, team function, or work task
 
-	response, err := classify(ctx, instructions, input)
-	if err != nil {
-		return nil, fmt.Errorf("failed to classify with Gemini: %w", err)
-	}
+## **neutral**
+**Criteria:** General organizational communication that is neither clearly productive nor distracting. Company-wide or team-wide channels used for announcements and coordination.
+**Indicators:**
+- General channels: #general, #announcements, #company, #all-hands, #team-*, #org-*, #office-*, #hr, #it-support, #helpdesk, #onboarding, #welcome
+- Channels that serve organizational purposes without being directly about project work
+- Workspace home page or search without specific channel context
+- Browsing channel list without engaging (title contains "Browse channels" or similar)
 
-	return response, nil
-}
+## **distracting**
+**Criteria:** Social channels, watercooler chat, entertainment, or passive browsing without clear work purpose.
+**Indicators:**
+- Social/fun channels: #random, #watercooler, #pets, #food, #memes, #off-topic, #fun-*, #chat-*, #social-*, #music, #gaming, #sports, #books, #movies, #travel, #fitness, #jokes, #dogs, #cats, #photos
+- Content consumption channels: #links, #articles, #videos, #interesting-*, #cool-*
+- Any channel name that suggests entertainment, socializing, or non-work activity
 
-// classifySlackApp classifies Slack desktop application activity using the window title.
-// Titles typically look like: "Slack | #engineering | Acme Corp" or "Slack - #random - Workspace"
-func classifySlackApp(ctx context.Context, appName, title string, _, _ *string) (*ClassificationResponse, error) {
+# Output Format
 
-	return classifySlackActivity(ctx, "Analyse Slack desktop activity from the following title: "+title)
-}
+Return a JSON object with the following keys:
+1. "classification": "productive" (work communication), "neutral" (general org channels), or "distracting" (social/entertainment).
+2. "reasoning": Brief explanation.
+3. "tags": Array of strings from ONLY these options: ["communication", "entertainment", "time-sink", "content-consumption"].
+4. "confidence_score": Float (0.0 - 1.0)
+	`
+)

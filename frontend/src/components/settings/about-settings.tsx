@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { GetVersion } from "../../../bindings/github.com/focusd-so/focusd/internal/settings/service";
+import { GetCurrentVersion } from "../../../bindings/github.com/focusd-so/focusd/internal/updater/service";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function AboutSettings() {
   const { data: version } = useQuery({
     queryKey: ["app-version"],
-    queryFn: GetVersion,
+    queryFn: () => (import.meta.env.DEV ? Promise.resolve("dev") : GetCurrentVersion()),
   });
 
   return (

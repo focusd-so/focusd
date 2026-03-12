@@ -7,15 +7,7 @@ import { useAccountStore } from "@/stores/account-store";
 import { DeviceHandshakeResponse_AccountTier } from "../../bindings/github.com/focusd-so/focusd/gen/api/v1/models";
 import { Browser } from "@wailsio/runtime";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { IconDeviceFloppy, IconHistory, IconFileText, IconTerminal, IconTestPipe, IconCrown } from "@tabler/icons-react";
+import { IconDeviceFloppy, IconFileText, IconTerminal, IconTestPipe, IconCrown } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ExecutionLogsSheet } from "@/components/execution-logs";
@@ -315,22 +307,10 @@ export function terminationMode(ctx: Context): TerminationDecision | undefined {
 }
 `;
 
-function formatDate(timestamp: number): string {
-  const date = new Date(timestamp * 1000);
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 export function CustomRules() {
   const {
     customRules,
-    customRulesHistory,
     updateSetting,
-    fetchCustomRulesHistory,
   } = useSettingsStore();
 
   const { checkoutLink, fetchAccountTier } = useAccountStore();
@@ -440,17 +420,6 @@ export function CustomRules() {
     []
   );
 
-  const handleHistoryOpen = (open: boolean) => {
-    if (open) {
-      fetchCustomRulesHistory(10);
-    }
-  };
-
-  const handleRestoreVersion = (value: string) => {
-    setDraft(value);
-    toast.info("Version restored. Click Save to apply changes.");
-  };
-
   const handleEditorWillMount = useCallback((monaco: Monaco) => {
     monacoRef.current = monaco;
 
@@ -513,41 +482,6 @@ export function CustomRules() {
           </div>
 
           <div className="flex items-center gap-2">
-            <DropdownMenu onOpenChange={handleHistoryOpen}>
-              <DropdownMenuTrigger asChild>
-                <button
-                  className="inline-flex items-center gap-1.5 h-8 px-2 text-xs font-medium text-muted-foreground/60 hover:text-foreground hover:underline underline-offset-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-muted-foreground/60 disabled:hover:no-underline"
-                >
-                  <IconHistory className="w-3.5 h-3.5" />
-                  <span className="sr-only sm:not-sr-only">History</span>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Version History</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {customRulesHistory.length === 0 ? (
-                  <DropdownMenuItem disabled className="text-xs">No history available</DropdownMenuItem>
-                ) : (
-                  customRulesHistory.map((version, index) => (
-                    <DropdownMenuItem
-                      key={version.id}
-                      onClick={() => handleRestoreVersion(version.value)}
-                      className="flex flex-col items-start gap-0.5 py-2"
-                    >
-                      <div className="flex items-center justify-between w-full">
-                        <span className="font-semibold text-sm">Version {version.version}</span>
-                        <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                          {index === 0 && version.value === customRules
-                            ? "CURRENT"
-                            : formatDate(version.created_at)}
-                        </span>
-                      </div>
-                    </DropdownMenuItem>
-                  ))
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
             <button
               onClick={() => setLogsOpen(true)}
               className="inline-flex items-center gap-1.5 h-8 px-2 text-xs font-medium text-muted-foreground/60 hover:text-foreground hover:underline underline-offset-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-muted-foreground/60 disabled:hover:no-underline"

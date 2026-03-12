@@ -12,12 +12,6 @@ import (
 )
 
 func (s *Service) ClassifyCustomRules(ctx context.Context, appName string, url *string, nowTime *time.Time) (*ClassificationResponse, error) {
-	if s.settingsService == nil {
-		slog.Warn("settings service is nil, skipping custom rules classification")
-
-		return nil, nil
-	}
-
 	slog.Info("classifying application usage with custom rules")
 
 	sandboxCtx := createSandboxContext(appName, url)
@@ -115,17 +109,13 @@ func (s *Service) ClassifyCustomRulesWithSandbox(ctx context.Context, sandboxCtx
 
 func (s *Service) classifySandbox(ctx context.Context, sandboxCtx sandboxContext) (desicion *classificationDecision, logs []string, err error) {
 	// Get the latest custom rules code
-	customRules, err := s.settingsService.GetLatest(settings.SettingsKeyCustomRules)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if customRules == nil || customRules.Value == "" {
+	customRules := settings.GetCustomRulesJS()
+	if customRules == "" {
 		return nil, nil, nil
 	}
 
 	// Create a new sandbox with the custom rules code
-	sb, err := newSandbox(customRules.Value)
+	sb, err := newSandbox(customRules)
 	if err != nil {
 		return nil, nil, err
 	}
