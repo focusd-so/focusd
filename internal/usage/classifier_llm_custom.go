@@ -3,11 +3,10 @@ package usage
 import (
 	"context"
 	"fmt"
-	"log/slog"
-	"strings"
 )
 
-const instructionSlackClassification = `
+func classifySlackActivity(ctx context.Context, input string) (*ClassificationResponse, error) {
+	const instructionSlackClassification = `
 You classify Slack activity for software engineers.
 
 Task:
@@ -32,41 +31,19 @@ Return JSON only with exactly these keys:
 }
 `
 
-func classifySlackActivity(ctx context.Context, input string) (*ClassificationResponse, error) {
 	response, err := classify(ctx, instructionSlackClassification, input)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify Slack activity: %w", err)
 	}
 
-	normalizeSlackResponse(response)
-
-	return response, nil
-}
-
-func normalizeSlackResponse(response *ClassificationResponse) {
-	slog.Info("Normalizing Slack response", "response", response)
-	// response.DetectedCommunicationChannel = normalizeDetectedCommunicationChannel(response.DetectedCommunicationChannel)
-
 	switch response.Classification {
 	case ClassificationProductive, ClassificationNeutral, ClassificationDistracting:
-		return
 	default:
 		response.Classification = ClassificationNeutral
 		if response.Reasoning == "" {
 			response.Reasoning = "Defaulted to neutral due to invalid classification"
 		}
 	}
-}
 
-func normalizeDetectedCommunicationChannel(channel string) string {
-	channel = strings.TrimSpace(channel)
-	channel = strings.Trim(channel, "\"'")
-	channel = strings.TrimPrefix(channel, "#")
-
-	switch strings.ToLower(channel) {
-	case "", "null", "none", "n/a":
-		return ""
-	}
-
-	return channel
+	return response, nil
 }
