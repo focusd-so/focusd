@@ -18,10 +18,10 @@ const (
 	TerminationModeSourceWhitelist   TerminationModeSource = "whitelist"
 	TerminationModeSourcePaused      TerminationModeSource = "paused"
 
-	ClassificationSourceUserSet     ClassificationSource = "user_set"
-	ClassificationSourceObviously   ClassificationSource = "obviously"
-	ClassificationSourceCloudLLM    ClassificationSource = "llm"
-	ClassificationSourceCustomRules ClassificationSource = "custom_rules"
+	ClassificationSourceUserSet        ClassificationSource = "user_set"
+	ClassificationSourceObviously      ClassificationSource = "obviously"
+	ClassificationSourceCustomRules    ClassificationSource = "custom_rules"
+	ClassificationSourceCloudLLMGemini ClassificationSource = "llm_gemini"
 
 	IdleApplicationName = "Idle"
 
@@ -47,9 +47,17 @@ type ClassificationResponse struct {
 	ClassificationSource         ClassificationSource `json:"classification_source"`
 	Reasoning                    string               `json:"reasoning"`
 	ConfidenceScore              float32              `json:"confidence_score"`
-	DetectedProject              string               `json:"detected_project"`
-	DetectedCommunicationChannel string               `json:"detected_communication_channel"`
-	Tags                         []string             `json:"tags"`
+	// DetectedProject is inferred by the LLM from the window title or channel name.
+	// For coding apps (VS Code, Xcode, etc.), it extracts the workspace/project name from the title format.
+	// For communication apps (Slack), it extracts the project/team context if strongly implied by the channel name.
+	DetectedProject string `json:"detected_project"`
+	
+	// DetectedCommunicationChannel is inferred by the LLM from the window title for communication apps.
+	// E.g., for Slack it extracts "engineering" from "Slack | #engineering | Acme Corp".
+	// This is only populated when the "communication" tag is assigned.
+	DetectedCommunicationChannel string `json:"detected_communication_channel"`
+	
+	Tags []string `json:"tags"`
 
 	SandboxContext  string  `json:"sandbox_context"`
 	SandboxResponse *string `json:"sandbox_response"`

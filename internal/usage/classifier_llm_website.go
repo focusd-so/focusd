@@ -95,7 +95,8 @@ You are a General Software Engineer Intent Classifier. Your job is to determine 
 Return a JSON object with the following keys:
 1. "classification": "productive", "neutral", or "distracting".
 2. "reasoning": Brief explanation.
-3. "tags": Array of strings from ONLY these options: ["coding", "docs", "debug", "communication", "planning", "learning", "entertainment", "news", "social", "shopping", "other"].
+3. "tags": Array of strings from ONLY these options: ["coding", "docs", "debug", "communication", "terminal", "planning", "learning", "entertainment", "news", "social", "shopping", "other"].
+   - IMPORTANT: Be extremely conservative with the "communication" tag. Only use it when there is actual messaging, emailing, or chatting happening. Do NOT use it for reading code reviews, terminal multiplexers, or project management.
 4. "confidence_score": Float (0.0 - 1.0)
 `
 		inputTmpl = `
@@ -858,13 +859,15 @@ func (s *Service) classifyWithGemini(ctx context.Context, instructions, input st
 	replacer := strings.NewReplacer("```json", "", "`", "")
 	text = replacer.Replace(text)
 
+	slog.Info("Website classification response", "resp", text)
+
 	var response ClassificationResponse
 
 	if err := json.Unmarshal([]byte(text), &response); err != nil {
 		return nil, err
 	}
 
-	response.ClassificationSource = ClassificationSourceCloudLLM
+	response.ClassificationSource = ClassificationSourceCloudLLMGemini
 
 	return &response, nil
 }

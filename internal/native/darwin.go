@@ -30,7 +30,7 @@ static int checkAutomationPermission(const char* bundleID) {
 }
 
 // Forward declaration of Go callback
-extern void goOnTitleChange(int pid, char* bundleID, char* title, char* appName, char* executablePath, char* appIcon);
+extern void goOnTitleChange(int pid, char* bundleID, char* title, char* appName, char* executablePath, char* appIcon, char* appCategory);
 
 // Global state
 static AXObserverRef gObserver = NULL;
@@ -77,7 +77,18 @@ static void emitTitleChange(pid_t pid, NSString* title) {
     }
     const char* appIconStr = [appIconBase64 UTF8String] ?: "";
 
-    goOnTitleChange((int)pid, (char*)bundleIDStr, (char*)titleStr, (char*)appNameStr, (char*)execPathStr, (char*)appIconStr);
+    // Get app category from Info.plist (LSApplicationCategoryType)
+    NSString* appCategoryStr = @"";
+    if (app.bundleURL) {
+        NSBundle* appBundle = [NSBundle bundleWithURL:app.bundleURL];
+        if (appBundle) {
+            NSString* cat = [appBundle objectForInfoDictionaryKey:@"LSApplicationCategoryType"];
+            if (cat) appCategoryStr = cat;
+        }
+    }
+    const char* appCategoryC = [appCategoryStr UTF8String] ?: "";
+
+    goOnTitleChange((int)pid, (char*)bundleIDStr, (char*)titleStr, (char*)appNameStr, (char*)execPathStr, (char*)appIconStr, (char*)appCategoryC);
 }
 
 // AXObserver callback
@@ -246,7 +257,7 @@ func startObserver() {
 }
 
 //export goOnTitleChange
-func goOnTitleChange(cPID C.int, cBundleID *C.char, cTitle *C.char, cAppName *C.char, cExecutablePath *C.char, cAppIcon *C.char) {
+func goOnTitleChange(cPID C.int, cBundleID *C.char, cTitle *C.char, cAppName *C.char, cExecutablePath *C.char, cAppIcon *C.char, cAppCategory *C.char) {
 	// Copy C strings to Go strings synchronously (C memory may be freed after return)
 	pid := int(cPID)
 	bundleID := C.GoString(cBundleID)
@@ -254,6 +265,7 @@ func goOnTitleChange(cPID C.int, cBundleID *C.char, cTitle *C.char, cAppName *C.
 	appName := C.GoString(cAppName)
 	executablePath := C.GoString(cExecutablePath)
 	appIcon := C.GoString(cAppIcon)
+	appCategory := C.GoString(cAppCategory)
 
 	go func() {
 		var browserURL string
@@ -282,6 +294,7 @@ func goOnTitleChange(cPID C.int, cBundleID *C.char, cTitle *C.char, cAppName *C.
 			Title:          title,
 			AppIcon:        appIcon,
 			URL:            browserURL,
+			AppCategory:    appCategory,
 		})
 	}()
 }

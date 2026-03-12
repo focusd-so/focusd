@@ -3,7 +3,6 @@ package usage
 import (
 	"fmt"
 	"math"
-	"sort"
 	"time"
 )
 
@@ -20,6 +19,15 @@ func (s *Service) GetDayInsights(date time.Time) (DayInsights, error) {
 	score := ProductivityScore{}
 	hourly := make(ProductivityPerHourBreakdown)
 
+	insights := DayInsights{
+		ProductivityScore:            score,
+		ProductivityPerHourBreakdown: hourly,
+		TopDistractions:              make(map[string]int),
+		TopBlocked:                   make(map[string]int),
+		ProjectBreakdown:             make(map[string]int),
+		CommunicationBreakdown:       make(map[string]CommunicationBreakdown),
+	}
+
 	for i, usage := range usages {
 		end := resolveEndTime(usage, usages, i)
 		if end <= usage.StartedAt {
@@ -35,6 +43,28 @@ func (s *Service) GetDayInsights(date time.Time) (DayInsights, error) {
 			entry.addSeconds(usage.Classification, secs, isIdle)
 			hourly[hour] = entry
 		}
+
+		if usage.IsCommunicationUsage() {
+			key := fmt.Sprintf("%s:%s", usage.Application.Name, usage.CommunicationChannel())
+
+			entry := insights.CommunicationBreakdown[key]
+			entry.Name = usage.Application.Name
+			entry.Channel = usage.CommunicationChannel()
+			entry.DurationSeconds += dur
+			insights.CommunicationBreakdown[key] = entry
+		}
+
+		if usage.TerminationMode == TerminationModeBlock {
+			insights.TopBlocked[usageDisplayName(usage)] += dur
+		}
+
+		if usage.Classification == ClassificationDistracting && usage.TerminationMode != TerminationModeBlock {
+			insights.TopDistractions[usageDisplayName(usage)] += dur
+		}
+
+		if usage.HasDetectedProject() {
+			insights.ProjectBreakdown[usage.GetDetectedProject()] += dur
+		}
 	}
 
 	score.ProductivityScore = calculateProductivityScore(score.ProductiveSeconds, score.DistractiveSeconds)
@@ -43,14 +73,8 @@ func (s *Service) GetDayInsights(date time.Time) (DayInsights, error) {
 		hourly[hour] = s
 	}
 
-	insights := DayInsights{
-		ProductivityScore:            score,
-		ProductivityPerHourBreakdown: hourly,
-		TopDistractions:              buildDistractionBreakdown(usages),
-		TopBlocked:                   buildBlockedBreakdown(usages),
-		ProjectBreakdown:             buildProjectBreakdown(usages),
-		CommunicationBreakdown:       buildCommunicationBreakdown(usages),
-	}
+	insights.ProductivityScore = score
+	insights.ProductivityPerHourBreakdown = hourly
 
 	var summary LLMDailySummary
 	if err := s.db.Where("date = ?", date.Format("2006-01-02")).First(&summary).Error; err == nil {
@@ -106,104 +130,4 @@ func usageDisplayName(usage ApplicationUsage) string {
 		return *usage.Application.Hostname
 	}
 	return usage.Application.Name
-}
-
-func buildDistractionBreakdown(usages []ApplicationUsage) []DistractionBreakdown {
-	seconds := make(map[string]int)
-	for i, u := range usages {
-		if u.Classification != ClassificationDistracting {
-			continue
-		}
-		if u.TerminationMode == TerminationModeBlock {
-			continue
-		}
-		end := resolveEndTime(u, usages, i)
-		if end <= u.StartedAt {
-			continue
-		}
-		seconds[usageDisplayName(u)] += int(end - u.StartedAt)
-	}
-
-	out := make([]DistractionBreakdown, 0, len(seconds))
-	for name, secs := range seconds {
-		out = append(out, DistractionBreakdown{Name: name, Minutes: secs / 60})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Minutes > out[j].Minutes })
-	if len(out) > 5 {
-		out = out[:5]
-	}
-	return out
-}
-
-func buildBlockedBreakdown(usages []ApplicationUsage) []BlockedBreakdown {
-	counts := make(map[string]int)
-	for _, u := range usages {
-		if u.TerminationMode != TerminationModeBlock {
-			continue
-		}
-		counts[usageDisplayName(u)]++
-	}
-
-	out := make([]BlockedBreakdown, 0, len(counts))
-	for name, count := range counts {
-		out = append(out, BlockedBreakdown{Name: name, Count: count})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Count > out[j].Count })
-	if len(out) > 5 {
-		out = out[:5]
-	}
-	return out
-}
-
-func buildProjectBreakdown(usages []ApplicationUsage) []ProjectBreakdown {
-	seconds := make(map[string]int)
-	for i, u := range usages {
-		if u.DetectedProject == nil || *u.DetectedProject == "" {
-			continue
-		}
-		end := resolveEndTime(u, usages, i)
-		if end <= u.StartedAt {
-			continue
-		}
-		seconds[*u.DetectedProject] += int(end - u.StartedAt)
-	}
-
-	out := make([]ProjectBreakdown, 0, len(seconds))
-	for name, secs := range seconds {
-		out = append(out, ProjectBreakdown{Name: name, Minutes: secs / 60})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Minutes > out[j].Minutes })
-	return out
-}
-
-func hasTag(tags []ApplicationUsageTags, tag string) bool {
-	for _, t := range tags {
-		if t.Tag == tag {
-			return true
-		}
-	}
-	return false
-}
-
-func buildCommunicationBreakdown(usages []ApplicationUsage) []CommunicationBreakdown {
-	seconds := make(map[string]int)
-	for i, u := range usages {
-		isCommunication := (u.DetectedCommunicationChannel != nil && *u.DetectedCommunicationChannel != "") ||
-			hasTag(u.Tags, "communication")
-		if !isCommunication {
-			continue
-		}
-		end := resolveEndTime(u, usages, i)
-		if end <= u.StartedAt {
-			continue
-		}
-		seconds[usageDisplayName(u)] += int(end - u.StartedAt)
-	}
-
-	out := make([]CommunicationBreakdown, 0, len(seconds))
-	for name, secs := range seconds {
-		out = append(out, CommunicationBreakdown{Name: name, Minutes: secs / 60})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Minutes > out[j].Minutes })
-	return out
 }

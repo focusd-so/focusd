@@ -29,6 +29,7 @@ type NativeEvent struct {
 	Title          string
 	AppIcon        string // base64 encoded PNG
 	URL            string
+	AppCategory    string // LSApplicationCategoryType from Info.plist, e.g. "public.app-category.developer-tools"
 }
 
 func (e *NativeEvent) BrowserHostname() string {

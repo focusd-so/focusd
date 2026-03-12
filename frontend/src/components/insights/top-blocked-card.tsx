@@ -1,10 +1,9 @@
 import { IconShield, IconArrowRight } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { BlockedBreakdown } from "@/../bindings/github.com/focusd-so/focusd/internal/usage/models";
 
 interface TopBlockedCardProps {
-  blockedAttempts: BlockedBreakdown[];
+  blockedAttempts: { name: string; count: number }[];
 }
 
 export function TopBlockedCard({ blockedAttempts }: TopBlockedCardProps) {

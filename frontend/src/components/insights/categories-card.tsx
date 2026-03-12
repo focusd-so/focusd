@@ -1,11 +1,11 @@
-import { IconFolder, IconArrowRight } from "@tabler/icons-react";
+import { IconFolder, IconArrowRight, IconInfoCircle } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatMinutes } from "@/lib/mock-data";
-import type { ProjectBreakdown } from "@/../bindings/github.com/focusd-so/focusd/internal/usage/models";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { formatDuration } from "@/lib/mock-data";
 
 interface CategoriesCardProps {
-  projects: ProjectBreakdown[];
+  projects: { name: string; duration_seconds: number }[];
 }
 
 const projectColors = [
@@ -18,8 +18,8 @@ const projectColors = [
 ];
 
 export function CategoriesCard({ projects }: CategoriesCardProps) {
-  const totalMinutes = projects.reduce((sum, p) => sum + p.minutes, 0);
-  const maxMinutes = Math.max(...projects.map((p) => p.minutes), 1);
+  const totalSeconds = projects.reduce((sum, p) => sum + p.duration_seconds, 0);
+  const maxSeconds = Math.max(...projects.map((p) => p.duration_seconds), 1);
 
   const topProjects = projects.slice(0, 3);
 
@@ -30,12 +30,22 @@ export function CategoriesCard({ projects }: CategoriesCardProps) {
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <IconFolder className="w-4 h-4 text-muted-foreground" />
             Projects
+            <TooltipProvider>
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <IconInfoCircle className="w-3.5 h-3.5 text-muted-foreground/50 hover:text-muted-foreground cursor-help transition-colors" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-[250px] text-xs text-muted-foreground bg-popover/90 backdrop-blur-md px-3 py-2 border-muted/20 shadow-xl">
+                  Project names are automatically inferred by AI from your application window titles (e.g., from your code editor or terminal).
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </CardTitle>
           <Link
             to="/screen-time/screentime"
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
-            {formatMinutes(totalMinutes)} total
+            {formatDuration(totalSeconds)} total
             <IconArrowRight className="w-3 h-3" />
           </Link>
         </div>
@@ -47,7 +57,7 @@ export function CategoriesCard({ projects }: CategoriesCardProps) {
           </p>
         ) : (
           topProjects.map((project, index) => {
-            const widthPct = (project.minutes / maxMinutes) * 100;
+            const widthPct = (project.duration_seconds / maxSeconds) * 100;
             const colorClass = projectColors[index % projectColors.length];
             return (
               <div key={index} className="space-y-1.5">
@@ -61,7 +71,7 @@ export function CategoriesCard({ projects }: CategoriesCardProps) {
                     </span>
                   </span>
                   <span className="text-muted-foreground">
-                    {formatMinutes(project.minutes)}
+                    {formatDuration(project.duration_seconds)}
                   </span>
                 </div>
                 <div className="h-2 bg-muted/30 rounded-full overflow-hidden">

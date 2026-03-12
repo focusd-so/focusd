@@ -16,10 +16,10 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import type { DailyUsageSummary } from "@/stores/usage-store";
+import type { LLMDailySummary } from "@/../bindings/github.com/focusd-so/focusd/internal/usage/models";
 
 interface LLMInsightCardProps {
-  dailyUsageSummary: DailyUsageSummary;
+  dailyUsageSummary: LLMDailySummary;
   isYesterday?: boolean;
 }
 

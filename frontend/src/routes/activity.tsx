@@ -7,6 +7,7 @@ import {
   IconShield,
   IconChevronDown,
   IconClock,
+  IconSearch,
 } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -123,6 +124,8 @@ function ActivityPage() {
   const allowedItems = useUsageStore((state) => state.allowedItems);
   const blockedItems = useUsageStore((state) => state.blockedItems); // Subscribe to blocked items map
 
+  const [searchQuery, setSearchQuery] = useState("");
+
   // Defer rendering of the full list to make navigation instant
   const [renderCount, setRenderCount] = useState(15);
 
@@ -214,6 +217,19 @@ function ActivityPage() {
     return result.sort((a, b) => (b.usage.started_at ?? 0) - (a.usage.started_at ?? 0));
   }, [getBlockedItemsList, blockedItems, allowedItems, recentUsages]);
 
+  const filteredBlockedUsages = useMemo(() => {
+    if (!searchQuery) return blockedUsagesDisplay;
+    const q = searchQuery.toLowerCase();
+    return blockedUsagesDisplay.filter((item) => {
+      const { usage } = item;
+      const name = usage.application?.name?.toLowerCase() || "";
+      const host = usage.application?.hostname?.toLowerCase() || "";
+      const title = usage.window_title?.toLowerCase() || "";
+      const tags = usage.tags?.map((t) => t.tag.toLowerCase()).join(" ") || "";
+      return name.includes(q) || host.includes(q) || title.includes(q) || tags.includes(q);
+    });
+  }, [blockedUsagesDisplay, searchQuery]);
+
   return (
     <div className="flex flex-col gap-6 p-4 flex-1 min-h-0 overflow-hidden">
       <div className="flex flex-col gap-4 shrink-0">
@@ -222,26 +238,42 @@ function ActivityPage() {
 
       {blockedUsagesDisplay.length > 0 && (
         <div className="flex flex-col gap-2 min-h-0 max-h-[40%]">
-          <div className="flex items-center justify-between shrink-0">
-            <p className="text-xs font-bold text-red-500/80 uppercase tracking-widest flex items-center gap-2">
+          <div className="flex items-center justify-between shrink-0 gap-4">
+            <p className="text-xs font-bold text-red-500/80 uppercase tracking-widest flex items-center gap-2 whitespace-nowrap">
               <IconShield className="w-3 h-3" />
               Blocked Distractions Today
             </p>
-            <Badge
-              variant="outline"
-              className="border-red-500/20 text-red-500/60 text-[9px] px-1.5 h-4"
-            >
-              {blockedUsagesDisplay.filter((b) => !b.isAllowed).length} PREVENTED
-            </Badge>
+            <div className="flex items-center gap-3">
+              <div className="relative group flex items-center">
+                <IconSearch className="w-3.5 h-3.5 absolute left-0 text-white/20 group-focus-within:text-red-500/50 transition-colors pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search..."
+                  className="h-6 w-20 focus:w-40 bg-transparent text-xs text-white/70 pl-5 pr-0 outline-none placeholder:text-white/20 transition-all focus:placeholder:opacity-0 cursor-pointer focus:cursor-text"
+                />
+              </div>
+              <Badge
+                variant="outline"
+                className="border-red-500/20 text-red-500/60 text-[9px] px-1.5 h-4 shrink-0 transition-all"
+              >
+                {filteredBlockedUsages.filter((b) => !b.isAllowed).length} PREVENTED
+              </Badge>
+            </div>
           </div>
           <ScrollArea className="flex-1 min-h-0 [&_[data-radix-scroll-area-scrollbar]]:hidden">
             <div className="flex flex-col gap-2">
-              {blockedUsagesDisplay.map((item) => (
-                <BlockedUsageItem
-                  key={item.usage.application?.hostname || item.usage.application?.bundle_id || ""}
-                  item={item}
-                />
-              ))}
+              {filteredBlockedUsages.length === 0 ? (
+                <div className="text-xs text-center text-white/30 py-4 italic">No matches found</div>
+              ) : (
+                filteredBlockedUsages.map((item) => (
+                  <BlockedUsageItem
+                    key={item.usage.application?.hostname || item.usage.application?.bundle_id || ""}
+                    item={item}
+                  />
+                ))
+              )}
             </div>
           </ScrollArea>
         </div>

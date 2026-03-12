@@ -1,41 +1,32 @@
 package usage
 
 type DayInsights struct {
-	ProductivityScore            ProductivityScore
-	ProductivityPerHourBreakdown ProductivityPerHourBreakdown
-	LLMDailySummary              *LLMDailySummary
-	TopDistractions              []DistractionBreakdown
-	TopBlocked                   []BlockedBreakdown
-	ProjectBreakdown             []ProjectBreakdown
-	CommunicationBreakdown       []CommunicationBreakdown
-}
-
-type DistractionBreakdown struct {
-	Name    string `json:"name"`
-	Minutes int    `json:"minutes"`
-}
-
-type BlockedBreakdown struct {
-	Name  string `json:"name"`
-	Count int    `json:"count"`
+	ProductivityScore            ProductivityScore                 `json:"productivity_score"`
+	ProductivityPerHourBreakdown ProductivityPerHourBreakdown      `json:"productivity_per_hour_breakdown"`
+	LLMDailySummary              *LLMDailySummary                  `json:"llm_daily_summary"`
+	TopDistractions              map[string]int                    `json:"top_distractions"`
+	TopBlocked                   map[string]int                    `json:"top_blocked"`
+	ProjectBreakdown             map[string]int                    `json:"project_breakdown"`
+	CommunicationBreakdown       map[string]CommunicationBreakdown `json:"communication_breakdown"`
 }
 
 type ProjectBreakdown struct {
-	Name    string `json:"name"`
-	Minutes int    `json:"minutes"`
+	Name            string `json:"name"`
+	DurationSeconds int    `json:"duration_seconds"`
 }
 
 type CommunicationBreakdown struct {
-	Name    string `json:"name"`
-	Minutes int    `json:"minutes"`
+	Name            string `json:"name"`
+	Channel         string `json:"channel"`
+	DurationSeconds int    `json:"duration_seconds"`
 }
 
 type ProductivityScore struct {
-	ProductiveSeconds  int
-	DistractiveSeconds int
-	IdleSeconds        int
-	OtherSeconds       int
-	ProductivityScore  int
+	ProductiveSeconds  int `json:"productive_seconds"`
+	DistractiveSeconds int `json:"distractive_seconds"`
+	IdleSeconds        int `json:"idle_seconds"`
+	OtherSeconds       int `json:"other_seconds"`
+	ProductivityScore  int `json:"productivity_score"`
 }
 
 func (p *ProductivityScore) addSeconds(classification Classification, seconds int, isIdle bool) {

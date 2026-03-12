@@ -186,7 +186,7 @@ func TestService_TitleChanged_WhenSameApplication_ContinueCurrentApplicationUsag
 	}
 
 	// change the title of the current application
-	err := service.TitleChanged(ctx, "/Applications/Slack.app/Contents/MacOS/Slack", "Slack", "Slack", "", nil, nil)
+	err := service.TitleChanged(ctx, "/Applications/Slack.app/Contents/MacOS/Slack", "Slack", "Slack", "", nil, nil, nil)
 	require.NoError(t, err, "failed to change title")
 
 	// read the application usage
@@ -216,7 +216,7 @@ func TestService_TitleChanged_WhenDifferentApplication_CloseCurrentApplicationUs
 	}
 
 	// change the title of the current application
-	err := service.TitleChanged(ctx, "com.apple.Safari", "Safari", "New Tab", "", nil, nil)
+	err := service.TitleChanged(ctx, "com.apple.Safari", "Safari", "New Tab", "", nil, nil, nil)
 	require.NoError(t, err, "failed to change title")
 
 	// read the application usage
@@ -232,7 +232,7 @@ func TestService_TitleChanged_ClassificationErrorStored(t *testing.T) {
 	// setup a service with a mock settings service that returns invalid custom rules to trigger a classification error
 	usageService, db := setUpServiceWithSettings(t, "invalid custom rules")
 
-	err := usageService.TitleChanged(context.Background(), "com.apple.Safari", "Safari", "New Tab", "", nil, nil)
+	err := usageService.TitleChanged(context.Background(), "com.apple.Safari", "Safari", "New Tab", "", nil, nil, nil)
 	require.Nil(t, err)
 
 	var readApplicationUsage usage.ApplicationUsage
@@ -286,6 +286,7 @@ func TestService_TitleChanged_PropogateClassificationFromLLM(t *testing.T) {
 		"",
 		nil,
 		&url,
+		nil,
 	)
 	require.NoError(t, err, "failed to change title")
 
@@ -294,7 +295,7 @@ func TestService_TitleChanged_PropogateClassificationFromLLM(t *testing.T) {
 	require.NoError(t, db.Preload("Tags").Where("ended_at IS NULL").First(&readApplicationUsage).Error)
 
 	require.Equal(t, usage.ClassificationProductive, readApplicationUsage.Classification)
-	require.Equal(t, usage.ClassificationSourceCloudLLM, readApplicationUsage.ClassificationSource)
+	require.Equal(t, usage.ClassificationSourceCloudLLMGemini, readApplicationUsage.ClassificationSource)
 	require.Equal(t, "Productive work communication", readApplicationUsage.ClassificationReasoning)
 	require.Equal(t, float32(0.95), readApplicationUsage.ClassificationConfidence)
 

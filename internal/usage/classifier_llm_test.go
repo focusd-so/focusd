@@ -280,3 +280,21 @@ func TestClassify_Website_Generic(t *testing.T) {
 		assert.Equal(t, ClassificationDistracting, response.Classification)
 	})
 }
+
+func TestClassify_Application_Slack(t *testing.T) {
+	genaiClient, err := genai.NewClient(context.Background(), &genai.ClientConfig{
+		APIKey: os.Getenv("GEMINI_API_KEY"),
+	})
+
+	require.NoError(t, err, "failed to create genai client")
+
+	s, _ := setUpService(t, WithGenaiClient(genaiClient))
+
+	t.Run("extract channel name", func(t *testing.T) {
+		response, err := s.classifyApplication(context.Background(), "slack", "private-coin-team-chat (Channel) - Snyk - Slack", nil, nil)
+		require.NoError(t, err, "failed to classify application")
+
+		assert.Equal(t, ClassificationProductive, response.Classification)
+		assert.Equal(t, "private-coin-team-chat", response.DetectedCommunicationChannel)
+	})
+}
