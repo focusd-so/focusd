@@ -507,6 +507,16 @@ func (s *Service) classifyObviouslyWebsite(ctx context.Context, browserURL strin
 
 	hasPath := path != "" && path != "/"
 
+	if isCriticalNoBlockPage(browserURL, "", "") {
+		return &ClassificationResponse{
+			Classification:       ClassificationNeutral,
+			ClassificationSource: ClassificationSourceObviously,
+			Reasoning:            "Payment/booking flow detected - safety override to avoid interruption",
+			ConfidenceScore:      1.0,
+			Tags:                 []string{"other"},
+		}, nil
+	}
+
 	// 0. Check always-allow path categories first (e.g. focusd.so/blocked)
 	fullURL := hostname + path
 	for _, cat := range alwaysAllowPathCategories {

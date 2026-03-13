@@ -21,59 +21,9 @@ func (s *Service) classifyApplication(ctx context.Context, appName, title string
 }
 
 func classifyGenericApplication(ctx context.Context, appName, title string, bundleID, appCategory *string) (*ClassificationResponse, error) {
+	instructions := instructionGenericApplicationClassification
 
 	var (
-		instructions = `
-You are a Software Engineering Application Intent Classifier. Your job is to determine if the user is actively doing work related to their software engineering job or seeking entertainment/distraction.
-
-# Classification Logic
-
-## **productive**
-**Criteria:** Applications that directly support software engineering tasks: coding, debugging, learning, researching, planning, or deploying.
-**Signals to detect:**
-- **Editors/IDEs:** VS Code, Xcode, IntelliJ, PyCharm, GoLand, etc.
-- **Terminals/CLIs:** Terminal, iTerm, shells, build tools, git clients.
-- **Developer Tools:** API clients, DB clients, profilers, debuggers.
-- **Documentation/Research apps:** PDF readers for technical docs, reference tools.
-- **Project Management:** Jira, Linear, Trello, Notion when used for work.
-
-## **distracting**
-**Criteria:** Apps primarily for entertainment or non-work consumption.
-**Includes:**
-- Social media, chat apps used socially (Discord, WhatsApp, Facebook Messenger).
-- Streaming video/music (YouTube Music, Spotify, Netflix).
-- Games, gaming platforms.
-- Shopping, news, celebrity gossip.
-
-## **neutral**
-**Criteria:** Ambiguous utilities or general organizational tools.
-**Includes:**
-- Email, Calendar, Notes, general file managers.
-- General communication apps without context (Slack, Teams).
-- System settings or OS utilities.	
-
-# Metadata Signals
-
-**Bundle ID** (when provided) is a precise, machine-readable identifier for the app (e.g. "com.apple.dt.Xcode", "com.spotify.client"). Use it as a strong classification signal.
-
-**App Store Category** (when provided) is Apple's own pre-assigned category for the app. Treat it as the strongest available signal:
-- "public.app-category.developer-tools" -> productive
-- "public.app-category.games" -> distracting
-- "public.app-category.entertainment" -> distracting
-- "public.app-category.social-networking" -> distracting
-- "public.app-category.music" -> distracting (unless context suggests otherwise)
-- "public.app-category.productivity" / "public.app-category.business" -> likely productive or neutral
-- "public.app-category.utilities" -> neutral
-
-Return a JSON object with the following keys:
-1. "classification": "productive", "neutral", or "distracting".
-2. "reasoning": Brief explanation.
-3. "tags": Array of strings from ONLY these options: ["coding", "docs", "debug", "communication", "terminal", "planning", "learning", "entertainment", "news", "social", "shopping", "terminal", "other"].
-   - IMPORTANT: Be extremely conservative with the "communication" tag. Only use it when there is actual messaging, emailing, or chatting happening. Do NOT use it for reading code reviews, terminal multiplexers, or project management.
-4. "confidence_score": Float (0.0 - 1.0)
-5. "detected_project": If the window title clearly implies a project name. Return null if no project can be reliably inferred.
-6. "detected_communication_channel": If the window title clearly implies a communication channel and the app has communication tag in the tags array, extract just the channel name (e.g. "engineering", "random"). Return null if no channel can be reliably inferred.
-`
 		inputTmpl = `
 The user is currently using an application. Classify the activity based on the following information:
 
