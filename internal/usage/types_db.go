@@ -118,9 +118,18 @@ func (a *ApplicationUsage) Same(windowTitle, appName string, bundleID, url *stri
 	if aURL != nil && *aURL == "" {
 		aURL = nil
 	}
+	if aURL != nil {
+		normalized := normalizeURLHost(*aURL)
+		aURL = &normalized
+	}
+
 	newURL := url
 	if newURL != nil && *newURL == "" {
 		newURL = nil
+	}
+	if newURL != nil {
+		normalized := normalizeURLHost(*newURL)
+		newURL = &normalized
 	}
 
 	if aURL != nil && newURL != nil && *aURL == *newURL {

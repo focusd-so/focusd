@@ -2,7 +2,9 @@ package usage_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	urlpkg "net/url"
 	"testing"
 	"time"
 
@@ -13,8 +15,14 @@ import (
 	"github.com/focusd-so/focusd/internal/usage"
 )
 
+func memoryDSN(t *testing.T) string {
+	t.Helper()
+
+	return fmt.Sprintf("file:%s?mode=memory&cache=shared", urlpkg.QueryEscape(t.Name()))
+}
+
 func setUpService(t *testing.T, options ...usage.Option) (*usage.Service, *gorm.DB) {
-	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	db, _ := gorm.Open(sqlite.Open(memoryDSN(t)), &gorm.Config{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -238,6 +246,50 @@ func TestService_TitleChanged_ClassificationErrorStored(t *testing.T) {
 
 	require.NotNil(t, readApplicationUsage.ClassificationError)
 	require.Contains(t, *readApplicationUsage.ClassificationError, "failed to classify application usage with custom rules")
+}
+
+func TestService_TitleChanged_StripsWWWInURLComparison(t *testing.T) {
+	service, db := setUpService(t)
+
+	app := usage.Application{Name: "Google Chrome"}
+	require.NoError(t, db.Create(&app).Error)
+
+	initialURL := "https://youtube.com/watch?v=abc"
+	applicationUsage := usage.ApplicationUsage{
+		StartedAt:      time.Now().Unix(),
+		WindowTitle:    "YouTube",
+		ExecutablePath: "Google Chrome",
+		BrowserURL:     &initialURL,
+		ApplicationID:  app.ID,
+	}
+	require.NoError(t, db.Create(&applicationUsage).Error)
+
+	newURL := "https://www.youtube.com/watch?v=abc"
+	err := service.TitleChanged(context.Background(), "Google Chrome", "YouTube", "Google Chrome", "", nil, &newURL, nil)
+	require.NoError(t, err)
+
+	var count int64
+	require.NoError(t, db.Model(&usage.ApplicationUsage{}).Count(&count).Error)
+	require.Equal(t, int64(1), count)
+
+	var readUsage usage.ApplicationUsage
+	require.NoError(t, db.Where("id = ?", applicationUsage.ID).First(&readUsage).Error)
+	require.Nil(t, readUsage.EndedAt)
+	require.NotNil(t, readUsage.BrowserURL)
+	require.Equal(t, "https://www.youtube.com/watch?v=abc", *readUsage.BrowserURL)
+}
+
+func TestService_TitleChanged_PreservesRawURLForBlocking(t *testing.T) {
+	service, db := setUpService(t)
+
+	newURL := "https://www.focusd.so/blocked?d=123"
+	err := service.TitleChanged(context.Background(), "Google Chrome", "Blocked", "Google Chrome", "", nil, &newURL, nil)
+	require.NoError(t, err)
+
+	var readUsage usage.ApplicationUsage
+	require.NoError(t, db.Where("id = ?", 1).First(&readUsage).Error)
+	require.NotNil(t, readUsage.BrowserURL)
+	require.Equal(t, "https://www.focusd.so/blocked?d=123", *readUsage.BrowserURL)
 }
 
 // roundTripFunc is an adapter to allow the use of ordinary functions as http.RoundTripper.

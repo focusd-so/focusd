@@ -44,8 +44,7 @@ func (e *NativeEvent) BrowserHostname() string {
 		return ""
 	}
 
-	// this is very annoying
-	hostname := strings.TrimPrefix(u.Host, "www.")
+	hostname := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
 
 	return hostname
 }

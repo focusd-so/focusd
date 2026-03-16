@@ -507,7 +507,7 @@ func (s *Service) classifyObviouslyWebsite(ctx context.Context, browserURL strin
 
 	hasPath := path != "" && path != "/"
 
-	if isCriticalNoBlockPage(browserURL, "", "") {
+	if isDeterministicCriticalNoBlockURL(browserURL) {
 		return &ClassificationResponse{
 			Classification:       ClassificationNeutral,
 			ClassificationSource: ClassificationSourceObviously,

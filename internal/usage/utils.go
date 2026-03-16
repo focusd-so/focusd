@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -15,13 +16,69 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
+func normalizeHostname(hostname string) string {
+	hostname = strings.ToLower(strings.TrimSpace(hostname))
+	hostname = strings.TrimSuffix(hostname, ".")
+	hostname = strings.TrimPrefix(hostname, "www.")
+
+	return hostname
+}
+
+func normalizeURLHost(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+
+	hostname := normalizeHostname(u.Hostname())
+	if hostname == "" {
+		return rawURL
+	}
+
+	if port := u.Port(); port != "" {
+		u.Host = net.JoinHostPort(hostname, port)
+	} else {
+		u.Host = hostname
+	}
+
+	return u.String()
+}
+
+func normalizeOptionalURL(rawURL *string) *string {
+	if rawURL == nil {
+		return nil
+	}
+
+	trimmed := strings.TrimSpace(*rawURL)
+	if trimmed == "" {
+		return nil
+	}
+
+	normalized := normalizeURLHost(trimmed)
+
+	return &normalized
+}
+
+func sanitizeOptionalURL(rawURL *string) *string {
+	if rawURL == nil {
+		return nil
+	}
+
+	trimmed := strings.TrimSpace(*rawURL)
+	if trimmed == "" {
+		return nil
+	}
+
+	return &trimmed
+}
+
 func parseURL(browserURL string) (hostname, path string) {
 	u, err := url.Parse(browserURL)
 	if err != nil {
 		return "", ""
 	}
 
-	hostname = strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
+	hostname = normalizeHostname(u.Hostname())
 	path = u.Path
 
 	return hostname, path

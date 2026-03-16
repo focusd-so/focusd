@@ -54,7 +54,7 @@ func classifyGeneric(ctx context.Context, url, title string) (*ClassificationRes
 		slog.Debug("failed to fetch main content for generic classification", "url", url, "error", err)
 	}
 
-	if isCriticalNoBlockPage(url, title, mainContent) {
+	if isDeterministicCriticalNoBlockURL(url) {
 		return &ClassificationResponse{
 			Classification:       ClassificationNeutral,
 			ClassificationSource: ClassificationSourceObviously,
@@ -63,6 +63,8 @@ func classifyGeneric(ctx context.Context, url, title string) (*ClassificationRes
 			Tags:                 []string{"other"},
 		}, nil
 	}
+
+	suspiciousCriticalContext := isSuspiciousCriticalContext(url, title, mainContent)
 
 	var (
 		instructions = instructionGenericWebsiteClassification
@@ -79,7 +81,27 @@ Main Content (truncated): %s
 
 	response, err := classify(ctx, instructions, input)
 	if err != nil {
+		if suspiciousCriticalContext {
+			return &ClassificationResponse{
+				Classification:       ClassificationNeutral,
+				ClassificationSource: ClassificationSourceObviously,
+				Reasoning:            "Potential payment/booking flow with uncertain model result - safety override to avoid interruption",
+				ConfidenceScore:      1.0,
+				Tags:                 []string{"other"},
+			}, nil
+		}
+
 		return nil, fmt.Errorf("failed to classify with Gemini: %w", err)
+	}
+
+	if suspiciousCriticalContext && response.ConfidenceScore < 0.75 {
+		return &ClassificationResponse{
+			Classification:       ClassificationNeutral,
+			ClassificationSource: ClassificationSourceObviously,
+			Reasoning:            "Potential payment/booking flow with low-confidence classification - safety override to avoid interruption",
+			ConfidenceScore:      1.0,
+			Tags:                 []string{"other"},
+		}, nil
 	}
 
 	return response, nil

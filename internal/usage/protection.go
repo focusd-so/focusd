@@ -175,6 +175,8 @@ func (s *Service) Whitelist(appname string, hostname string, duration time.Durat
 		return fmt.Errorf("duration must be at least 5 minutes")
 	}
 
+	hostname = normalizeHostname(hostname)
+
 	now := time.Now().Unix()
 	expiresAt := now + int64(duration.Seconds())
 
@@ -182,9 +184,15 @@ func (s *Service) Whitelist(appname string, hostname string, duration time.Durat
 		duration = time.Hour
 	}
 
-	// delete any existing whitelist entries for the bundle ID and hostname
-	if err := s.db.Where("app_name = ? AND hostname = ?", appname, hostname).Delete(&ProtectionWhitelist{}).Error; err != nil {
-		return err
+	// delete any existing whitelist entries for the app and hostname
+	if hostname == "" {
+		if err := s.db.Where("app_name = ? AND (hostname IS NULL OR hostname = '')", appname).Delete(&ProtectionWhitelist{}).Error; err != nil {
+			return err
+		}
+	} else {
+		if err := s.db.Where("app_name = ? AND (hostname = ? OR hostname = ?)", appname, hostname, "www."+hostname).Delete(&ProtectionWhitelist{}).Error; err != nil {
+			return err
+		}
 	}
 
 	whitelist := ProtectionWhitelist{
@@ -282,7 +290,15 @@ func (s *Service) CalculateTerminationMode(ctx context.Context, appUsage *Applic
 
 	// get all whitelist entries for the bundle ID and hostname
 	var whitelist ProtectionWhitelist
-	if err := s.db.Where("app_name = ? AND expires_at > ?", appUsage.Application.Name, time.Now().Unix()).Limit(1).First(&whitelist).Error; err != nil {
+	hostname := normalizeHostname(fromPtr(appUsage.Application.Hostname))
+	query := s.db.Where("app_name = ? AND expires_at > ?", appUsage.Application.Name, time.Now().Unix())
+	if hostname == "" {
+		query = query.Where("(hostname IS NULL OR hostname = '')")
+	} else {
+		query = query.Where("(hostname = ? OR hostname = ?)", hostname, "www."+hostname)
+	}
+
+	if err := query.Limit(1).First(&whitelist).Error; err != nil {
 		if err != gorm.ErrRecordNotFound {
 			return TerminationDecision{}, err
 		}

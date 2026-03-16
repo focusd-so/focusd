@@ -97,6 +97,9 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	rawURL := sanitizeOptionalURL(url)
+	normalizedURL := normalizeOptionalURL(rawURL)
+
 	// check if the current application is the same
 	currentApplicationUsage, err := s.getCurrentApplicationUsage()
 	if err != nil {
@@ -104,7 +107,16 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 	}
 
 	// if the current application is the same, let it continue
-	if currentApplicationUsage != nil && currentApplicationUsage.Same(windowTitle, appName, bundleID, url) {
+	if currentApplicationUsage != nil && currentApplicationUsage.Same(windowTitle, appName, bundleID, normalizedURL) {
+		if rawURL != nil {
+			currentURL := fromPtr(currentApplicationUsage.BrowserURL)
+			if currentURL != *rawURL {
+				if err := s.db.Model(&ApplicationUsage{}).Where("id = ?", currentApplicationUsage.ID).Update("browser_url", *rawURL).Error; err != nil {
+					return fmt.Errorf("failed to refresh browser url for current usage: %w", err)
+				}
+			}
+		}
+
 		return nil
 	}
 
@@ -113,7 +125,7 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 		return fmt.Errorf("failed to close current application usage: %w", err)
 	}
 
-	application, err := s.getOrCreateApplication(ctx, appName, icon, bundleID, url, appCategory)
+	application, err := s.getOrCreateApplication(ctx, appName, icon, bundleID, normalizedURL, appCategory)
 	if err != nil {
 		return fmt.Errorf("failed to get or create application: %w", err)
 	}
@@ -121,7 +133,7 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 	applicationUsage := ApplicationUsage{
 		ExecutablePath: executablePath,
 		WindowTitle:    windowTitle,
-		BrowserURL:     url,
+		BrowserURL:     rawURL,
 		StartedAt:      time.Now().Unix(),
 
 		Application: application,
@@ -292,23 +304,27 @@ func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage
 func (s *Service) getOrCreateApplication(ctx context.Context, name, icon string, bundleID, rawURL, appCategory *string) (Application, error) {
 	// Handle web applications (browser tabs with URLs)
 
-	rawURLValue := fromPtr(rawURL)
+	rawURLValue := strings.TrimSpace(fromPtr(rawURL))
 
 	if rawURLValue != "" {
 		// Extract hostname from the URL (e.g., "www.google.com" from "https://www.google.com/search?q=...")
-		u, err := url.Parse(rawURLValue)
-		if err != nil {
-			slog.Warn("failed to parse URL", "error", err)
+		hostname, _ := parseURL(rawURLValue)
+		if hostname == "" {
+			u, err := url.Parse(rawURLValue)
+			if err != nil {
+				slog.Warn("failed to parse URL", "error", err)
+			}
+			if u != nil {
+				hostname = normalizeHostname(u.Hostname())
+			}
 		}
-
-		hostname := u.Hostname()
 
 		// Attempt to find an existing application record by hostname.
 		// Web apps are uniquely identified by hostname, so all tabs from the same
 		// site (e.g., multiple Google tabs) share the same Application record.
 		var (
 			application Application
-			query       = s.db.Where("(hostname = ? OR hostname IS NULL) AND name = ?", hostname, name)
+			query       = s.db.Where("((hostname = ? OR hostname = ?) OR hostname IS NULL) AND name = ?", hostname, "www."+hostname, name)
 		)
 
 		if err := query.First(&application).Error; err != nil {

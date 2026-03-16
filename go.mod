@@ -21,7 +21,7 @@ require (
 	github.com/tmc/langchaingo v0.1.14
 	github.com/tursodatabase/libsql-client-go v0.0.0-20251219100830-236aa1ff8acc
 	github.com/urfave/cli/v3 v3.6.2
-	github.com/wailsapp/wails/v3 v3.0.0-alpha.72
+	github.com/wailsapp/wails/v3 v3.0.0-alpha.74
 	github.com/zalando/go-keyring v0.2.6
 	golang.org/x/net v0.50.0
 	golang.org/x/sync v0.19.0

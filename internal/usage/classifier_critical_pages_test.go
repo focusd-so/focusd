@@ -7,7 +7,52 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestIsCriticalNoBlockPage(t *testing.T) {
+func TestIsDeterministicCriticalNoBlockURL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		rawURL   string
+		expected bool
+	}{
+		{
+			name:     "detects stripe checkout host",
+			rawURL:   "https://checkout.stripe.com/c/pay/cs_test_123",
+			expected: true,
+		},
+		{
+			name:     "detects paypal checkout host",
+			rawURL:   "https://checkout.paypal.com/checkoutnow?token=123",
+			expected: true,
+		},
+		{
+			name:     "detects provider path flow",
+			rawURL:   "https://www.paypal.com/checkoutnow?token=abc",
+			expected: true,
+		},
+		{
+			name:     "does not match hostname only",
+			rawURL:   "https://paypal.com/",
+			expected: false,
+		},
+		{
+			name:     "non critical page",
+			rawURL:   "https://example.com/news",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		tc := tt
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			actual := isDeterministicCriticalNoBlockURL(tc.rawURL)
+			require.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
+func TestIsSuspiciousCriticalContext(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -18,30 +63,21 @@ func TestIsCriticalNoBlockPage(t *testing.T) {
 		expected    bool
 	}{
 		{
-			name:     "detects payment from url path",
-			rawURL:   "https://example.com/checkout/confirm",
-			expected: true,
-		},
-		{
-			name:     "detects reservation from query",
-			rawURL:   "https://example.com/travel?step=reservation_confirm",
-			expected: true,
-		},
-		{
-			name:     "detects booking from title",
-			rawURL:   "https://example.com/flow",
-			title:    "Finalize Booking",
-			expected: true,
-		},
-		{
-			name:        "detects invoice from content",
+			name:        "detects strong phrase from content",
 			rawURL:      "https://example.com/flow",
-			mainContent: "Please complete payment for invoice #1234",
+			mainContent: "Please complete payment to confirm your booking",
 			expected:    true,
 		},
 		{
-			name:     "does not match hostname only",
-			rawURL:   "https://booking.com/",
+			name:     "detects multi token from title",
+			rawURL:   "https://example.com/flow",
+			title:    "Reservation payment confirmation",
+			expected: true,
+		},
+		{
+			name:     "does not trigger for weak single mention",
+			rawURL:   "https://example.com/blog/payment-systems",
+			title:    "How payment systems work",
 			expected: false,
 		},
 		{
@@ -56,7 +92,7 @@ func TestIsCriticalNoBlockPage(t *testing.T) {
 		tc := tt
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			actual := isCriticalNoBlockPage(tc.rawURL, tc.title, tc.mainContent)
+			actual := isSuspiciousCriticalContext(tc.rawURL, tc.title, tc.mainContent)
 			require.Equal(t, tc.expected, actual)
 		})
 	}
