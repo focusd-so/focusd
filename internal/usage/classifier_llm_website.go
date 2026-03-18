@@ -13,7 +13,12 @@ import (
 )
 
 func (s *Service) classifyWebsite(ctx context.Context, url, title string) (*ClassificationResponse, error) {
-	hostname, _ := parseURL(url)
+	u, err := parseURLNormalized(url)
+	if err != nil {
+		return nil, err
+	}
+
+	hostname := u.Hostname()
 	domain, _ := publicsuffix.EffectiveTLDPlusOne(hostname)
 
 	switch domain {

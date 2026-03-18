@@ -45,9 +45,8 @@ func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle,
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if url != nil {
-		url = sanitizeOptionalURL(url)
-	}
+	parsed, _ := parseURLNormalized(fromPtr(url))
+	url = withPtr(parsed.String())
 
 	application, err := s.getOrCreateApplication(ctx, appName, icon, bundleID, url, appCategory)
 	if err != nil {
@@ -66,23 +65,17 @@ func (s *Service) usageChanged(ctx context.Context, usage ApplicationUsage) erro
 	// if the current application and new application usage are the same,
 	// no additional action, let the current application usage continue
 	if currentApplicationUsage.Same(usage) {
-		return nil
-	}
+		usage = currentApplicationUsage
+	} else {
+		// if new application usage is detected close the current application usage before creating a new one
+		if err := s.closeApplicationUsage(currentApplicationUsage); err != nil {
+			return fmt.Errorf("failed to close current application usage: %w", err)
+		}
 
-	// if new application usage is detected close the current application usage before creating a new one
-	if err := s.closeApplicationUsage(currentApplicationUsage); err != nil {
-		return fmt.Errorf("failed to close current application usage: %w", err)
+		if err := s.saveApplicationUsage(&usage); err != nil {
+			return fmt.Errorf("failed to save application usage: %w", err)
+		}
 	}
-
-	if err := s.db.Save(&usage).Error; err != nil {
-		return fmt.Errorf("failed to save application usage: %w", err)
-	}
-
-	s.eventsMu.RLock()
-	for _, fn := range s.onUsageUpdated {
-		fn(usage)
-	}
-	s.eventsMu.RUnlock()
 
 	if usage.Application.Name == IdleApplicationName {
 		return nil
@@ -133,13 +126,22 @@ func (s *Service) usageChanged(ctx context.Context, usage ApplicationUsage) erro
 	if usage.TerminationMode == TerminationModeBlock {
 		termReason := fromPtr(usage.ClassificationReasoning)
 		tags := ApplicationTagsSlice(usage.Tags).Tags()
+		usage.EndedAt = withPtr(time.Now().Unix())
 
-		s.appBlocker(usage.Application.Name, usage.WindowTitle, termReason, tags, usage.BrowserURL)
+		go func() { s.appBlocker(usage.Application.Name, usage.WindowTitle, termReason, tags, usage.BrowserURL) }()
+	}
+
+	return s.saveApplicationUsage(&usage)
+}
+
+func (s *Service) saveApplicationUsage(applicationUsage *ApplicationUsage) error {
+	if err := s.db.Save(applicationUsage).Error; err != nil {
+		return fmt.Errorf("failed to save application usage: %w", err)
 	}
 
 	s.eventsMu.RLock()
 	for _, fn := range s.onUsageUpdated {
-		fn(usage)
+		fn(*applicationUsage)
 	}
 	s.eventsMu.RUnlock()
 
@@ -206,16 +208,13 @@ func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage
 //   - for web apps, fallback to fetched favicon
 //   - otherwise use provided icon
 func (s *Service) getOrCreateApplication(ctx context.Context, name, icon string, bundleID, rawURL, appCategory *string) (Application, error) {
-	rawURL = normalizeOptionalURL(rawURL)
-
 	var application Application
 	var hostname *string
 
 	if rawURL != nil {
-		normalizedHostname := normalizeHostname(fromPtr(rawURL))
-		if normalizedHostname != "" {
-			hostname = &normalizedHostname
-		}
+		u, _ := parseURLNormalized(*rawURL)
+
+		hostname = withPtr(u.Hostname())
 	}
 
 	query := s.db.Where("name = ?", name)

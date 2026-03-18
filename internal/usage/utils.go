@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -16,81 +15,19 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
-func normalizeHostname(hostname string) string {
-	hostname = strings.ToLower(strings.TrimSpace(hostname))
+func parseURLNormalized(browserURL string) (*url.URL, error) {
+	u, err := url.ParseRequestURI(browserURL)
+	if err != nil {
+		return nil, err
+	}
+
+	hostname := strings.ToLower(strings.TrimSpace(u.Hostname()))
 	hostname = strings.TrimSuffix(hostname, ".")
 	hostname = strings.TrimPrefix(hostname, "www.")
 
-	return hostname
-}
+	u.Host = hostname
 
-func normalizeURLHost(rawURL string) string {
-	if rawURL == "" {
-		return ""
-	}
-
-	u, err := url.ParseRequestURI(rawURL)
-	if err != nil {
-		return rawURL
-	}
-
-	hostname := normalizeHostname(u.Hostname())
-	if hostname == "" {
-		return rawURL
-	}
-
-	if port := u.Port(); port != "" {
-		u.Host = net.JoinHostPort(hostname, port)
-	} else {
-		u.Host = hostname
-	}
-
-	return u.String()
-}
-
-// normalizeOptionalURL normalizes the given URL by
-//   - trimming whitespace
-//   - removing the "www." prefix and trailing dot.
-//   - parsing the URL and normalizing the hostname
-//   - if the URL is not a valid web URL, return nil
-func normalizeOptionalURL(rawURL *string) *string {
-	if rawURL == nil {
-		return nil
-	}
-
-	trimmed := strings.TrimSpace(*rawURL)
-	if trimmed == "" {
-		return nil
-	}
-
-	normalized := normalizeURLHost(trimmed)
-
-	return &normalized
-}
-
-func sanitizeOptionalURL(rawURL *string) *string {
-	if rawURL == nil {
-		return nil
-	}
-
-	trimmed := strings.TrimSpace(*rawURL)
-	if trimmed == "" {
-		return nil
-	}
-
-	return &trimmed
-}
-
-func parseURL(browserURL string) (hostname, path string) {
-	u, err := url.Parse(browserURL)
-	if err != nil {
-		return "", ""
-	}
-
-	hostname = normalizeHostname(u.Hostname())
-	path = u.Path
-
-	return hostname, path
+	return u, nil
 }
 
 type MetaData struct {
@@ -185,10 +122,12 @@ func createSandboxContext(appName string, url *string) sandboxContext {
 	if url != nil {
 		sandboxCtx.URL = *url
 
-		hostname, path := parseURL(*url)
-		sandboxCtx.Hostname = hostname
-		sandboxCtx.Path = path
-		sandboxCtx.Domain, _ = publicsuffix.EffectiveTLDPlusOne(hostname)
+		u, err := parseURLNormalized(*url)
+		if err == nil {
+			sandboxCtx.Hostname = u.Hostname()
+			sandboxCtx.Path = u.Path
+			sandboxCtx.Domain, _ = publicsuffix.EffectiveTLDPlusOne(u.Hostname())
+		}
 	}
 
 	return sandboxCtx

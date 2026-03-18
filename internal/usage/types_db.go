@@ -46,7 +46,7 @@ func (a Application) TableName() string {
 	return "application"
 }
 
-func (a Application) NewUsage(windowTitle string, url *string) ApplicationUsage {
+func (a Application) NewUsage(windowTitle string, browserURL *string) ApplicationUsage {
 	return ApplicationUsage{
 		ApplicationID:   a.ID,
 		Application:     a,
@@ -54,7 +54,7 @@ func (a Application) NewUsage(windowTitle string, url *string) ApplicationUsage 
 		Classification:  ClassificationNone,
 		TerminationMode: TerminationModeNone,
 		WindowTitle:     windowTitle,
-		BrowserURL:      url,
+		BrowserURL:      browserURL,
 	}
 }
 
@@ -147,7 +147,7 @@ func (a *ApplicationUsage) String() string {
 	vals := url.Values{}
 	vals.Set("app", a.Application.Name)
 	vals.Set("title", a.WindowTitle)
-	vals.Set("url", normalizeURLHost(fromPtr(a.BrowserURL)))
+	vals.Set("url", fromPtr(a.BrowserURL))
 
 	return vals.Encode()
 }

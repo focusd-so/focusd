@@ -45,10 +45,12 @@ func WithBrowserURLContext(url string) sandboxContextOption {
 	return func(ctx *sandboxContext) {
 		ctx.URL = url
 
-		hostname, path := parseURL(url)
-		ctx.Hostname = hostname
-		ctx.Path = path
-		ctx.Domain, _ = publicsuffix.EffectiveTLDPlusOne(hostname)
+		u, err := parseURLNormalized(url)
+		if err == nil {
+			ctx.Hostname = u.Hostname()
+			ctx.Path = u.Path
+			ctx.Domain, _ = publicsuffix.EffectiveTLDPlusOne(u.Hostname())
+		}
 	}
 }
 
