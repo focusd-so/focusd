@@ -7,6 +7,11 @@
 
 package usage
 
+import (
+	"net/url"
+	"time"
+)
+
 type (
 	ExecutionLogType string
 )
@@ -27,9 +32,10 @@ type Application struct {
 	Name string `json:"name" gorm:"uniqueIndex:idx_name_hostname_id;not null"`
 
 	// optional fields
-	Icon     *string `json:"icon"` // either app icon or favicon if host is present
-	Hostname *string `json:"hostname" gorm:"uniqueIndex:idx_name_hostname_id"`
-	Domain   *string `json:"domain"`
+	Icon           *string `json:"icon"` // either app icon or favicon if host is present
+	Hostname       *string `json:"hostname" gorm:"uniqueIndex:idx_name_hostname_id"`
+	Domain         *string `json:"domain"`
+	ExecutablePath string  `json:"executable_path"`
 
 	// darwin only
 	BundleID    *string `json:"bundle_id"`
@@ -40,6 +46,25 @@ func (a Application) TableName() string {
 	return "application"
 }
 
+func (a Application) NewUsage(windowTitle string, url *string) ApplicationUsage {
+	return ApplicationUsage{
+		ApplicationID:   a.ID,
+		Application:     a,
+		StartedAt:       time.Now().Unix(),
+		Classification:  ClassificationNone,
+		TerminationMode: TerminationModeNone,
+		WindowTitle:     windowTitle,
+		BrowserURL:      url,
+	}
+}
+
+func NewIdleApplication() Application {
+	return Application{
+		Name:           IdleApplicationName,
+		ExecutablePath: "com.system.idle",
+	}
+}
+
 type ApplicationUsage struct {
 	// mandatory fields
 	ID              int64           `json:"id" gorm:"primaryKey;autoIncrement;not null"`
@@ -47,7 +72,6 @@ type ApplicationUsage struct {
 	StartedAt       int64           `json:"started_at" gorm:"not null"`
 	Classification  Classification  `json:"classification" gorm:"index:idx_classification"`
 	TerminationMode TerminationMode `json:"termination_mode" gorm:"not null"`
-	ExecutablePath  string          `json:"executable_path" gorm:"not null"`
 
 	// optional fields
 	BrowserURL      *string `json:"browser_url" gorm:"type:text"`
@@ -107,51 +131,35 @@ func (a *ApplicationUsage) GetDetectedProject() string {
 }
 
 // Same returns true if the application usage is the same as the given application usage
-//
-// Application usage is considered the same if:
-//   - The url is not nil and the url is the same
-//   - The application name and title are the same,
-//     eg. Slack + general discussion != Slack + funny memes
-func (a *ApplicationUsage) Same(windowTitle, appName string, bundleID, url *string) bool {
-	// Consistently handle nil vs empty string for URL comparison
-	aURL := a.BrowserURL
-	if aURL != nil && *aURL == "" {
-		aURL = nil
-	}
-	if aURL != nil {
-		normalized := normalizeURLHost(*aURL)
-		aURL = &normalized
-	}
-
-	newURL := url
-	if newURL != nil && *newURL == "" {
-		newURL = nil
-	}
-	if newURL != nil {
-		normalized := normalizeURLHost(*newURL)
-		newURL = &normalized
-	}
-
-	if aURL != nil && newURL != nil && *aURL == *newURL {
+func (a ApplicationUsage) Same(a1 ApplicationUsage) bool {
+	if a.ID != 0 && a1.ID != 0 && a.ID == a1.ID {
 		return true
 	}
 
-	// If one is nil and the other isn't, they are different (e.g. switching between tabs and native app)
-	if (aURL == nil) != (newURL == nil) {
-		return false
+	return a.String() == a1.String()
+}
+
+func (a *ApplicationUsage) String() string {
+	if a.Application.Name == IdleApplicationName {
+		return IdleApplicationName
 	}
 
-	if appName == a.Application.Name && windowTitle == a.WindowTitle {
-		return true
-	}
+	vals := url.Values{}
+	vals.Set("app", a.Application.Name)
+	vals.Set("title", a.WindowTitle)
+	vals.Set("url", normalizeURLHost(fromPtr(a.BrowserURL)))
 
-	return false
+	return vals.Encode()
 }
 
 type ApplicationUsageTags struct {
 	ID      int64  `gorm:"primaryKey;autoIncrement" json:"id"`
 	Tag     string `json:"tag"`
 	UsageID int64  `json:"usage_id" gorm:"index:idx_usage_id"`
+}
+
+func (a *ApplicationUsageTags) TableName() string {
+	return "application_usage_tag"
 }
 
 type ProtectionWhitelist struct {
@@ -190,4 +198,8 @@ type SandboxExecutionLog struct {
 	FinishedAt *int64  `json:"finished_at" gorm:"index:idx_finished_at;nullable"`
 	Error      *string `json:"error" gorm:"type:text;nullable"`
 	Type       string  `json:"type" gorm:"index:idx_type"`
+}
+
+func (s *SandboxExecutionLog) TableName() string {
+	return "sandbox_execution_log"
 }

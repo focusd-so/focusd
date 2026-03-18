@@ -25,7 +25,11 @@ func normalizeHostname(hostname string) string {
 }
 
 func normalizeURLHost(rawURL string) string {
-	u, err := url.Parse(rawURL)
+	if rawURL == "" {
+		return ""
+	}
+
+	u, err := url.ParseRequestURI(rawURL)
 	if err != nil {
 		return rawURL
 	}
@@ -44,6 +48,11 @@ func normalizeURLHost(rawURL string) string {
 	return u.String()
 }
 
+// normalizeOptionalURL normalizes the given URL by
+//   - trimming whitespace
+//   - removing the "www." prefix and trailing dot.
+//   - parsing the URL and normalizing the hostname
+//   - if the URL is not a valid web URL, return nil
 func normalizeOptionalURL(rawURL *string) *string {
 	if rawURL == nil {
 		return nil

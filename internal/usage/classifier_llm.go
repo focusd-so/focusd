@@ -13,6 +13,7 @@ import (
 	"github.com/focusd-so/focusd/internal/api"
 	"github.com/focusd-so/focusd/internal/identity"
 	"github.com/focusd-so/focusd/internal/settings"
+	"github.com/spf13/viper"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/anthropic"
 	"github.com/tmc/langchaingo/llms/googleai"
@@ -38,6 +39,16 @@ func classify(ctx context.Context, instructions, input string) (*ClassificationR
 		return classifyWithAnthropic(ctx, instructions, input)
 	case settings.LLMProviderGroq:
 		return classifyWithGrok(ctx, instructions, input)
+	case settings.LLMProviderDummy:
+		resp := viper.GetString("dummy_classification_response")
+		if resp == "" {
+			return nil, errors.New("dummy_classification_response is not set")
+		}
+		var classification ClassificationResponse
+		if err := json.Unmarshal([]byte(resp), &classification); err != nil {
+			return nil, err
+		}
+		return &classification, nil
 	}
 
 	return nil, errors.New("unsupported LLM provider")

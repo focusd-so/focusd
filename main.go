@@ -235,8 +235,8 @@ func main() {
 
 	wailsApp.OnShutdown(cancel)
 
-	usageService.OnUsageUpdated(func(appUsage *usage.ApplicationUsage) {
-		wailsApp.Event.Emit("usage:update", *appUsage)
+	usageService.OnUsageUpdated(func(appUsage usage.ApplicationUsage) {
+		wailsApp.Event.Emit("usage:update", appUsage)
 	})
 
 	native.OnIdleChange(func(idleSeconds float64) {

@@ -3,7 +3,6 @@ package usage_test
 import (
 	"context"
 	"fmt"
-	"net/http"
 	urlpkg "net/url"
 	"testing"
 	"time"
@@ -33,145 +32,136 @@ func setUpService(t *testing.T, options ...usage.Option) (*usage.Service, *gorm.
 	return service, db
 }
 
-func TestService_WhenEnterIdle_ContinueCurrentIdlePeriod(t *testing.T) {
-	service, db := setUpService(t)
-
-	// create the Idle application
-	idleApp := usage.Application{Name: usage.IdleApplicationName}
-	require.NoError(t, db.Create(&idleApp).Error)
-
-	// create an open idle usage
-	idleUsage := usage.ApplicationUsage{
-		ApplicationID:   idleApp.ID,
-		StartedAt:       time.Now().Unix(),
-		Classification:  usage.ClassificationNone,
-		TerminationMode: usage.TerminationModeNone,
-		WindowTitle:     usage.IdleApplicationName,
-		ExecutablePath:  "idle",
-	}
-	require.NoError(t, db.Create(&idleUsage).Error)
-
-	// wait 3 seconds
-	time.Sleep(3 * time.Second)
-
-	// enter idle
-	err := service.IdleChanged(context.Background(), true)
-	require.NoError(t, err, "failed to enter idle")
-
-	// read the idle usage — it should still be open
-	var readIdleUsage usage.ApplicationUsage
-	require.NoError(t, db.Where("id = ?", idleUsage.ID).First(&readIdleUsage).Error)
-
-	require.NotEqual(t, int64(0), readIdleUsage.StartedAt)
-	require.Equal(t, readIdleUsage.ID, idleUsage.ID)
-	require.Nil(t, readIdleUsage.EndedAt)
-	require.Nil(t, readIdleUsage.DurationSeconds)
+type usageDriver struct {
+	t       *testing.T
+	service *usage.Service
+	db      *gorm.DB
 }
 
-func TestService_WhenEnterIdle_CreateNewIdlePeriod(t *testing.T) {
-	service, db := setUpService(t)
-
-	// create the Idle application
-	idleApp := usage.Application{Name: usage.IdleApplicationName}
-	require.NoError(t, db.Create(&idleApp).Error)
-
-	now := time.Now().Unix()
-	expectedDurationSeconds := 3
-
-	// create a closed idle usage
-	closedIdleUsage := usage.ApplicationUsage{
-		ApplicationID:   idleApp.ID,
-		StartedAt:       time.Now().Unix(),
-		EndedAt:         &now,
-		DurationSeconds: &expectedDurationSeconds,
-		Classification:  usage.ClassificationNone,
-		TerminationMode: usage.TerminationModeNone,
-		WindowTitle:     usage.IdleApplicationName,
-		ExecutablePath:  "idle",
+func newUsageDriver(t *testing.T, options ...usage.Option) *usageDriver {
+	service, db := setUpService(t, options...)
+	return &usageDriver{
+		t:       t,
+		service: service,
+		db:      db,
 	}
-	require.NoError(t, db.Create(&closedIdleUsage).Error)
-
-	// enter idle
-	err := service.IdleChanged(context.Background(), true)
-	require.NoError(t, err, "failed to enter idle")
-
-	// read the new idle usage
-	var readIdleUsage usage.ApplicationUsage
-	require.NoError(t, db.Joins("Application").
-		Where("application.name = ? AND application_usage.ended_at IS NULL", usage.IdleApplicationName).
-		Limit(1).Order("application_usage.started_at DESC").
-		First(&readIdleUsage).Error)
-
-	require.NotEqual(t, int64(0), readIdleUsage.StartedAt)
-	require.NotEqual(t, readIdleUsage.ID, closedIdleUsage.ID)
-	require.Nil(t, readIdleUsage.EndedAt)
-	require.Nil(t, readIdleUsage.DurationSeconds)
 }
 
-func TestService_WhenExitIdle_CloseCurrentIdlePeriod(t *testing.T) {
-	service, db := setUpService(t)
-
-	// create the Idle application
-	idleApp := usage.Application{Name: usage.IdleApplicationName}
-	require.NoError(t, db.Create(&idleApp).Error)
-
-	// create an open idle usage
-	idleUsage := usage.ApplicationUsage{
-		ApplicationID:   idleApp.ID,
-		StartedAt:       time.Now().Unix(),
-		Classification:  usage.ClassificationNone,
-		TerminationMode: usage.TerminationModeNone,
-		WindowTitle:     usage.IdleApplicationName,
-		ExecutablePath:  "idle",
-	}
-	require.NoError(t, db.Create(&idleUsage).Error)
-
-	// wait 3 seconds
-	time.Sleep(3 * time.Second)
-
-	// exit idle
-	err := service.IdleChanged(context.Background(), false)
-	require.NoError(t, err, "failed to exit idle")
-
-	// read the idle usage
-	var readIdleUsage usage.ApplicationUsage
-	require.NoError(t, db.Where("id = ?", idleUsage.ID).First(&readIdleUsage).Error)
-
-	require.NotEqual(t, int64(0), readIdleUsage.StartedAt)
-	require.NotNil(t, readIdleUsage.EndedAt)
-	require.NotNil(t, readIdleUsage.DurationSeconds)
-	require.Equal(t, 3, *readIdleUsage.DurationSeconds)
+func (d *usageDriver) EnterIdle() *usageDriver {
+	err := d.service.IdleChanged(context.Background(), true)
+	require.NoError(d.t, err, "failed to enter idle")
+	return d
 }
 
-func TestService_CloseCurrentApplicationUsageWhenEnterIdle(t *testing.T) {
-	service, db := setUpService(t)
+func (d *usageDriver) ExitIdle() *usageDriver {
+	err := d.service.IdleChanged(context.Background(), false)
+	require.NoError(d.t, err, "failed to exit idle")
+	return d
+}
 
+func (d *usageDriver) TitleChanged(path, bundleID, name, title string) *usageDriver {
+	err := d.service.TitleChanged(context.Background(), path, bundleID, name, title, nil, nil, nil)
+	require.NoError(d.t, err, "failed to change title")
+	return d
+}
+
+func (d *usageDriver) AssertApplicationCount(expected int) *usageDriver {
+	apps, err := d.service.GetApplicationList()
+	require.NoError(d.t, err, "failed to get application list")
+	require.Len(d.t, apps, expected, "unexpected application count")
+	return d
+}
+
+func (d *usageDriver) AssertUsageCount(appName string, expected int) *usageDriver {
+	var app usage.Application
+	err := d.db.Where("name = ?", appName).First(&app).Error
+	require.NoError(d.t, err, "failed to find application %s", appName)
+
+	usages, err := d.service.GetUsageList(usage.GetUsageListOptions{
+		ApplicationID: &app.ID,
+	})
+	require.NoError(d.t, err, "failed to get usage list for %s", appName)
+	require.Len(d.t, usages, expected, "unexpected usage count for %s", appName)
+	return d
+}
+
+func (d *usageDriver) AssertLastUsage(appName string, check func(*usage.ApplicationUsage)) *usageDriver {
+	var app usage.Application
+	err := d.db.Where("name = ?", appName).First(&app).Error
+	require.NoError(d.t, err, "failed to find application %s", appName)
+
+	var lastUsage usage.ApplicationUsage
+	err = d.db.Where("application_id = ?", app.ID).Order("started_at desc").First(&lastUsage).Error
+	require.NoError(d.t, err, "failed to find last usage for %s", appName)
+
+	check(&lastUsage)
+	return d
+}
+
+func TestService_IdleChanged_TransitionsBetweenIdleAndApplicationUsage(t *testing.T) {
+	d := newUsageDriver(t)
+
+	updateCalls := 0
+	d.service.OnUsageUpdated(func(_ usage.ApplicationUsage) {
+		updateCalls++
+	})
+
+	// Initial idle entry should create an idle usage record with no classification
+	d.EnterIdle().
+		AssertApplicationCount(1).
+		AssertUsageCount(usage.IdleApplicationName, 1).
+		AssertLastUsage(usage.IdleApplicationName, func(u *usage.ApplicationUsage) {
+			require.Equal(t, usage.ClassificationNone, u.Classification)
+			require.Nil(t, u.EndedAt)
+		})
+
+	// Ensure classification update callback was called once for the idle usage
+	require.Equal(t, 1, updateCalls)
+
+	// Re-entering idle should be idempotent
+	d.EnterIdle().
+		AssertApplicationCount(1).
+		AssertUsageCount(usage.IdleApplicationName, 1)
+
+	time.Sleep(2 * time.Second)
+
+	// Switching from Idle to an application should close the Idle usage and
 	// create a new application usage
-	applicationUsage := usage.ApplicationUsage{
-		StartedAt:       time.Now().Unix(),
-		EndedAt:         nil,
-		DurationSeconds: nil,
-	}
-	if err := db.Create(&applicationUsage).Error; err != nil {
-		t.Fatalf("failed to create application usage: %v", err)
-	}
+	d.TitleChanged("/Applications/Slack.app/Contents/MacOS/Slack", "com.tinyspeck.slackmacgap", "Slack", "General").
+		AssertApplicationCount(2).
+		AssertUsageCount(usage.IdleApplicationName, 1).
+		AssertLastUsage(usage.IdleApplicationName, func(u *usage.ApplicationUsage) {
+			require.NotNil(t, u.EndedAt)
+			require.NotNil(t, u.DurationSeconds)
+			require.Equal(t, 2, *u.DurationSeconds)
+		}).
+		AssertUsageCount("Slack", 1).
+		AssertLastUsage("Slack", func(u *usage.ApplicationUsage) {
+			require.Nil(t, u.EndedAt)
+		})
 
-	// wait 3 seconds
+	// Switching from an application back to Idle should close the application
+	// usage and create a new Idle usage
 	time.Sleep(3 * time.Second)
+	d.EnterIdle().
+		AssertUsageCount(usage.IdleApplicationName, 2).
+		AssertUsageCount("Slack", 1).
+		AssertLastUsage("Slack", func(u *usage.ApplicationUsage) {
+			require.NotNil(t, u.EndedAt)
+			require.NotNil(t, u.DurationSeconds)
+			require.Equal(t, 3, *u.DurationSeconds)
+		})
+}
 
-	err := service.IdleChanged(context.Background(), true)
-	require.NoError(t, err, "failed to enter idle")
+func TestService_TitleChanged(t *testing.T) {
+	d := newUsageDriver(t)
 
-	// read the application usage
-	var readApplicationUsage usage.ApplicationUsage
-	if err := db.Where("id = ?", applicationUsage.ID).First(&readApplicationUsage).Error; err != nil {
-		t.Fatalf("failed to find application usage: %v", err)
-	}
-
-	require.NotEqual(t, 0, readApplicationUsage.StartedAt)
-	require.NotEqual(t, 0, readApplicationUsage.EndedAt)
-	require.NotNil(t, readApplicationUsage.DurationSeconds)
-	require.Equal(t, 3, *readApplicationUsage.DurationSeconds)
+	d.TitleChanged("/Applications/Slack.app/Contents/MacOS/Slack", "com.tinyspeck.slackmacgap", "Slack", "General").
+		AssertApplicationCount(1).
+		AssertUsageCount("Slack", 1).
+		AssertLastUsage("Slack", func(u *usage.ApplicationUsage) {
+			require.Nil(t, u.EndedAt)
+		})
 }
 
 func TestService_TitleChanged_WhenSameApplication_ContinueCurrentApplicationUsage(t *testing.T) {
@@ -256,11 +246,10 @@ func TestService_TitleChanged_StripsWWWInURLComparison(t *testing.T) {
 
 	initialURL := "https://youtube.com/watch?v=abc"
 	applicationUsage := usage.ApplicationUsage{
-		StartedAt:      time.Now().Unix(),
-		WindowTitle:    "YouTube",
-		ExecutablePath: "Google Chrome",
-		BrowserURL:     &initialURL,
-		ApplicationID:  app.ID,
+		StartedAt:     time.Now().Unix(),
+		WindowTitle:   "YouTube",
+		BrowserURL:    &initialURL,
+		ApplicationID: app.ID,
 	}
 	require.NoError(t, db.Create(&applicationUsage).Error)
 
@@ -290,11 +279,4 @@ func TestService_TitleChanged_PreservesRawURLForBlocking(t *testing.T) {
 	require.NoError(t, db.Where("id = ?", 1).First(&readUsage).Error)
 	require.NotNil(t, readUsage.BrowserURL)
 	require.Equal(t, "https://www.focusd.so/blocked?d=123", *readUsage.BrowserURL)
-}
-
-// roundTripFunc is an adapter to allow the use of ordinary functions as http.RoundTripper.
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
-	return f(r)
 }

@@ -11,22 +11,13 @@ import (
 	"github.com/focusd-so/focusd/internal/settings"
 )
 
-func (s *Service) ClassifyCustomRules(ctx context.Context, appName string, url *string, nowTime *time.Time) (*ClassificationResponse, error) {
+func (s *Service) ClassifyCustomRules(ctx context.Context, opts ...sandboxContextOption) (*ClassificationResponse, error) {
 	slog.Info("classifying application usage with custom rules")
 
-	sandboxCtx := createSandboxContext(appName, url)
-
-	if nowTime != nil {
-		t := *nowTime
-		sandboxCtx.Now = func(loc *time.Location) time.Time {
-			return t.In(loc)
-		}
-	}
-
-	return s.ClassifyCustomRulesWithSandbox(ctx, sandboxCtx)
+	return s.classifyCustomRulesWithSandbox(ctx, NewSandboxContext(opts...))
 }
 
-func (s *Service) ClassifyCustomRulesWithSandbox(ctx context.Context, sandboxCtx sandboxContext) (*ClassificationResponse, error) {
+func (s *Service) classifyCustomRulesWithSandbox(ctx context.Context, sandboxCtx sandboxContext) (*ClassificationResponse, error) {
 	// Serialize the context to JSON
 	contextJSON, err := json.Marshal(sandboxCtx)
 	if err != nil {

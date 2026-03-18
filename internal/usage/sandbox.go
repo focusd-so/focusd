@@ -24,26 +24,6 @@ type terminationDecision struct {
 	TerminationReasoning string `json:"terminationReasoning"`
 }
 
-// sandboxContext provides context for the current rule execution including usage data and helper functions
-type sandboxContext struct {
-	// Input data
-	AppName string `json:"appName"`
-
-	Hostname       string `json:"hostname"`
-	Path           string `json:"path"`
-	Domain         string `json:"domain"`
-	URL            string `json:"url"`
-	Classification string `json:"classification"`
-
-	// Helper pre-computed values
-	MinutesSinceLastBlock     *int `json:"minutesSinceLastBlock"`
-	MinutesUsedSinceLastBlock *int `json:"minutesUsedSinceLastBlock"`
-
-	// Helper functions
-	Now                 func(loc *time.Location) time.Time                                    `json:"-"`
-	MinutesUsedInPeriod func(bundleID, hostname string, durationMinutes int64) (int64, error) `json:"-"`
-}
-
 // sandbox executes user-defined JavaScript rules using V8
 type sandbox struct {
 	isolate *v8.Isolate

@@ -1,7 +1,7 @@
 package usage
 
 // OnUsageUpdated subscribes a callback to the usage updated event.
-func (s *Service) OnUsageUpdated(fn func(usage *ApplicationUsage)) {
+func (s *Service) OnUsageUpdated(fn func(usage ApplicationUsage)) {
 	s.eventsMu.Lock()
 	defer s.eventsMu.Unlock()
 	s.onUsageUpdated = append(s.onUsageUpdated, fn)

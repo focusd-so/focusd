@@ -76,6 +76,14 @@ func (s *Service) GetUsageList(options GetUsageListOptions) ([]ApplicationUsage,
 	return usages, nil
 }
 
+func (s *Service) GetApplicationList() ([]Application, error) {
+	var applications []Application
+	if err := s.db.Find(&applications).Error; err != nil {
+		return nil, err
+	}
+	return applications, nil
+}
+
 func (s *Service) GetUsageAggregation(options GetUsageListOptions) ([]UsageAggregation, error) {
 	var usages []ApplicationUsage
 

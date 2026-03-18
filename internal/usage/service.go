@@ -21,7 +21,7 @@ type Service struct {
 	onProtectionPaused     []func(pause ProtectionPause)
 	onProtectionResumed    []func(pause ProtectionPause)
 	onLLMDailySummaryReady []func(summary LLMDailySummary)
-	onUsageUpdated         []func(usage *ApplicationUsage)
+	onUsageUpdated         []func(usage ApplicationUsage)
 
 	// mu serializes title change processing to prevent race conditions
 	// when multiple events fire concurrently
@@ -41,9 +41,7 @@ func NewService(ctx context.Context, db *gorm.DB, options ...Option) (*Service, 
 		return nil, fmt.Errorf("failed to migrate usage tables: %w", err)
 	}
 
-	service := &Service{
-		db: db,
-	}
+	service := &Service{db: db}
 
 	for _, option := range options {
 		option(service)
