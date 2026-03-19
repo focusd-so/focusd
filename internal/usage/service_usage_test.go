@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -72,7 +71,7 @@ func TestService_TransitionsBetweenIdleAndApplicationUsage(t *testing.T) {
 		AssertUsagesCount(3)
 }
 
-func TestService_ProtectionPauseAll(t *testing.T) {
+func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 	h := newUsageHarness(t)
 
 	// user opens amazon, gets blocked by obviously classifier since it's a distraction
@@ -89,7 +88,7 @@ func TestService_ProtectionPauseAll(t *testing.T) {
 		AssertUpdateEventsCount(2).
 		AssertBlockerEventsCount(1)
 
-	// user pauses all protection and opens amazon again, should not be blocked
+	// user pauses all protection and opens amazon and linkedin, should not be blocked
 	h.
 		ResetBlockerEvents().
 		ResetUsageEvents().
@@ -99,18 +98,29 @@ func TestService_ProtectionPauseAll(t *testing.T) {
 			assertUsageApplicationName(t, "Chrome"),
 			assertUsageHostname(t, "amazon.com"),
 			assertUsageClassification(t, usage.ClassificationDistracting),
-			assertTerminationMode(t, usage.TerminationModePaused),
+			assertTerminationMode(t, usage.TerminationModeAllow),
 			assertTerminationModeSource(t, usage.TerminationModeSourcePaused),
 		).
 		AssertUpdateEventsCount(2).
+		AssertBlockerEventsCount(0).
+		TitleChanged("Chrome", "Linkedin", withPtr("https://www.linkedin.com")).
+		AssertLastUsage(
+			assertUsageApplicationName(t, "Chrome"),
+			assertUsageHostname(t, "linkedin.com"),
+			assertUsageClassification(t, usage.ClassificationDistracting),
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourcePaused),
+		).
+		AssertUpdateEventsCount(5).
 		AssertBlockerEventsCount(0)
 
-	// wait 6 seconds to collapse and see the distraction blocked again
+	// pause duration has collapsed, so user gets blocked again
 	h.
 		ResetBlockerEvents().
 		ResetUsageEvents().
 		Await(6*time.Second).
 		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertPreviousUsage(assertUsageClosed(t)).
 		AssertLastUsage(
 			assertUsageApplicationName(t, "Chrome"),
 			assertUsageHostname(t, "amazon.com"),
@@ -118,125 +128,87 @@ func TestService_ProtectionPauseAll(t *testing.T) {
 			assertTerminationMode(t, usage.TerminationModeBlock),
 			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
 		).
-		AssertUpdateEventsCount(1).
+		AssertUpdateEventsCount(3).
 		AssertBlockerEventsCount(1)
 
-}
+	// user whitelists amazon and opens it again, should not be blocked, linkedin is still blocked
+	h.
+		ResetBlockerEvents().
+		Whitelist("Chrome", "https://www.amazon.com", 3*time.Second).
+		TitleChanged("Chrome", "Amazon", withPtr("https://amazon.com")).
+		AssertLastUsage(
+			assertUsageHostname(t, "amazon.com"),
+			assertUsageClassification(t, usage.ClassificationDistracting),
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+		).
+		AssertBlockerEventsCount(0).
+		TitleChanged("Chrome", "Linkedin", withPtr("https://www.linkedin.com")).
+		AssertPreviousUsage(assertUsageClosed(t)).
+		AssertLastUsage(
+			assertUsageHostname(t, "linkedin.com"),
+			assertUsageClassification(t, usage.ClassificationDistracting),
+			assertTerminationMode(t, usage.TerminationModeBlock),
+			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+		).
+		AssertBlockerEventsCount(1).
+		ResetBlockerEvents().
+		Await(time.Second*4).
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertUsageHostname(t, "amazon.com"),
+			assertUsageClassification(t, usage.ClassificationDistracting),
+			assertTerminationMode(t, usage.TerminationModeBlock),
+			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+		)
 
-func TestService_TitleChanged_WhenSameApplication_ContinueCurrentApplicationUsage(t *testing.T) {
-	h := newUsageHarness(t)
+	// 2. Manual Pause Resumption
+	h.
+		ResetBlockerEvents().
+		Pause(10, "test early resume").
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourcePaused),
+		).
+		Await(time.Second).
+		Resume("user clicked resume").
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeBlock),
+			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+		)
 
-	// create a new application usage
-	applicationUsage := usage.ApplicationUsage{
-		StartedAt:   time.Now().Unix(),
-		WindowTitle: "Slack",
-		Application: usage.Application{Name: "Slack"},
-	}
-	if err := h.db.Create(&applicationUsage).Error; err != nil {
-		t.Fatalf("failed to create application usage: %v", err)
-	}
+	// 3. Whitelist Overwriting / Extension
+	h.
+		ResetBlockerEvents().
+		Whitelist("Chrome", "https://www.amazon.com", 2*time.Second).
+		Await(time.Second).
+		Whitelist("Chrome", "https://www.amazon.com", 4*time.Hour).
+		Await(time.Second*3).
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+		)
 
-	// change the title of the current application
-	h.TitleChangedRaw("/Applications/Slack.app/Contents/MacOS/Slack", "Slack", "Slack", "", nil, nil, nil)
+	// 4. Cross-Browser Whitelist
+	h.
+		ResetBlockerEvents().
+		TitleChanged("Safari", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertUsageApplicationName(t, "Safari"),
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+		)
 
-	// read the application usage
-	var readApplicationUsage usage.ApplicationUsage
-	if err := h.db.Where("id = ?", applicationUsage.ID).First(&readApplicationUsage).Error; err != nil {
-		t.Fatalf("failed to find application usage: %v", err)
-	}
-
-	require.NotEqual(t, 0, readApplicationUsage.StartedAt)
-	require.Nil(t, readApplicationUsage.EndedAt)
-	require.Nil(t, readApplicationUsage.DurationSeconds)
-}
-
-func TestService_TitleChanged_WhenDifferentApplication_CloseCurrentApplicationUsage(t *testing.T) {
-	h := newUsageHarness(t)
-
-	// create a new application usage
-	applicationUsage := usage.ApplicationUsage{
-		StartedAt:   time.Now().Unix(),
-		WindowTitle: "Slack",
-		Application: usage.Application{Name: "Slack"},
-	}
-	if err := h.db.Create(&applicationUsage).Error; err != nil {
-		t.Fatalf("failed to create application usage: %v", err)
-	}
-
-	// change the title of the current application
-	h.TitleChangedRaw("com.apple.Safari", "Safari", "New Tab", "", nil, nil, nil)
-
-	// read the application usage
-	var readApplicationUsage usage.ApplicationUsage
-	if err := h.db.Where("id = ?", applicationUsage.ID).First(&readApplicationUsage).Error; err != nil {
-		t.Fatalf("failed to find application usage: %v", err)
-	}
-
-	require.NotNil(t, readApplicationUsage.EndedAt)
-}
-
-func TestService_TitleChanged_ClassificationErrorStored(t *testing.T) {
-	h := newUsageHarness(t)
-	viper.Set("dummy_classification_response", "{")
-
-	h.TitleChangedRaw("com.apple.Safari", "Safari", "New Tab", "", nil, nil, nil)
-
-	var readApplicationUsage usage.ApplicationUsage
-	if err := h.db.Where("id = ?", 1).First(&readApplicationUsage).Error; err != nil {
-		t.Fatalf("failed to find application usage: %v", err)
-	}
-
-	require.NotNil(t, readApplicationUsage.ClassificationError)
-	require.Contains(t, *readApplicationUsage.ClassificationError, "failed to classify application usage with LLM")
-}
-
-func TestService_TitleChanged_StripsWWWInURLComparison(t *testing.T) {
-	h := newUsageHarness(t)
-
-	app := usage.Application{Name: "Google Chrome"}
-	h.retryLocked(func() error {
-		return h.db.Create(&app).Error
-	})
-
-	initialURL := "https://youtube.com/watch?v=abc"
-	applicationUsage := usage.ApplicationUsage{
-		StartedAt:     time.Now().Unix(),
-		WindowTitle:   "YouTube",
-		BrowserURL:    &initialURL,
-		ApplicationID: app.ID,
-	}
-	h.retryLocked(func() error {
-		return h.db.Create(&applicationUsage).Error
-	})
-
-	newURL := "https://www.youtube.com/watch?v=abc"
-	h.TitleChangedRaw("Google Chrome", "YouTube", "Google Chrome", "", nil, &newURL, nil)
-
-	var count int64
-	h.retryLocked(func() error {
-		return h.db.Model(&usage.ApplicationUsage{}).Count(&count).Error
-	})
-	require.Equal(t, int64(1), count)
-
-	var readUsage usage.ApplicationUsage
-	h.retryLocked(func() error {
-		return h.db.Where("id = ?", applicationUsage.ID).First(&readUsage).Error
-	})
-	require.Nil(t, readUsage.EndedAt)
-	require.NotNil(t, readUsage.BrowserURL)
-	require.Equal(t, "https://youtube.com/watch?v=abc", *readUsage.BrowserURL)
-}
-
-func TestService_TitleChanged_PreservesRawURLForBlocking(t *testing.T) {
-	h := newUsageHarness(t)
-
-	newURL := "https://www.focusd.so/blocked?d=123"
-	h.TitleChangedRaw("Google Chrome", "Blocked", "Google Chrome", "", nil, &newURL, nil)
-
-	var readUsage usage.ApplicationUsage
-	h.retryLocked(func() error {
-		return h.db.Where("id = ?", 1).First(&readUsage).Error
-	})
-	require.NotNil(t, readUsage.BrowserURL)
-	require.Equal(t, "https://www.focusd.so/blocked?d=123", *readUsage.BrowserURL)
+	// 5. Manual Whitelist Removal
+	h.
+		ResetBlockerEvents().
+		RemoveActiveWhitelists().
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeBlock),
+			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+		)
 }

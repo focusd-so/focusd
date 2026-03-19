@@ -170,17 +170,13 @@ func (s *Service) GetPauseHistory(days int) ([]ProtectionPause, error) {
 //
 // Side effects:
 //   - Creates a ProtectionWhitelist record in the database with expiration timestamp
-func (s *Service) Whitelist(appname string, hostname string, duration time.Duration) error {
-	if duration < 5*time.Minute {
-		return fmt.Errorf("duration must be at least 5 minutes")
-	}
-
+func (s *Service) Whitelist(appname string, url string, duration time.Duration) error {
 	now := time.Now().Unix()
 	expiresAt := now + int64(duration.Seconds())
 
-	if duration == 0 {
-		duration = time.Hour
-	}
+	var hostname string
+	normalized, _ := parseURLNormalized(url)
+	hostname = normalized.Hostname()
 
 	// delete any existing whitelist entries for the app and hostname
 	if hostname == "" {
@@ -188,7 +184,7 @@ func (s *Service) Whitelist(appname string, hostname string, duration time.Durat
 			return err
 		}
 	} else {
-		if err := s.db.Where("app_name = ? AND hostname = ?", appname, hostname).Delete(&ProtectionWhitelist{}).Error; err != nil {
+		if err := s.db.Where("hostname = ?", hostname).Delete(&ProtectionWhitelist{}).Error; err != nil {
 			return err
 		}
 	}
@@ -280,7 +276,7 @@ func (s *Service) CalculateTerminationMode(ctx context.Context, appUsage *Applic
 
 	if protectionPause.ID > 0 {
 		return TerminationDecision{
-			Mode:      TerminationModePaused,
+			Mode:      TerminationModeAllow,
 			Reasoning: "focus protection has been paused by the user",
 			Source:    TerminationModeSourcePaused,
 		}, nil
@@ -289,9 +285,9 @@ func (s *Service) CalculateTerminationMode(ctx context.Context, appUsage *Applic
 	// get all whitelist entries for the bundle ID and hostname
 	var whitelist ProtectionWhitelist
 	hostname := fromPtr(appUsage.Application.Hostname)
-	query := s.db.Where("app_name = ? AND expires_at > ?", appUsage.Application.Name, time.Now().Unix())
+	query := s.db.Where("expires_at > ?", time.Now().Unix())
 	if hostname == "" {
-		query = query.Where("(hostname IS NULL OR hostname = '')")
+		query = query.Where("app_name = ? AND (hostname IS NULL OR hostname = '')", appUsage.Application.Name)
 	} else {
 		query = query.Where("(hostname = ? OR hostname = ?)", hostname, "www."+hostname)
 	}

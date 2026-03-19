@@ -8,10 +8,9 @@ type (
 )
 
 const (
-	TerminationModeNone   TerminationMode = "none"
-	TerminationModeBlock  TerminationMode = "block"
-	TerminationModePaused TerminationMode = "paused"
-	TerminationModeAllow  TerminationMode = "allow"
+	TerminationModeNone  TerminationMode = "none"
+	TerminationModeBlock TerminationMode = "block"
+	TerminationModeAllow TerminationMode = "allow"
 
 	TerminationModeSourceApplication TerminationModeSource = "application"
 	TerminationModeSourceCustomRules TerminationModeSource = "custom_rules"

@@ -196,6 +196,23 @@ func (h *usageHarness) Whitelist(appName, hostname string, duration time.Duratio
 	return h
 }
 
+func (h *usageHarness) RemoveActiveWhitelists() *usageHarness {
+	h.t.Helper()
+	h.retryLocked(func() error {
+		wls, err := h.service.GetWhitelist()
+		if err != nil {
+			return err
+		}
+		for _, wl := range wls {
+			if err := h.service.RemoveWhitelist(wl.ID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return h
+}
+
 func (h *usageHarness) UsageList() []usage.ApplicationUsage {
 	h.t.Helper()
 	var (

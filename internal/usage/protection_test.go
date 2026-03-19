@@ -431,7 +431,7 @@ func TestProtection_CalculateTerminationMode_ProtectionPaused(t *testing.T) {
 		Application:    usage.Application{Name: "YouTube"},
 	})
 	require.NoError(t, err)
-	require.Equal(t, usage.TerminationModePaused, decision.Mode)
+	require.Equal(t, usage.TerminationModeAllow, decision.Mode)
 	require.Equal(t, usage.TerminationModeSourcePaused, decision.Source)
 	require.Equal(t, "focus protection has been paused by the user", decision.Reasoning)
 }

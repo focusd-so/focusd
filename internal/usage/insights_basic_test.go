@@ -380,16 +380,16 @@ func TestGetUsageList_PaginationPageAndPageSize(t *testing.T) {
 		PageSize: &pageSize,
 	})
 	require.NoError(t, err)
-	require.Len(t, result, 5, "PageSize sets offset only, not limit — all remaining rows from offset 0 returned")
+	require.Len(t, result, 2, "Page 0 should return 2 items")
 
-	// Page 1, size 2 → offset=2, skips first 2 (DESC order: returns index 2, 1, 0)
+	// Page 1, size 2 → offset=2, skips first 2 (DESC order: returns index 2, 1)
 	page = 1
 	result, err = service.GetUsageList(usage.GetUsageListOptions{
 		Page:     &page,
 		PageSize: &pageSize,
 	})
 	require.NoError(t, err)
-	require.Len(t, result, 3, "page 1 with pageSize 2 should skip 2 and return remaining 3")
+	require.Len(t, result, 2, "page 1 with pageSize 2 should skip 2 and return next 2")
 
 	// Page 2, size 2 → offset=4, skips first 4 (returns index 0 only)
 	page = 2
@@ -541,7 +541,6 @@ func TestGetUsageList_TerminationModeFilter(t *testing.T) {
 		usage.TerminationModeNone,
 		usage.TerminationModeBlock,
 		usage.TerminationModeAllow,
-		usage.TerminationModePaused,
 	}
 	dur := 1800
 	for i := range starts {
