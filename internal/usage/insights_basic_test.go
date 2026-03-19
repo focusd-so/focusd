@@ -541,6 +541,7 @@ func TestGetUsageList_TerminationModeFilter(t *testing.T) {
 		usage.TerminationModeNone,
 		usage.TerminationModeBlock,
 		usage.TerminationModeAllow,
+		usage.TerminationModeNone,
 	}
 	dur := 1800
 	for i := range starts {

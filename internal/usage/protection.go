@@ -3,6 +3,7 @@ package usage
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -175,8 +176,13 @@ func (s *Service) Whitelist(appname string, url string, duration time.Duration) 
 	expiresAt := now + int64(duration.Seconds())
 
 	var hostname string
-	normalized, _ := parseURLNormalized(url)
-	hostname = normalized.Hostname()
+	if normalized, err := parseURLNormalized(url); err == nil && normalized != nil {
+		hostname = normalized.Hostname()
+	} else if url != "" {
+		hostname = strings.ToLower(strings.TrimSpace(url))
+		hostname = strings.TrimSuffix(hostname, ".")
+		hostname = strings.TrimPrefix(hostname, "www.")
+	}
 
 	// delete any existing whitelist entries for the app and hostname
 	if hostname == "" {
