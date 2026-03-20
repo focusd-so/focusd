@@ -84,7 +84,7 @@ interface ClassificationDecision {
 /**
  * Provides context for the current rule execution including usage data.
  */
-interface Context {
+interface UsageContext {
   /** The display name of the application (e.g., 'Safari', 'Slack'). */
   readonly appName?: string;
   /** The application's bundle identifier (e.g., 'com.apple.Safari'). */
@@ -107,7 +107,7 @@ interface Context {
    * @returns Total minutes of usage in the specified time window
    * @example
    * // Block if used more than 30 minutes in the last hour
-   * if (ctx.minutesUsedInPeriod(60) > 30) {
+   * if (context.minutesUsedInPeriod(60) > 30) {
    *   return { terminationMode: TerminationMode.Block, terminationReasoning: 'Usage limit exceeded' };
    * }
    */
@@ -278,14 +278,14 @@ const starterRulesTS = `/**
  *
  * @example
  * // Classify all GitHub activity as productive
- * if (ctx.domain === 'github.com') {
+ * if (context.domain === 'github.com') {
  *   return {
  *     classification: Classification.Productive,
  *     classificationReasoning: 'GitHub is a development tool'
  *   };
  * }
  */
-export function classify(ctx: Context): ClassificationDecision | undefined {
+export function classify(context: UsageContext): ClassificationDecision | undefined {
   return undefined;
 }
 
@@ -295,14 +295,14 @@ export function classify(ctx: Context): ClassificationDecision | undefined {
  *
  * @example
  * // Block social media after 10 PM in London
- * if (ctx.domain === 'twitter.com' && now(Timezone.Europe_London).getHours() >= 22) {
+ * if (context.domain === 'twitter.com' && now(Timezone.Europe_London).getHours() >= 22) {
  *   return {
  *     terminationMode: TerminationMode.Block,
  *     terminationReasoning: 'Social media blocked after 10 PM'
  *   };
  * }
  */
-export function terminationMode(ctx: Context): TerminationDecision | undefined {
+export function terminationMode(context: UsageContext): TerminationDecision | undefined {
   return undefined;
 }
 `;
