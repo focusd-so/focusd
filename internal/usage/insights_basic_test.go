@@ -9,11 +9,6 @@ import (
 	"github.com/focusd-so/focusd/internal/usage"
 )
 
-// timePtr returns a pointer to the given time.
-func timePtr(t time.Time) *time.Time { return &t }
-
-func terminationModePtr(mode usage.TerminationMode) *usage.TerminationMode { return &mode }
-
 func TestGetUsageList_NoFilters(t *testing.T) {
 	service, db := setUpService(t)
 
@@ -69,7 +64,7 @@ func TestGetUsageList_StartedAtFilter(t *testing.T) {
 	// Filter: startedAt >= 12:00 → should return usages at 14:00 and 18:00
 	startedAt := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC)
 	result, err := service.GetUsageList(usage.GetUsageListOptions{
-		StartedAt: timePtr(startedAt),
+		StartedAt: withPtr(startedAt),
 	})
 	require.NoError(t, err)
 	require.Len(t, result, 2, "only usages starting at or after 12:00 should be returned")
@@ -106,7 +101,7 @@ func TestGetUsageList_EndedAtFilter(t *testing.T) {
 	// Filter: endedAt <= 11:00 → should return u0 (ends 08:30) and u1 (ends 10:45)
 	endedAt := time.Date(2025, 6, 15, 11, 0, 0, 0, time.UTC)
 	result, err := service.GetUsageList(usage.GetUsageListOptions{
-		EndedAt: timePtr(endedAt),
+		EndedAt: withPtr(endedAt),
 	})
 	require.NoError(t, err)
 	require.Len(t, result, 2, "only usages ending at or before 11:00 should be returned")
@@ -146,8 +141,8 @@ func TestGetUsageList_StartedAtAndEndedAtCombined(t *testing.T) {
 	endedAt := time.Date(2025, 6, 15, 15, 0, 0, 0, time.UTC)
 
 	result, err := service.GetUsageList(usage.GetUsageListOptions{
-		StartedAt: timePtr(startedAt),
-		EndedAt:   timePtr(endedAt),
+		StartedAt: withPtr(startedAt),
+		EndedAt:   withPtr(endedAt),
 	})
 	require.NoError(t, err)
 	require.Len(t, result, 2, "only usages within the [09:00, 15:00] window should be returned")
@@ -175,7 +170,7 @@ func TestGetUsageList_StartedAtExactBoundary(t *testing.T) {
 
 	// startedAt filter equals the exact start time → should include the usage (>=)
 	result, err := service.GetUsageList(usage.GetUsageListOptions{
-		StartedAt: timePtr(startAt),
+		StartedAt: withPtr(startAt),
 	})
 	require.NoError(t, err)
 	require.Len(t, result, 1, "usage starting at exact boundary should be included (>=)")
@@ -201,7 +196,7 @@ func TestGetUsageList_EndedAtExactBoundary(t *testing.T) {
 
 	// endedAt filter equals the exact end time → should include the usage (<=)
 	result, err := service.GetUsageList(usage.GetUsageListOptions{
-		EndedAt: timePtr(endAt),
+		EndedAt: withPtr(endAt),
 	})
 	require.NoError(t, err)
 	require.Len(t, result, 1, "usage ending at exact boundary should be included (<=)")
@@ -320,7 +315,7 @@ func TestGetUsageList_DateFilter(t *testing.T) {
 	// Filter by day1 only
 	filterDate := time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC)
 	result, err := service.GetUsageList(usage.GetUsageListOptions{
-		Date: timePtr(filterDate),
+		Date: withPtr(filterDate),
 	})
 	require.NoError(t, err)
 	require.Len(t, result, 1, "only usages on 2025-06-15 should be returned")
@@ -346,7 +341,7 @@ func TestGetUsageList_DateFilterNoMatches(t *testing.T) {
 	// Filter by a date with no usages
 	noMatchDate := time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC)
 	result, err := service.GetUsageList(usage.GetUsageListOptions{
-		Date: timePtr(noMatchDate),
+		Date: withPtr(noMatchDate),
 	})
 	require.NoError(t, err)
 	require.Len(t, result, 0, "no usages should match a date with no data")
@@ -380,16 +375,16 @@ func TestGetUsageList_PaginationPageAndPageSize(t *testing.T) {
 		PageSize: &pageSize,
 	})
 	require.NoError(t, err)
-	require.Len(t, result, 5, "PageSize sets offset only, not limit — all remaining rows from offset 0 returned")
+	require.Len(t, result, 2, "Page 0 should return 2 items")
 
-	// Page 1, size 2 → offset=2, skips first 2 (DESC order: returns index 2, 1, 0)
+	// Page 1, size 2 → offset=2, skips first 2 (DESC order: returns index 2, 1)
 	page = 1
 	result, err = service.GetUsageList(usage.GetUsageListOptions{
 		Page:     &page,
 		PageSize: &pageSize,
 	})
 	require.NoError(t, err)
-	require.Len(t, result, 3, "page 1 with pageSize 2 should skip 2 and return remaining 3")
+	require.Len(t, result, 2, "page 1 with pageSize 2 should skip 2 and return next 2")
 
 	// Page 2, size 2 → offset=4, skips first 4 (returns index 0 only)
 	page = 2
@@ -478,8 +473,8 @@ func TestGetUsageList_DateCombinedWithStartedAtAndEndedAt(t *testing.T) {
 	// → only u1 (14:00) should match; u0 is before 10:00 and other-day is excluded by Date
 	startedAt := time.Date(2025, 6, 15, 10, 0, 0, 0, time.UTC)
 	result, err := service.GetUsageList(usage.GetUsageListOptions{
-		Date:      timePtr(day),
-		StartedAt: timePtr(startedAt),
+		Date:      withPtr(day),
+		StartedAt: withPtr(startedAt),
 	})
 	require.NoError(t, err)
 	require.Len(t, result, 1)
@@ -521,8 +516,8 @@ func TestGetUsageList_NoMatchesWithNarrowWindow(t *testing.T) {
 	endedAt := time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC)
 
 	result, err := service.GetUsageList(usage.GetUsageListOptions{
-		StartedAt: timePtr(startedAt),
-		EndedAt:   timePtr(endedAt),
+		StartedAt: withPtr(startedAt),
+		EndedAt:   withPtr(endedAt),
 	})
 	require.NoError(t, err)
 	require.Len(t, result, 0, "no usages should match a narrow window with no data")
@@ -541,7 +536,6 @@ func TestGetUsageList_TerminationModeFilter(t *testing.T) {
 		usage.TerminationModeNone,
 		usage.TerminationModeBlock,
 		usage.TerminationModeAllow,
-		usage.TerminationModePaused,
 	}
 	dur := 1800
 	for i := range starts {
@@ -558,7 +552,7 @@ func TestGetUsageList_TerminationModeFilter(t *testing.T) {
 	}
 
 	result, err := service.GetUsageList(usage.GetUsageListOptions{
-		TerminationMode: terminationModePtr(usage.TerminationModeBlock),
+		TerminationMode: withPtr(usage.TerminationModeBlock),
 	})
 	require.NoError(t, err)
 	require.Len(t, result, 1, "only blocked items should be returned")
@@ -583,7 +577,7 @@ func TestGetUsageList_TerminationModeFilterNoMatches(t *testing.T) {
 	require.NoError(t, db.Create(&u).Error)
 
 	result, err := service.GetUsageList(usage.GetUsageListOptions{
-		TerminationMode: terminationModePtr(usage.TerminationModeBlock),
+		TerminationMode: withPtr(usage.TerminationModeBlock),
 	})
 	require.NoError(t, err)
 	require.Len(t, result, 0, "no rows should match an unused termination mode")
@@ -619,9 +613,9 @@ func TestGetUsageList_TerminationModeFilterCombinedWithDateRange(t *testing.T) {
 	startedAt := time.Date(2025, 6, 15, 9, 0, 0, 0, time.UTC)
 	endedAt := time.Date(2025, 6, 15, 16, 0, 0, 0, time.UTC)
 	result, err := service.GetUsageList(usage.GetUsageListOptions{
-		StartedAt:       timePtr(startedAt),
-		EndedAt:         timePtr(endedAt),
-		TerminationMode: terminationModePtr(usage.TerminationModeBlock),
+		StartedAt:       withPtr(startedAt),
+		EndedAt:         withPtr(endedAt),
+		TerminationMode: withPtr(usage.TerminationModeBlock),
 	})
 	require.NoError(t, err)
 	require.Len(t, result, 1, "combined filters should return only the matching intersection")

@@ -1,5 +1,5 @@
 //go:build production
 
-package main
+package settings
 
 const isProductionBuild = true

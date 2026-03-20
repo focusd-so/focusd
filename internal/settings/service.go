@@ -1,129 +1,81 @@
 package settings
 
 import (
+	"encoding/base64"
 	"fmt"
-	"time"
+	"log/slog"
+	"path/filepath"
 
-	"gorm.io/gorm"
+	"github.com/spf13/viper"
 )
 
-type SettingsKey string
+// This service exposes interface for the frontend to interact with
+// viper to read/write settings through wails3 bindings mechanism
+type Service struct{}
 
-const (
-	SettingsKeyCustomRules          SettingsKey = "custom_rules"
-	SettingsKeyIdleThreshold        SettingsKey = "idle_threshold"
-	SettingsKeyHistoryRetention     SettingsKey = "history_retention"
-	SettingsKeyDistractionAllowance SettingsKey = "distraction_allowance"
-)
+func NewService(configDir string) (*Service, error) {
+	// Set defaults
+	viper.SetDefault("idle_threshold_seconds", 120)
+	viper.SetDefault("history_retention_days", 30)
+	viper.SetDefault("distraction_allowance_minutes", 60)
+	viper.SetDefault("custom_rules_js", []string{})
 
-type Settings struct {
-	ID        int64       `gorm:"primaryKey;autoIncrement" json:"id"`
-	Key       SettingsKey `json:"key"`
-	Value     string      `json:"value"`
-	Version   int         `json:"version"`
-	CreatedAt int64       `json:"created_at"`
-}
+	// Config file settings
+	viper.SetConfigName("config")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath(configDir)
 
-type Service struct {
-	db      *gorm.DB
-	version string
-}
-
-func NewService(db *gorm.DB, version string) (*Service, error) {
-	if err := db.Migrator().AutoMigrate(&Settings{}); err != nil {
-		return nil, fmt.Errorf("failed to migrate settings table: %w", err)
-	}
-
-	return &Service{db: db, version: version}, nil
-}
-
-func (s *Service) GetVersion() string {
-	return s.version
-}
-
-func (s *Service) Save(key SettingsKey, value string) error {
-	setting := Settings{Key: key, Value: value}
-
-	// get existing setting last version
-	var existing Settings
-	if err := s.db.Where("key = ?", key).Order("version DESC").First(&existing).Error; err != nil {
-		if err != gorm.ErrRecordNotFound {
-			return fmt.Errorf("failed to get existing setting: %w", err)
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			if err := viper.SafeWriteConfigAs(filepath.Join(configDir, "config.yaml")); err != nil {
+				return nil, fmt.Errorf("failed to create default config file: %w", err)
+			}
+		} else {
+			return nil, fmt.Errorf("failed to read config file: %w", err)
 		}
 	}
 
-	setting.Version = existing.Version + 1
-	setting.CreatedAt = time.Now().Unix()
-	setting.Value = value
+	return &Service{}, nil
+}
 
-	if err := s.db.Create(&setting).Error; err != nil {
-		return err
-	}
+func (s *Service) GetConfig() *AppConfig {
+	return GetConfig()
+}
 
-	// Keep only the 10 most recent versions, delete older ones
-	const maxVersionsToKeep = 10
-	if setting.Version > maxVersionsToKeep {
-		if err := s.db.Where("key = ? AND version <= ?", key, setting.Version-maxVersionsToKeep).
-			Delete(&Settings{}).Error; err != nil {
-			return fmt.Errorf("failed to cleanup old versions: %w", err)
-		}
+func (s *Service) SaveConfig(config AppConfig) error {
+	viper.Set("idle_threshold_seconds", config.IdleThresholdSeconds)
+	viper.Set("history_retention_days", config.HistoryRetentionDays)
+	viper.Set("distraction_allowance_minutes", config.DistractionAllowanceMinutes)
+	viper.Set("custom_rules_js", config.CustomRulesJS)
+
+	if err := viper.WriteConfig(); err != nil {
+		return fmt.Errorf("failed to write config to disk: %w", err)
 	}
 
 	return nil
 }
 
-func (s *Service) GetLatest(key SettingsKey) (*Settings, error) {
-	var setting Settings
-
-	if err := s.db.Where("key = ?", key).Order("version DESC").First(&setting).Error; err != nil {
-		if err != gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("failed to get setting: %w", err)
-		}
-
-		return nil, nil
+func GetConfig() *AppConfig {
+	config := DefaultConfig()
+	if err := viper.Unmarshal(&config); err != nil {
+		slog.Warn("failed to unmarshal config", "error", err)
 	}
 
-	return &setting, nil
+	return &config
 }
 
-// GetAll returns the latest version of each setting key.
-//
-// Returns:
-//   - []Settings: A slice of settings with the latest version for each key
-//   - error: Database error if the query fails
-func (s *Service) GetAll() ([]Settings, error) {
-	var settings []Settings
+func GetCustomRulesJS() string {
+	config := GetConfig()
 
-	// Get distinct keys and their latest versions using a subquery
-	subQuery := s.db.Model(&Settings{}).
-		Select("key, MAX(version) as max_version").
-		Group("key")
-
-	if err := s.db.Model(&Settings{}).
-		Joins("JOIN (?) AS latest ON settings.key = latest.key AND settings.version = latest.max_version", subQuery).
-		Find(&settings).Error; err != nil {
-		return nil, fmt.Errorf("failed to get all settings: %w", err)
+	if len(config.CustomRulesJS) == 0 {
+		return ""
 	}
 
-	return settings, nil
-}
-
-// GetVersionHistory returns the last N versions of a setting key, ordered by version descending.
-//
-// Parameters:
-//   - key: The settings key to get history for
-//   - limit: Maximum number of versions to return
-//
-// Returns:
-//   - []Settings: A slice of settings versions, newest first
-//   - error: Database error if the query fails
-func (s *Service) GetVersionHistory(key SettingsKey, limit int) ([]Settings, error) {
-	var settings []Settings
-	if err := s.db.Where("key = ?", key).
-		Order("version DESC").
-		Limit(limit).
-		Find(&settings).Error; err != nil {
-		return nil, fmt.Errorf("failed to get version history: %w", err)
+	decoded, err := base64.StdEncoding.DecodeString(config.CustomRulesJS[0])
+	if err != nil {
+		slog.Warn("failed to decode custom rules", "error", err)
+		return ""
 	}
-	return settings, nil
+
+	return string(decoded)
 }

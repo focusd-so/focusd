@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"github.com/focusd-so/focusd/internal/settings"
 	"github.com/focusd-so/focusd/internal/usage"
 )
 
@@ -79,23 +79,23 @@ func TestProtection_PauseProtectionEventsFired(t *testing.T) {
 		onProtectionResumedCalled = false
 	)
 
-	service, _ := setUpService(
-		t,
-		usage.WithProtectionPaused(func(pause usage.ProtectionPause) {
-			onProtectionPausedCalled = true
-			require.NotEqual(t, int64(0), pause.ResumedAt)
-			// this will still be initial requested duration
-			require.Equal(t, 10, pause.ActualDurationSeconds)
-			require.Equal(t, "protection paused for 10s expired", pause.ResumedReason)
-		}),
-		usage.WithProtectionResumed(func(pause usage.ProtectionPause) {
-			onProtectionResumedCalled = true
-			require.NotEqual(t, int64(0), pause.ResumedAt)
-			// this is the actual duration calculated after the resume
-			require.Equal(t, 3, pause.ActualDurationSeconds)
-			require.Equal(t, "just because", pause.ResumedReason)
-		}),
-	)
+	service, _ := setUpService(t)
+
+	service.OnProtectionPause(func(pause usage.ProtectionPause) {
+		onProtectionPausedCalled = true
+		require.NotEqual(t, int64(0), pause.ResumedAt)
+		// this will still be initial requested duration
+		require.Equal(t, 10, pause.ActualDurationSeconds)
+		require.Equal(t, "protection paused for 10s expired", pause.ResumedReason)
+	})
+
+	service.OnProtectionResumed(func(pause usage.ProtectionPause) {
+		onProtectionResumedCalled = true
+		require.NotEqual(t, int64(0), pause.ResumedAt)
+		// this is the actual duration calculated after the resume
+		require.Equal(t, 3, pause.ActualDurationSeconds)
+		require.Equal(t, "just because", pause.ResumedReason)
+	})
 
 	_, err := service.PauseProtection(10, "test")
 
@@ -163,7 +163,8 @@ func TestProtection_Whitelist_CreatesEntry(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, "/usr/bin/app", entry.AppName)
-	require.Equal(t, "example.com", entry.Hostname)
+	require.NotNil(t, entry.Hostname)
+	require.Equal(t, "example.com", *entry.Hostname)
 	require.InDelta(t, time.Now().Add(30*time.Minute).Unix(), entry.ExpiresAt, 5)
 }
 
@@ -184,8 +185,22 @@ func TestProtection_Whitelist_ReplacesExistingEntry(t *testing.T) {
 
 	require.Len(t, entries, 1)
 	require.Equal(t, "/usr/bin/app", entries[0].AppName)
-	require.Equal(t, "example.com", entries[0].Hostname)
+	require.NotNil(t, entries[0].Hostname)
+	require.Equal(t, "example.com", *entries[0].Hostname)
 	require.InDelta(t, time.Now().Add(1*time.Hour).Unix(), entries[0].ExpiresAt, 5)
+}
+
+func TestProtection_Whitelist_NormalizesWWW(t *testing.T) {
+	service, db := setUpService(t)
+
+	err := service.Whitelist("Google Chrome", "www.youtube.com", 30*time.Minute)
+	require.NoError(t, err)
+
+	var entry usage.ProtectionWhitelist
+	err = db.First(&entry).Error
+	require.NoError(t, err)
+	require.NotNil(t, entry.Hostname)
+	require.Equal(t, "youtube.com", *entry.Hostname)
 }
 
 func TestProtection_Whitelist_ZeroDurationBug(t *testing.T) {
@@ -269,19 +284,11 @@ func TestProtection_RemoveWhitelist_NonExistentID(t *testing.T) {
 func setUpServiceWithSettings(t *testing.T, customRules string) (*usage.Service, *gorm.DB) {
 	t.Helper()
 
-	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	db, _ := gorm.Open(sqlite.Open(memoryDSN(t)), &gorm.Config{})
 
-	settingsService, err := settings.NewService(db, "test")
-	require.NoError(t, err)
+	viper.SetDefault("custom_rules_js", []string{customRules})
 
-	err = settingsService.Save(settings.SettingsKeyCustomRules, customRules)
-	require.NoError(t, err)
-
-	service, err := usage.NewService(
-		context.Background(),
-		db,
-		usage.WithSettingsService(settingsService),
-	)
+	service, err := usage.NewService(context.Background(), db)
 	require.NoError(t, err)
 
 	return service, db
@@ -424,7 +431,7 @@ func TestProtection_CalculateTerminationMode_ProtectionPaused(t *testing.T) {
 		Application:    usage.Application{Name: "YouTube"},
 	})
 	require.NoError(t, err)
-	require.Equal(t, usage.TerminationModePaused, decision.Mode)
+	require.Equal(t, usage.TerminationModeAllow, decision.Mode)
 	require.Equal(t, usage.TerminationModeSourcePaused, decision.Source)
 	require.Equal(t, "focus protection has been paused by the user", decision.Reasoning)
 }
@@ -436,10 +443,9 @@ func TestProtection_AllowedByWhitelist(t *testing.T) {
 		err := service.Whitelist("/usr/bin/app", "", 30*time.Minute)
 		require.NoError(t, err)
 
-		emptyHostname := ""
 		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
-			Application:    usage.Application{Hostname: &emptyHostname},
+			Application:    usage.Application{Name: "/usr/bin/app"},
 		})
 		require.NoError(t, err)
 		require.Equal(t, usage.TerminationModeAllow, decision.Mode)
@@ -456,11 +462,58 @@ func TestProtection_AllowedByWhitelist(t *testing.T) {
 		hostname := "example.com"
 		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
-			Application:    usage.Application{Hostname: &hostname},
+			Application:    usage.Application{Name: "/usr/bin/app", Hostname: &hostname},
 		})
 		require.NoError(t, err)
 		require.Equal(t, usage.TerminationModeAllow, decision.Mode)
 		require.Equal(t, usage.TerminationModeSourceWhitelist, decision.Source)
 		require.Equal(t, "temporarily allowed usage by user", decision.Reasoning)
+	})
+
+	t.Run("does not allow other hostnames in same browser", func(t *testing.T) {
+		service, _ := setUpService(t)
+
+		err := service.Whitelist("Google Chrome", "www.amazon.com", 30*time.Minute)
+		require.NoError(t, err)
+
+		youtube := "youtube.com"
+		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
+			Classification: usage.ClassificationDistracting,
+			Application:    usage.Application{Name: "Google Chrome", Hostname: &youtube},
+		})
+		require.NoError(t, err)
+		require.Equal(t, usage.TerminationModeBlock, decision.Mode)
+		require.Equal(t, usage.TerminationModeSourceApplication, decision.Source)
+	})
+
+	t.Run("strips www when evaluating whitelist", func(t *testing.T) {
+		service, _ := setUpService(t)
+
+		err := service.Whitelist("Google Chrome", "www.youtube.com", 30*time.Minute)
+		require.NoError(t, err)
+
+		hostname := "youtube.com"
+		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
+			Classification: usage.ClassificationDistracting,
+			Application:    usage.Application{Name: "Google Chrome", Hostname: &hostname},
+		})
+		require.NoError(t, err)
+		require.Equal(t, usage.TerminationModeAllow, decision.Mode)
+		require.Equal(t, usage.TerminationModeSourceWhitelist, decision.Source)
+	})
+
+	t.Run("subdomains remain distinct", func(t *testing.T) {
+		service, _ := setUpService(t)
+
+		err := service.Whitelist("Google Chrome", "mail.google.com", 30*time.Minute)
+		require.NoError(t, err)
+
+		drive := "drive.google.com"
+		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
+			Classification: usage.ClassificationDistracting,
+			Application:    usage.Application{Name: "Google Chrome", Hostname: &drive},
+		})
+		require.NoError(t, err)
+		require.Equal(t, usage.TerminationModeBlock, decision.Mode)
 	})
 }

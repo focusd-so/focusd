@@ -7,33 +7,25 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/genai"
 	"gorm.io/gorm"
-
-	"github.com/focusd-so/focusd/internal/settings"
 )
 
 type Service struct {
 	// external services and dependencies
-	db          *gorm.DB
-	genaiClient *genai.Client
-
-	// internal services and dependencies
-	settingsService *settings.Service
+	db *gorm.DB
 
 	appBlocker func(appName, title, reason string, tags []string, browserURL *string)
 
 	// events
-	onProtectionPaused     func(pause ProtectionPause)
-	onProtectionResumed    func(pause ProtectionPause)
-	onLLMDailySummaryReady func(summary LLMDailySummary)
+	eventsMu               sync.RWMutex
+	onProtectionPaused     []func(pause ProtectionPause)
+	onProtectionResumed    []func(pause ProtectionPause)
+	onLLMDailySummaryReady []func(summary LLMDailySummary)
+	onUsageUpdated         []func(usage *ApplicationUsage)
 
 	// mu serializes title change processing to prevent race conditions
 	// when multiple events fire concurrently
 	mu sync.Mutex
-
-	// channel to receive usage updates
-	UsageUpdates chan *ApplicationUsage
 }
 
 func NewService(ctx context.Context, db *gorm.DB, options ...Option) (*Service, error) {
@@ -49,10 +41,7 @@ func NewService(ctx context.Context, db *gorm.DB, options ...Option) (*Service, 
 		return nil, fmt.Errorf("failed to migrate usage tables: %w", err)
 	}
 
-	service := &Service{
-		db:           db,
-		UsageUpdates: make(chan *ApplicationUsage, 10), // buffer of 10 to prevent blocking
-	}
+	service := &Service{db: db}
 
 	for _, option := range options {
 		option(service)

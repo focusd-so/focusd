@@ -11,28 +11,13 @@ import (
 	"github.com/focusd-so/focusd/internal/settings"
 )
 
-func (s *Service) ClassifyCustomRules(ctx context.Context, appName string, url *string, nowTime *time.Time) (*ClassificationResponse, error) {
-	if s.settingsService == nil {
-		slog.Warn("settings service is nil, skipping custom rules classification")
-
-		return nil, nil
-	}
-
+func (s *Service) ClassifyCustomRules(ctx context.Context, opts ...sandboxContextOption) (*ClassificationResponse, error) {
 	slog.Info("classifying application usage with custom rules")
 
-	sandboxCtx := createSandboxContext(appName, url)
-
-	if nowTime != nil {
-		t := *nowTime
-		sandboxCtx.Now = func(loc *time.Location) time.Time {
-			return t.In(loc)
-		}
-	}
-
-	return s.ClassifyCustomRulesWithSandbox(ctx, sandboxCtx)
+	return s.classifyCustomRulesWithSandbox(ctx, NewSandboxContext(opts...))
 }
 
-func (s *Service) ClassifyCustomRulesWithSandbox(ctx context.Context, sandboxCtx sandboxContext) (*ClassificationResponse, error) {
+func (s *Service) classifyCustomRulesWithSandbox(ctx context.Context, sandboxCtx sandboxContext) (*ClassificationResponse, error) {
 	// Serialize the context to JSON
 	contextJSON, err := json.Marshal(sandboxCtx)
 	if err != nil {
@@ -115,17 +100,13 @@ func (s *Service) ClassifyCustomRulesWithSandbox(ctx context.Context, sandboxCtx
 
 func (s *Service) classifySandbox(ctx context.Context, sandboxCtx sandboxContext) (desicion *classificationDecision, logs []string, err error) {
 	// Get the latest custom rules code
-	customRules, err := s.settingsService.GetLatest(settings.SettingsKeyCustomRules)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if customRules == nil || customRules.Value == "" {
+	customRules := settings.GetCustomRulesJS()
+	if customRules == "" {
 		return nil, nil, nil
 	}
 
 	// Create a new sandbox with the custom rules code
-	sb, err := newSandbox(customRules.Value)
+	sb, err := newSandbox(customRules)
 	if err != nil {
 		return nil, nil, err
 	}

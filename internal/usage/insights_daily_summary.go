@@ -10,10 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/genai"
-
 	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
 	"github.com/focusd-so/focusd/internal/identity"
+	"github.com/focusd-so/focusd/internal/settings"
+	"github.com/tmc/langchaingo/llms"
+	"github.com/tmc/langchaingo/llms/anthropic"
+	"github.com/tmc/langchaingo/llms/googleai"
+	"github.com/tmc/langchaingo/llms/openai"
+	"google.golang.org/api/option"
 )
 
 const (
@@ -51,7 +55,7 @@ OUTPUT (strict JSON, no markdown fences):
 }`
 
 func (s *Service) GenerateLLMDailySummaryIfNeeded(ctx context.Context) error {
-	if s.genaiClient == nil {
+	if !dailySummaryLLMConfigured() {
 		return nil
 	}
 
@@ -123,8 +127,12 @@ func (s *Service) generateDailySummaryForDate(ctx context.Context, date time.Tim
 
 	slog.Info("daily summary generated", "date", dateStr, "headline", summary.Headline)
 
-	if s.onLLMDailySummaryReady != nil && summary.DayVibe != "insufficient-data" {
-		s.onLLMDailySummaryReady(summary)
+	if summary.DayVibe != "insufficient-data" {
+		s.eventsMu.RLock()
+		for _, fn := range s.onLLMDailySummaryReady {
+			fn(summary)
+		}
+		s.eventsMu.RUnlock()
 	}
 
 	return nil
@@ -145,7 +153,7 @@ func (s *Service) computeLLMDaySummaryInput(date time.Time) (LLMDaySummaryInput,
 	var (
 		productiveSecs  int
 		distractiveSecs int
-		contextSwitches int            // productive↔distracting transitions
+		contextSwitches int // productive↔distracting transitions
 		prevClass       Classification
 
 		appProductiveSecs  = make(map[string]int)
@@ -155,7 +163,7 @@ func (s *Service) computeLLMDaySummaryInput(date time.Time) (LLMDaySummaryInput,
 		hourProductiveSecs = make(map[int]int)
 		hourDistractSecs   = make(map[int]int)
 
-		deep    deepWorkTracker      // emits sessions ≥ 25 min
+		deep    deepWorkTracker // emits sessions ≥ 25 min
 		focus   focusStretchTracker
 		cascade cascadeTracker
 	)
@@ -251,7 +259,7 @@ func (s *Service) generateLLMDailySummary(ctx context.Context, input LLMDaySumma
 		return LLMDailySummary{}, fmt.Errorf("failed to marshal input: %w", err)
 	}
 
-	text, err := s.generateDailySummaryWithGemini(ctx, llmDailySummaryPrompt, string(inputJSON))
+	text, err := generateDailySummary(ctx, llmDailySummaryPrompt, string(inputJSON))
 	if err != nil {
 		return LLMDailySummary{}, err
 	}
@@ -273,50 +281,154 @@ func (s *Service) generateLLMDailySummary(ctx context.Context, input LLMDaySumma
 	}, nil
 }
 
-func (s *Service) generateDailySummaryWithGemini(ctx context.Context, systemPrompt, input string) (string, error) {
-	if s.genaiClient == nil {
-		return "", errors.New("genai client not configured")
+func dailySummaryLLMConfigured() bool {
+	switch settings.GetConfig().ClassificationLLMProvider {
+	case settings.LLMProviderGoogle, settings.LLMProviderOpenAI, settings.LLMProviderAnthropic, settings.LLMProviderGroq:
+		return true
+	default:
+		return false
 	}
+}
 
-	// Use a more capable model for summaries since this runs once per day
-	models := map[apiv1.DeviceHandshakeResponse_AccountTier]string{
-		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_UNSPECIFIED: "gemini-2.5-flash",
-		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE:        "gemini-2.5-flash",
-		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_TRIAL:       "gemini-2.5-flash",
-		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS:        "gemini-2.5-flash",
-		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PRO:         "gemini-2.5-flash",
+func generateDailySummary(ctx context.Context, systemPrompt, input string) (string, error) {
+	switch settings.GetConfig().ClassificationLLMProvider {
+	case settings.LLMProviderGoogle:
+		return generateDailySummaryWithGemini(ctx, systemPrompt, input)
+	case settings.LLMProviderOpenAI:
+		return generateDailySummaryWithOpenAI(ctx, systemPrompt, input)
+	case settings.LLMProviderAnthropic:
+		return generateDailySummaryWithAnthropic(ctx, systemPrompt, input)
+	case settings.LLMProviderGroq:
+		return generateDailySummaryWithGrok(ctx, systemPrompt, input)
+	default:
+		return "", errors.New("unsupported LLM provider")
 	}
+}
 
+func selectDailySummaryModel(models map[apiv1.DeviceHandshakeResponse_AccountTier]string) string {
 	tier := identity.GetAccountTier()
-	model, ok := models[tier]
-	if !ok {
-		model = "gemini-2.5-flash"
+	if model, ok := models[tier]; ok {
+		return model
 	}
 
-	resp, err := s.genaiClient.Models.GenerateContent(ctx, model, []*genai.Content{
-		{
-			Role: "user",
-			Parts: []*genai.Part{
-				genai.NewPartFromText(input),
-			},
-		},
-	}, &genai.GenerateContentConfig{
-		SystemInstruction: &genai.Content{
-			Parts: []*genai.Part{
-				genai.NewPartFromText(systemPrompt),
-			},
-		},
+	slog.Warn("unsupported account tier for daily summary model, using free tier model", "tier", tier)
+
+	if model, ok := models[apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE]; ok {
+		return model
+	}
+
+	return models[apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_UNSPECIFIED]
+}
+
+func generateDailySummaryWithGemini(ctx context.Context, systemPrompt, input string) (string, error) {
+	// Use the strongest current non-reasoning Gemini model.
+	models := map[apiv1.DeviceHandshakeResponse_AccountTier]string{
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_UNSPECIFIED: "gemini-2.5-flash-lite",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE:        "gemini-2.5-flash-lite",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_TRIAL:       "gemini-2.5-flash-lite",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS:        "gemini-2.5-flash-lite",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PRO:         "gemini-2.5-flash-lite",
+	}
+
+	withGoogleAIEndpoint := func(endpoint string) googleai.Option {
+		return func(opts *googleai.Options) {
+			opts.ClientOptions = append(opts.ClientOptions, option.WithEndpoint(endpoint))
+		}
+	}
+
+	model, err := googleai.New(ctx,
+		googleai.WithDefaultModel(selectDailySummaryModel(models)),
+		googleai.WithHTTPClient(newSignedLLMHTTPClient()),
+		withGoogleAIEndpoint(settings.APIBaseURL()+"/api/v1/gemini"),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return generateDailySummaryWithLLM(ctx, model, systemPrompt, input)
+}
+
+func generateDailySummaryWithOpenAI(ctx context.Context, systemPrompt, input string) (string, error) {
+	models := map[apiv1.DeviceHandshakeResponse_AccountTier]string{
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_UNSPECIFIED: "gpt-4.1",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE:        "gpt-4.1",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_TRIAL:       "gpt-4.1",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS:        "gpt-4.1",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PRO:         "gpt-4.1",
+	}
+
+	model, err := openai.New(
+		openai.WithModel(selectDailySummaryModel(models)),
+		openai.WithToken("stubbed"),
+		openai.WithHTTPClient(newSignedLLMHTTPClient()),
+		openai.WithBaseURL(settings.APIBaseURL()+"/api/v1/openai/v1"),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return generateDailySummaryWithLLM(ctx, model, systemPrompt, input)
+}
+
+func generateDailySummaryWithAnthropic(ctx context.Context, systemPrompt, input string) (string, error) {
+	models := map[apiv1.DeviceHandshakeResponse_AccountTier]string{
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_UNSPECIFIED: "claude-sonnet-4-5",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE:        "claude-sonnet-4-5",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_TRIAL:       "claude-sonnet-4-5",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS:        "claude-sonnet-4-5",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PRO:         "claude-sonnet-4-5",
+	}
+
+	model, err := anthropic.New(
+		anthropic.WithModel(selectDailySummaryModel(models)),
+		anthropic.WithToken("stubbed"),
+		anthropic.WithHTTPClient(newSignedLLMHTTPClient()),
+		anthropic.WithBaseURL(settings.APIBaseURL()+"/api/v1/anthropic/v1"),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return generateDailySummaryWithLLM(ctx, model, systemPrompt, input)
+}
+
+func generateDailySummaryWithGrok(ctx context.Context, systemPrompt, input string) (string, error) {
+	models := map[apiv1.DeviceHandshakeResponse_AccountTier]string{
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_UNSPECIFIED: "grok-4.20-beta-latest-non-reasoning",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE:        "grok-4.20-beta-latest-non-reasoning",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_TRIAL:       "grok-4.20-beta-latest-non-reasoning",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS:        "grok-4.20-beta-latest-non-reasoning",
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PRO:         "grok-4.20-beta-latest-non-reasoning",
+	}
+
+	model, err := openai.New(
+		openai.WithModel(selectDailySummaryModel(models)),
+		openai.WithToken("stubbed"),
+		openai.WithHTTPClient(newSignedLLMHTTPClient()),
+		openai.WithBaseURL(settings.APIBaseURL()+"/api/v1/grok/v1"),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return generateDailySummaryWithLLM(ctx, model, systemPrompt, input)
+}
+
+func generateDailySummaryWithLLM(ctx context.Context, model llms.Model, systemPrompt, input string) (string, error) {
+	resp, err := model.GenerateContent(ctx, []llms.MessageContent{
+		llms.TextParts(llms.ChatMessageTypeSystem, systemPrompt),
+		llms.TextParts(llms.ChatMessageTypeHuman, input),
 	})
 	if err != nil {
-		return "", fmt.Errorf("gemini call failed: %w", err)
+		return "", err
 	}
 
-	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
-		return "", errors.New("empty response from Gemini")
+	if len(resp.Choices) == 0 {
+		return "", errors.New("empty response from LLM")
 	}
 
-	text := resp.Candidates[0].Content.Parts[0].Text
-	text = strings.NewReplacer("```json", "", "`", "").Replace(text)
+	text := resp.Choices[0].Content
+	text = strings.NewReplacer("```json", "", "```", "", "`", "").Replace(text)
 
 	return text, nil
 }

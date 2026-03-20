@@ -2,10 +2,12 @@ import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   IconAlertTriangle,
+  IconCalendar,
   IconClock,
   IconShieldOff,
   IconBulb,
 } from "@tabler/icons-react";
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,7 +18,21 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useUsageStore } from "@/stores/usage-store";
+import { cn } from "@/lib/utils";
 
 interface PauseConfirmationDialogProps {
   open: boolean;
@@ -29,6 +45,50 @@ const PAUSE_OPTIONS = [
   { label: "1 hour", value: 60 },
 ];
 
+const TIME_OPTIONS = Array.from({ length: 96 }, (_, index) => {
+  const hours = Math.floor(index / 4);
+  const minutes = (index % 4) * 15;
+  const value = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+  const label = new Date(2024, 0, 1, hours, minutes).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  return { value, label };
+});
+
+function getNextQuarterHourValue(date = new Date()): string {
+  const next = new Date(date);
+  next.setSeconds(0, 0);
+  next.setMinutes(Math.ceil(next.getMinutes() / 15) * 15);
+
+  if (next.getMinutes() === 60) {
+    next.setHours(next.getHours() + 1, 0, 0, 0);
+  }
+
+  return `${String(next.getHours()).padStart(2, "0")}:${String(next.getMinutes()).padStart(2, "0")}`;
+}
+
+function formatPauseDuration(totalMinutes: number): string {
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+
+  const parts: string[] = [];
+
+  if (days > 0) {
+    parts.push(`${days} day${days === 1 ? "" : "s"}`);
+  }
+  if (hours > 0) {
+    parts.push(`${hours} hour${hours === 1 ? "" : "s"}`);
+  }
+  if (days === 0 && minutes > 0) {
+    parts.push(`${minutes} minute${minutes === 1 ? "" : "s"}`);
+  }
+
+  return parts.join(" ");
+}
+
 export function PauseConfirmationDialog({
   open,
   onOpenChange,
@@ -39,9 +99,19 @@ export function PauseConfirmationDialog({
   const pauseHistory = useUsageStore((state) => state.pauseHistory);
   const getPauseHistory = useUsageStore((state) => state.getPauseHistory);
   const navigate = useNavigate();
+  const [pauseMode, setPauseMode] = useState<"duration" | "until">("duration");
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
+  const [pauseUntilDate, setPauseUntilDate] = useState<Date | undefined>(undefined);
+  const [pauseUntilTime, setPauseUntilTime] = useState<string>("");
   const [isPausing, setIsPausing] = useState(false);
   const [allowingKey, setAllowingKey] = useState<string | null>(null);
+
+  const resetPauseForm = () => {
+    setPauseMode("duration");
+    setSelectedDuration(null);
+    setPauseUntilDate(undefined);
+    setPauseUntilTime("");
+  };
 
   // Fetch pause history for the last 30 days when the dialog opens
   // and reset selected duration when the dialog is closed.
@@ -49,9 +119,30 @@ export function PauseConfirmationDialog({
     if (open) {
       getPauseHistory(30);
     } else {
-      setSelectedDuration(null);
+      resetPauseForm();
     }
   }, [open, getPauseHistory]);
+
+  const pauseUntilDateTime = useMemo(() => {
+    if (!pauseUntilDate || !pauseUntilTime) return null;
+    const [hours, minutes] = pauseUntilTime.split(":").map(Number);
+
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+
+    const date = new Date(pauseUntilDate);
+    date.setHours(hours, minutes, 0, 0);
+    return date;
+  }, [pauseUntilDate, pauseUntilTime]);
+
+  const pauseUntilDurationMinutes = useMemo(() => {
+    if (!pauseUntilDateTime) return null;
+    return Math.ceil((pauseUntilDateTime.getTime() - Date.now()) / (1000 * 60));
+  }, [pauseUntilDateTime]);
+
+  const canConfirmPause =
+    pauseMode === "duration"
+      ? !!selectedDuration
+      : !!pauseUntilDurationMinutes && pauseUntilDurationMinutes > 0;
 
   // Get last 2 blocked items to show as quick allow options
   const blockedItems = getBlockedItemsList().slice(0, 2);
@@ -80,13 +171,21 @@ export function PauseConfirmationDialog({
   }, [pauseHistory]);
 
   const handleConfirmPause = async () => {
-    if (!selectedDuration) return;
+    let durationMinutes: number | null = null;
+
+    if (pauseMode === "duration") {
+      durationMinutes = selectedDuration;
+    } else if (pauseUntilDateTime) {
+      durationMinutes = Math.ceil((pauseUntilDateTime.getTime() - Date.now()) / (1000 * 60));
+    }
+
+    if (!durationMinutes || durationMinutes <= 0) return;
 
     setIsPausing(true);
     try {
-      await pauseProtection(selectedDuration);
+      await pauseProtection(durationMinutes);
       onOpenChange(false);
-      setSelectedDuration(null);
+      resetPauseForm();
     } finally {
       setIsPausing(false);
     }
@@ -94,7 +193,7 @@ export function PauseConfirmationDialog({
 
   const handleCancel = () => {
     onOpenChange(false);
-    setSelectedDuration(null);
+    resetPauseForm();
   };
 
   const handleQuickAllow = async (appName: string, hostname: string, durationMinutes: number) => {
@@ -221,19 +320,112 @@ export function PauseConfirmationDialog({
             <div className="space-y-2">
               <div className="grid grid-cols-3 gap-2">
                 {PAUSE_OPTIONS.map((opt) => (
-                  <button
+                  <Button
                     key={opt.value}
-                    onClick={() => setSelectedDuration(opt.value)}
-                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all cursor-pointer ${selectedDuration === opt.value
-                      ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400"
-                      : "border-border/60 hover:border-border text-muted-foreground hover:bg-muted/50"
-                      }`}
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setPauseMode("duration");
+                      setSelectedDuration(opt.value);
+                    }}
+                    className={cn(
+                      "h-9 px-2 rounded-lg border transition-all text-xs font-medium gap-1.5",
+                      pauseMode === "duration" && selectedDuration === opt.value
+                        ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/15"
+                        : "border-border/60 hover:border-border text-muted-foreground hover:bg-muted/50"
+                    )}
                   >
-                    <IconClock className="w-4 h-4" />
-                    <span className="text-xs font-semibold">{opt.label}</span>
-                  </button>
+                    <IconClock className="w-3.5 h-3.5" />
+                    <span>{opt.label}</span>
+                  </Button>
                 ))}
               </div>
+
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  if (pauseMode === "until") {
+                    setPauseMode("duration");
+                    setPauseUntilDate(undefined);
+                    setPauseUntilTime("");
+                    return;
+                  }
+
+                  setPauseMode("until");
+                  setSelectedDuration(null);
+                  if (!pauseUntilDate) {
+                    const now = new Date();
+                    setPauseUntilDate(now);
+                    setPauseUntilTime(getNextQuarterHourValue(now));
+                  }
+                }}
+                className={cn(
+                  "w-full h-9 px-3 rounded-lg border transition-all text-xs font-medium gap-1.5",
+                  pauseMode === "until"
+                    ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/15"
+                    : "border-border/60 hover:border-border text-muted-foreground hover:bg-muted/50"
+                )}
+              >
+                <IconCalendar className="w-3.5 h-3.5" />
+                <span>Pause until</span>
+              </Button>
+
+              {pauseMode === "until" && (
+                <div className="rounded-xl border border-border/60 p-3 space-y-2 bg-muted/20">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="justify-start text-left font-normal w-full min-w-0"
+                        >
+                          <IconCalendar className="mr-2 h-4 w-4" />
+                          <span className="truncate">
+                            {pauseUntilDate ? format(pauseUntilDate, "MMM d, yyyy") : "Select date"}
+                          </span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={pauseUntilDate}
+                          onSelect={setPauseUntilDate}
+                          disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+
+                    <Select value={pauseUntilTime} onValueChange={setPauseUntilTime}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select time" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TIME_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {pauseUntilDurationMinutes !== null && pauseUntilDurationMinutes > 0 && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Protection will resume in {formatPauseDuration(pauseUntilDurationMinutes)}
+                      {pauseUntilDateTime ? ` · ${format(pauseUntilDateTime, "MMM d, yyyy h:mm a")}` : ""}.
+                    </p>
+                  )}
+
+                  {pauseUntilDurationMinutes !== null && pauseUntilDurationMinutes <= 0 && (
+                    <p className="text-[11px] text-destructive">
+                      Please select a future date and time.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </DialogBody>
@@ -249,8 +441,8 @@ export function PauseConfirmationDialog({
           <Button
             variant="default"
             onClick={handleConfirmPause}
-            disabled={!selectedDuration || isPausing}
-            className={`flex-1 rounded-xl h-11 font-semibold transition-all shadow-sm ${selectedDuration
+            disabled={!canConfirmPause || isPausing}
+            className={`flex-1 rounded-xl h-11 font-semibold transition-all shadow-sm ${canConfirmPause
               ? "bg-orange-500 text-white hover:bg-orange-600 shadow-orange-500/10"
               : "bg-muted text-muted-foreground opacity-50"
               }`}

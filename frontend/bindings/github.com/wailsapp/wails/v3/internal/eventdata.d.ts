@@ -15,7 +15,7 @@ declare module "@wailsio/runtime" {
             "authctx:updated": any;
             "daily-summary:ready": usage$0.LLMDailySummary;
             "protection:status": usage$0.ProtectionPause;
-            "usage:update": usage$0.ApplicationUsage;
+            "usage:update": usage$0.ApplicationUsage | null;
         }
     }
 }

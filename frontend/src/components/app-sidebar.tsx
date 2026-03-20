@@ -6,7 +6,7 @@ import {
 } from "@tabler/icons-react";
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { GetVersion } from "../../bindings/github.com/focusd-so/focusd/internal/settings/service";
+import { GetCurrentVersion } from "../../bindings/github.com/focusd-so/focusd/internal/updater/service";
 
 import {
   Sidebar,
@@ -44,7 +44,7 @@ export function AppSidebar() {
   const matchRoute = useMatchRoute();
   const { data: version } = useQuery({
     queryKey: ["app-version"],
-    queryFn: GetVersion,
+    queryFn: () => (import.meta.env.DEV ? Promise.resolve("dev") : GetCurrentVersion()),
   });
 
   return (

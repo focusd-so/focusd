@@ -15,16 +15,19 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
-func parseURL(browserURL string) (hostname, path string) {
-	u, err := url.Parse(browserURL)
+func parseURLNormalized(browserURL string) (*url.URL, error) {
+	u, err := url.ParseRequestURI(browserURL)
 	if err != nil {
-		return "", ""
+		return nil, err
 	}
 
-	hostname = strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
-	path = u.Path
+	hostname := strings.ToLower(strings.TrimSpace(u.Hostname()))
+	hostname = strings.TrimSuffix(hostname, ".")
+	hostname = strings.TrimPrefix(hostname, "www.")
 
-	return hostname, path
+	u.Host = hostname
+
+	return u, nil
 }
 
 type MetaData struct {
@@ -119,10 +122,12 @@ func createSandboxContext(appName string, url *string) sandboxContext {
 	if url != nil {
 		sandboxCtx.URL = *url
 
-		hostname, path := parseURL(*url)
-		sandboxCtx.Hostname = hostname
-		sandboxCtx.Path = path
-		sandboxCtx.Domain, _ = publicsuffix.EffectiveTLDPlusOne(hostname)
+		u, err := parseURLNormalized(*url)
+		if err == nil {
+			sandboxCtx.Hostname = u.Hostname()
+			sandboxCtx.Path = u.Path
+			sandboxCtx.Domain, _ = publicsuffix.EffectiveTLDPlusOne(u.Hostname())
+		}
 	}
 
 	return sandboxCtx

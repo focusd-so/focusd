@@ -503,9 +503,25 @@ func (s *Service) classifyObviously(ctx context.Context, appName string, url *st
 }
 
 func (s *Service) classifyObviouslyWebsite(ctx context.Context, browserURL string) (*ClassificationResponse, error) {
-	hostname, path := parseURL(browserURL)
+	u, err := parseURLNormalized(browserURL)
+	if err != nil {
+		return nil, err
+	}
+
+	hostname := u.Hostname()
+	path := u.Path
 
 	hasPath := path != "" && path != "/"
+
+	if isDeterministicCriticalNoBlockURL(browserURL) {
+		return &ClassificationResponse{
+			Classification:       ClassificationNeutral,
+			ClassificationSource: ClassificationSourceObviously,
+			Reasoning:            "Payment/booking flow detected - safety override to avoid interruption",
+			ConfidenceScore:      1.0,
+			Tags:                 []string{"other"},
+		}, nil
+	}
 
 	// 0. Check always-allow path categories first (e.g. focusd.so/blocked)
 	fullURL := hostname + path

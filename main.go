@@ -20,7 +20,6 @@ import (
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
-	"google.golang.org/genai"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -54,7 +53,7 @@ func init() {
 	// Register a custom event whose associated data type is string.
 	// This is not required, but the binding generator will pick up registered events
 	// and provide a strongly typed JS/TS API for them.
-	application.RegisterEvent[usage.ApplicationUsage]("usage:update")
+	application.RegisterEvent[*usage.ApplicationUsage]("usage:update")
 	application.RegisterEvent[usage.ProtectionPause]("protection:status")
 	application.RegisterEvent[usage.LLMDailySummary]("daily-summary:ready")
 	application.RegisterEvent[any]("authctx:updated")
@@ -64,6 +63,16 @@ func init() {
 // and starts a goroutine that emits a time-based event every second. It subsequently runs the application and
 // logs any error that might occur.
 func main() {
+	userdir, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatalf("failed to get user home directory: %v", err)
+	}
+
+	configDir := filepath.Join(userdir, ".focusd")
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		log.Fatalf("failed to create config directory: %v", err)
+	}
+
 	// Configure logging
 	logCloser, err := setupLogging()
 	if err != nil {
@@ -88,97 +97,24 @@ func main() {
 		log.Fatal("failed to setup web server: %w", err)
 	}
 
-	settingsService, err := settings.NewService(db, Version)
+	settingsService, err := settings.NewService(configDir)
 	if err != nil {
 		log.Fatal("failed to create settings service: %w", err)
 	}
 
-	// Resolve the API base URL based on build type.
-	apiBaseURL := "http://localhost:8089"
-	if isProductionBuild {
-		apiBaseURL = "https://api.focusd.so"
-	}
-
 	// This client is used to perform the handshake and get the token. It is not authenticated.
 	// It should only be used to perform the handshake and get the token.
-	apiUntrustedClient := api.NewClient(apiBaseURL)
+	apiUntrustedClient := api.NewClient(settings.APIBaseURL())
 
 	if err := identity.ScheduleHandshake(ctx, apiUntrustedClient); err != nil {
 		slog.Error("failed to schedule handshake", "error", err)
 	}
 
-	apiAuthenticatedClient := api.NewClient(apiBaseURL, api.NewSigningInterceptor())
+	apiAuthenticatedClient := api.NewClient(settings.APIBaseURL(), api.NewSigningInterceptor())
 
 	identityService := identity.NewService(apiAuthenticatedClient)
 
-	genaiClient, err := genai.NewClient(ctx, &genai.ClientConfig{
-		HTTPOptions: genai.HTTPOptions{
-			BaseURL: apiBaseURL + "/api/v1/gemini",
-		},
-		HTTPClient: &http.Client{
-			Transport: api.NewSigningRoundTripper(nil),
-		},
-		Backend: genai.BackendGeminiAPI,
-		// Since this is required to create the client, we are stubbing it for now.
-		// All the request will be going through api.focusd.so proxy.
-		APIKey: "stubbed",
-	})
-	if err != nil {
-		slog.Error("failed to create genai client", "error", err)
-	}
-
-	var wailsAppPtr *application.App
-
-	usageService, err := usage.NewService(
-		ctx, db,
-		usage.WithProtectionPaused(func(pause usage.ProtectionPause) {
-			slog.Info("protection has been paused", "reason", pause.Reason)
-			if wailsAppPtr != nil {
-				wailsAppPtr.Event.Emit("protection:status", pause)
-			}
-		}),
-		usage.WithProtectionResumed(func(pause usage.ProtectionPause) {
-			slog.Info("protection has been resumed", "reason", pause.Reason)
-			if wailsAppPtr != nil {
-				wailsAppPtr.Event.Emit("protection:status", pause)
-			}
-		}),
-		usage.WithAppBlocker(func(appName, title, reason string, tags []string, browserURL *string) {
-			client := extension.HasClient(appName)
-
-			// if an extension has been connected to handle app, they should take care of blocking the app
-			if client {
-				return
-			}
-
-			if browserURL != nil {
-				slog.Info("browser url provided, blocking url", "url", *browserURL)
-				if err := native.BlockURL(*browserURL, title, reason, tags, appName); err != nil {
-					slog.Error("failed to block URL", "url", *browserURL, "error", err)
-
-					return
-				}
-			}
-
-			slog.Info("no browser url provided, blocking app", "appName", appName)
-			if err := native.BlockApp(appName, title, reason, tags); err != nil {
-				slog.Error("failed to block app", "appName", appName, "error", err)
-
-				return
-			}
-		}),
-		usage.WithGenaiClient(genaiClient),
-		usage.WithSettingsService(settingsService),
-		usage.WithLLMDailySummaryReady(func(summary usage.LLMDailySummary) {
-			slog.Info("daily LLM summary ready", "date", summary.Date, "headline", summary.Headline)
-			if wailsAppPtr != nil {
-				wailsAppPtr.Event.Emit("daily-summary:ready", summary)
-			}
-			exec.Command("osascript", "-e",
-				fmt.Sprintf(`display notification "%s" with title "Focusd" subtitle "Daily Summary"`,
-					summary.Headline)).Run()
-		}),
-	)
+	usageService, err := usage.NewService(ctx, db)
 	if err != nil {
 		log.Fatal("failed to create usage service: %w", err)
 	}
@@ -208,7 +144,7 @@ func main() {
 			category = &event.AppCategory
 		}
 
-		err := usageService.TitleChanged(
+		appUsage, err := usageService.TitleChanged(
 			ctx,
 			event.ExecutablePath,
 			event.Title,
@@ -221,10 +157,34 @@ func main() {
 		if err != nil {
 			slog.Error("failed to handle title change", "error", err)
 		}
+
+		if appUsage.TerminationMode == usage.TerminationModeBlock {
+			tags := usage.ApplicationTagsSlice(appUsage.Tags).Tags()
+			reasoning := ""
+			if appUsage.ClassificationReasoning != nil {
+				reasoning = *appUsage.ClassificationReasoning
+			}
+
+			if url != nil {
+				slog.Info("browser url provided, blocking url", "url", *url)
+				if err := native.BlockURL(*url, event.Title, reasoning, tags, event.AppName); err != nil {
+					slog.Error("failed to block URL", "url", *url, "error", err)
+
+					return
+				}
+			}
+
+			if err := native.BlockApp(event.AppName, event.Title, reasoning, tags); err != nil {
+				slog.Error("failed to block app", "appName", event.AppName, "error", err)
+
+				return
+			}
+		}
+
 	})
 
 	var updaterService *updater.Service
-	if isProductionBuild {
+	if settings.IsProductionBuild() {
 		updaterService = updater.NewService(Version, "focusd-so", "focusd", AppleTeamID)
 	}
 
@@ -254,22 +214,30 @@ func main() {
 		},
 	})
 
+	usageService.OnProtectionPause(func(pause usage.ProtectionPause) {
+		wailsApp.Event.Emit("protection:status", pause)
+	})
+
+	usageService.OnProtectionResumed(func(pause usage.ProtectionPause) {
+		wailsApp.Event.Emit("protection:status", pause)
+	})
+
+	usageService.OnLLMDailySummaryReady(func(summary usage.LLMDailySummary) {
+		wailsApp.Event.Emit("daily-summary:ready", summary)
+
+		// TODO: use proper system api to send a notification
+		exec.Command("osascript", "-e",
+			fmt.Sprintf(`display notification "%s" with title "Focusd" subtitle "Daily Summary"`,
+				summary.Headline)).Run()
+	})
+
 	wailsApp.OnShutdown(cancel)
 
-	wailsAppPtr = wailsApp
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case usage := <-usageService.UsageUpdates:
-				if wailsAppPtr != nil {
-					wailsAppPtr.Event.Emit("usage:update", *usage)
-				}
-			}
+	usageService.OnUsageUpdated(func(appUsage *usage.ApplicationUsage) {
+		if appUsage != nil {
+			wailsApp.Event.Emit("usage:update", appUsage)
 		}
-	}()
+	})
 
 	native.OnIdleChange(func(idleSeconds float64) {
 		usageService.IdleChanged(ctx, idleSeconds > 120)
@@ -391,11 +359,11 @@ func setupLogging() (io.Closer, error) {
 	if _, err := os.Stat("go.mod"); err == nil {
 		logPath = logName
 	} else {
-		configDir, err := os.UserConfigDir()
+		configDir, err := os.UserHomeDir()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get user config dir: %w", err)
 		}
-		appDir := filepath.Join(configDir, "focusd")
+		appDir := filepath.Join(configDir, ".focusd")
 		if err := os.MkdirAll(appDir, 0755); err != nil {
 			return nil, fmt.Errorf("failed to create app config dir: %w", err)
 		}

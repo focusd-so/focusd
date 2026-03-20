@@ -418,7 +418,7 @@ func getPlatformSerial() (string, error) {
 	return strings.TrimSpace(string(serialOut)), nil
 }
 
-func BlockURL(targetURL, title, reason string, tags []string, appName string) error {
+func BlockURL(targetURL, title string, reason string, tags []string, appName string) error {
 
 	data := struct {
 		URL        string `json:"url"`

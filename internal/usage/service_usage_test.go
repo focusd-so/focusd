@@ -3,22 +3,25 @@ package usage_test
 import (
 	"context"
 	"fmt"
-	"io"
-	"net/http"
-	"strings"
+	urlpkg "net/url"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"google.golang.org/genai"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
 	"github.com/focusd-so/focusd/internal/usage"
 )
 
+func memoryDSN(t *testing.T) string {
+	t.Helper()
+
+	return fmt.Sprintf("file:%s?mode=memory&cache=shared&_busy_timeout=5000", urlpkg.QueryEscape(t.Name()))
+}
+
 func setUpService(t *testing.T, options ...usage.Option) (*usage.Service, *gorm.DB) {
-	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	db, _ := gorm.Open(sqlite.Open(memoryDSN(t)), &gorm.Config{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -29,278 +32,240 @@ func setUpService(t *testing.T, options ...usage.Option) (*usage.Service, *gorm.
 	return service, db
 }
 
-func TestService_WhenEnterIdle_ContinueCurrentIdlePeriod(t *testing.T) {
-	service, db := setUpService(t)
+func TestService_TransitionsBetweenIdleAndApplicationUsage(t *testing.T) {
+	h := newUsageHarness(t)
 
-	// create the Idle application
-	idleApp := usage.Application{Name: usage.IdleApplicationName}
-	require.NoError(t, db.Create(&idleApp).Error)
+	h.
+		EnterIdle().
+		AssertLastUsage(
+			assertUsageOpened(t),
+			assertUsageApplicationName(t, usage.IdleApplicationName),
+			assertUsageClassification(t, usage.ClassificationNone),
+		).
+		AssertUpdateEventsCount(1).
+		AssertUsagesCount(1).
+		Await(1 * time.Second).
+		EnterIdle().
+		AssertUpdateEventsCount(1).
+		AssertUsagesCount(1)
 
-	// create an open idle usage
-	idleUsage := usage.ApplicationUsage{
-		ApplicationID:   idleApp.ID,
-		StartedAt:       time.Now().Unix(),
-		Classification:  usage.ClassificationNone,
-		TerminationMode: usage.TerminationModeNone,
-		WindowTitle:     usage.IdleApplicationName,
-		ExecutablePath:  "idle",
-	}
-	require.NoError(t, db.Create(&idleUsage).Error)
+	h.
+		EnterIdle().
+		TitleChanged("Chrome", "Github", withPtr("https://github.com")).
+		AssertLastUsage(
+			assertUsageOpened(t),
+			assertUsageApplicationName(t, "Chrome"),
+			assertUsageHostname(t, "github.com"),
+			assertUsageClassification(t, usage.ClassificationProductive),
+		).
+		AssertPreviousUsage(assertUsageClosed(t)).
+		AssertUpdateEventsCount(4).
+		AssertUsagesCount(2)
 
-	// wait 3 seconds
-	time.Sleep(3 * time.Second)
-
-	// enter idle
-	err := service.IdleChanged(context.Background(), true)
-	require.NoError(t, err, "failed to enter idle")
-
-	// read the idle usage — it should still be open
-	var readIdleUsage usage.ApplicationUsage
-	require.NoError(t, db.Where("id = ?", idleUsage.ID).First(&readIdleUsage).Error)
-
-	require.NotEqual(t, int64(0), readIdleUsage.StartedAt)
-	require.Equal(t, readIdleUsage.ID, idleUsage.ID)
-	require.Nil(t, readIdleUsage.EndedAt)
-	require.Nil(t, readIdleUsage.DurationSeconds)
+	h.
+		Await(3 * time.Second).
+		EnterIdle().
+		AssertLastUsage(assertUsageOpened(t)).
+		AssertPreviousUsage(assertUsageClosed(t)).
+		AssertUpdateEventsCount(6).
+		AssertUsagesCount(3)
 }
 
-func TestService_WhenEnterIdle_CreateNewIdlePeriod(t *testing.T) {
-	service, db := setUpService(t)
+func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
+	h := newUsageHarness(t)
 
-	// create the Idle application
-	idleApp := usage.Application{Name: usage.IdleApplicationName}
-	require.NoError(t, db.Create(&idleApp).Error)
+	// user opens amazon, gets blocked by obviously classifier since it's a distraction
+	h.
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertUsageClosed(t),
+			assertUsageApplicationName(t, "Chrome"),
+			assertUsageHostname(t, "amazon.com"),
+			assertUsageClassification(t, usage.ClassificationDistracting),
+			assertTerminationMode(t, usage.TerminationModeBlock),
+			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+		).
+		AssertUpdateEventsCount(2)
 
-	now := time.Now().Unix()
-	expectedDurationSeconds := 3
+	// user pauses all protection and opens amazon and linkedin, should not be blocked
+	h.
+		ResetUsageEvents().
+		Pause(5, "test").
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertUsageApplicationName(t, "Chrome"),
+			assertUsageHostname(t, "amazon.com"),
+			assertUsageClassification(t, usage.ClassificationDistracting),
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourcePaused),
+		).
+		AssertUpdateEventsCount(2).
+		TitleChanged("Chrome", "Linkedin", withPtr("https://www.linkedin.com")).
+		AssertLastUsage(
+			assertUsageApplicationName(t, "Chrome"),
+			assertUsageHostname(t, "linkedin.com"),
+			assertUsageClassification(t, usage.ClassificationDistracting),
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourcePaused),
+		).
+		AssertUpdateEventsCount(5)
 
-	// create a closed idle usage
-	closedIdleUsage := usage.ApplicationUsage{
-		ApplicationID:   idleApp.ID,
-		StartedAt:       time.Now().Unix(),
-		EndedAt:         &now,
-		DurationSeconds: &expectedDurationSeconds,
-		Classification:  usage.ClassificationNone,
-		TerminationMode: usage.TerminationModeNone,
-		WindowTitle:     usage.IdleApplicationName,
-		ExecutablePath:  "idle",
-	}
-	require.NoError(t, db.Create(&closedIdleUsage).Error)
+	// pause duration has collapsed, so user gets blocked again
+	h.
+		ResetUsageEvents().
+		Await(6*time.Second).
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertPreviousUsage(assertUsageClosed(t)).
+		AssertLastUsage(
+			assertUsageApplicationName(t, "Chrome"),
+			assertUsageHostname(t, "amazon.com"),
+			assertUsageClassification(t, usage.ClassificationDistracting),
+			assertTerminationMode(t, usage.TerminationModeBlock),
+			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+		).
+		AssertUpdateEventsCount(3)
 
-	// enter idle
-	err := service.IdleChanged(context.Background(), true)
-	require.NoError(t, err, "failed to enter idle")
+	// user whitelists amazon and opens it again, should not be blocked, linkedin is still blocked
+	h.
+		Whitelist("Chrome", "https://www.amazon.com", 3*time.Second).
+		TitleChanged("Chrome", "Amazon", withPtr("https://amazon.com")).
+		AssertLastUsage(
+			assertUsageHostname(t, "amazon.com"),
+			assertUsageClassification(t, usage.ClassificationDistracting),
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+		).
+		TitleChanged("Chrome", "Linkedin", withPtr("https://www.linkedin.com")).
+		AssertPreviousUsage(assertUsageClosed(t)).
+		AssertLastUsage(
+			assertUsageHostname(t, "linkedin.com"),
+			assertUsageClassification(t, usage.ClassificationDistracting),
+			assertTerminationMode(t, usage.TerminationModeBlock),
+			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+		).
+		Await(time.Second*4).
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertUsageHostname(t, "amazon.com"),
+			assertUsageClassification(t, usage.ClassificationDistracting),
+			assertTerminationMode(t, usage.TerminationModeBlock),
+			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+		)
 
-	// read the new idle usage
-	var readIdleUsage usage.ApplicationUsage
-	require.NoError(t, db.Joins("Application").
-		Where("application.name = ? AND application_usage.ended_at IS NULL", usage.IdleApplicationName).
-		Limit(1).Order("application_usage.started_at DESC").
-		First(&readIdleUsage).Error)
+	// 2. Manual Pause Resumption
+	h.
+		Pause(10, "test early resume").
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourcePaused),
+		).
+		Await(time.Second).
+		Resume("user clicked resume").
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeBlock),
+			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+		)
 
-	require.NotEqual(t, int64(0), readIdleUsage.StartedAt)
-	require.NotEqual(t, readIdleUsage.ID, closedIdleUsage.ID)
-	require.Nil(t, readIdleUsage.EndedAt)
-	require.Nil(t, readIdleUsage.DurationSeconds)
-}
+	// 3. Whitelist Overwriting / Extension
+	h.
+		Whitelist("Chrome", "https://www.amazon.com", 2*time.Second).
+		Await(time.Second).
+		Whitelist("Chrome", "https://www.amazon.com", 4*time.Hour).
+		Await(time.Second*3).
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+		)
 
-func TestService_WhenExitIdle_CloseCurrentIdlePeriod(t *testing.T) {
-	service, db := setUpService(t)
+	// 4. Cross-Browser Whitelist
+	h.
+		TitleChanged("Safari", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertUsageApplicationName(t, "Safari"),
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+		)
 
-	// create the Idle application
-	idleApp := usage.Application{Name: usage.IdleApplicationName}
-	require.NoError(t, db.Create(&idleApp).Error)
+	// 5. Manual Whitelist Removal
+	h.
+		RemoveActiveWhitelists().
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeBlock),
+			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+		)
 
-	// create an open idle usage
-	idleUsage := usage.ApplicationUsage{
-		ApplicationID:   idleApp.ID,
-		StartedAt:       time.Now().Unix(),
-		Classification:  usage.ClassificationNone,
-		TerminationMode: usage.TerminationModeNone,
-		WindowTitle:     usage.IdleApplicationName,
-		ExecutablePath:  "idle",
-	}
-	require.NoError(t, db.Create(&idleUsage).Error)
+	// 6. Pause Expiry While Whitelist Is Still Active
+	h.
+		Await(250*time.Millisecond).
+		ResetUsageEvents().
+		Pause(3, "pause shorter than whitelist").
+		Whitelist("Chrome", "https://www.amazon.com", 7*time.Second).
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourcePaused),
+		).
+		Await(4*time.Second).
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+		)
 
-	// wait 3 seconds
-	time.Sleep(3 * time.Second)
+	// 7. Whitelist Expiry While Pause Is Still Active
+	h.
+		ResetUsageEvents().
+		Pause(8, "pause longer than whitelist").
+		Whitelist("Chrome", "https://www.amazon.com", 2*time.Second).
+		Await(3*time.Second).
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourcePaused),
+		).
+		Await(6*time.Second).
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeBlock),
+			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+		)
 
-	// exit idle
-	err := service.IdleChanged(context.Background(), false)
-	require.NoError(t, err, "failed to exit idle")
+	// 8. Manual Resume Does Not Clear Active Whitelist
+	h.
+		Await(250*time.Millisecond).
+		ResetUsageEvents().
+		Whitelist("Chrome", "https://www.amazon.com", 10*time.Second).
+		Pause(10, "manual resume should preserve whitelist").
+		Resume("user resumed protection manually").
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+		).
+		TitleChanged("Chrome", "Linkedin", withPtr("https://www.linkedin.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeBlock),
+			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+		)
 
-	// read the idle usage
-	var readIdleUsage usage.ApplicationUsage
-	require.NoError(t, db.Where("id = ?", idleUsage.ID).First(&readIdleUsage).Error)
-
-	require.NotEqual(t, int64(0), readIdleUsage.StartedAt)
-	require.NotNil(t, readIdleUsage.EndedAt)
-	require.NotNil(t, readIdleUsage.DurationSeconds)
-	require.Equal(t, 3, *readIdleUsage.DurationSeconds)
-}
-
-func TestService_CloseCurrentApplicationUsageWhenEnterIdle(t *testing.T) {
-	service, db := setUpService(t)
-
-	// create a new application usage
-	applicationUsage := usage.ApplicationUsage{
-		StartedAt:       time.Now().Unix(),
-		EndedAt:         nil,
-		DurationSeconds: nil,
-	}
-	if err := db.Create(&applicationUsage).Error; err != nil {
-		t.Fatalf("failed to create application usage: %v", err)
-	}
-
-	// wait 3 seconds
-	time.Sleep(3 * time.Second)
-
-	err := service.IdleChanged(context.Background(), true)
-	require.NoError(t, err, "failed to enter idle")
-
-	// read the application usage
-	var readApplicationUsage usage.ApplicationUsage
-	if err := db.Where("id = ?", applicationUsage.ID).First(&readApplicationUsage).Error; err != nil {
-		t.Fatalf("failed to find application usage: %v", err)
-	}
-
-	require.NotEqual(t, 0, readApplicationUsage.StartedAt)
-	require.NotEqual(t, 0, readApplicationUsage.EndedAt)
-	require.NotNil(t, readApplicationUsage.DurationSeconds)
-	require.Equal(t, 3, *readApplicationUsage.DurationSeconds)
-}
-
-func TestService_TitleChanged_WhenSameApplication_ContinueCurrentApplicationUsage(t *testing.T) {
-	service, db := setUpService(t)
-
-	ctx := context.Background()
-
-	// create a new application usage
-	applicationUsage := usage.ApplicationUsage{
-		StartedAt:   time.Now().Unix(),
-		WindowTitle: "Slack",
-		Application: usage.Application{Name: "Slack"},
-	}
-	if err := db.Create(&applicationUsage).Error; err != nil {
-		t.Fatalf("failed to create application usage: %v", err)
-	}
-
-	// change the title of the current application
-	err := service.TitleChanged(ctx, "/Applications/Slack.app/Contents/MacOS/Slack", "Slack", "Slack", "", nil, nil, nil)
-	require.NoError(t, err, "failed to change title")
-
-	// read the application usage
-	var readApplicationUsage usage.ApplicationUsage
-	if err := db.Where("id = ?", applicationUsage.ID).First(&readApplicationUsage).Error; err != nil {
-		t.Fatalf("failed to find application usage: %v", err)
-	}
-
-	require.NotEqual(t, 0, readApplicationUsage.StartedAt)
-	require.Nil(t, readApplicationUsage.EndedAt)
-	require.Nil(t, readApplicationUsage.DurationSeconds)
-}
-
-func TestService_TitleChanged_WhenDifferentApplication_CloseCurrentApplicationUsage(t *testing.T) {
-	service, db := setUpService(t)
-
-	ctx := context.Background()
-
-	// create a new application usage
-	applicationUsage := usage.ApplicationUsage{
-		StartedAt:   time.Now().Unix(),
-		WindowTitle: "Slack",
-		Application: usage.Application{Name: "Slack"},
-	}
-	if err := db.Create(&applicationUsage).Error; err != nil {
-		t.Fatalf("failed to create application usage: %v", err)
-	}
-
-	// change the title of the current application
-	err := service.TitleChanged(ctx, "com.apple.Safari", "Safari", "New Tab", "", nil, nil, nil)
-	require.NoError(t, err, "failed to change title")
-
-	// read the application usage
-	var readApplicationUsage usage.ApplicationUsage
-	if err := db.Where("id = ?", applicationUsage.ID).First(&readApplicationUsage).Error; err != nil {
-		t.Fatalf("failed to find application usage: %v", err)
-	}
-
-	require.NotNil(t, readApplicationUsage.EndedAt)
-}
-
-func TestService_TitleChanged_ClassificationErrorStored(t *testing.T) {
-	// setup a service with a mock settings service that returns invalid custom rules to trigger a classification error
-	usageService, db := setUpServiceWithSettings(t, "invalid custom rules")
-
-	err := usageService.TitleChanged(context.Background(), "com.apple.Safari", "Safari", "New Tab", "", nil, nil, nil)
-	require.Nil(t, err)
-
-	var readApplicationUsage usage.ApplicationUsage
-	if err := db.Where("id = ?", 1).First(&readApplicationUsage).Error; err != nil {
-		t.Fatalf("failed to find application usage: %v", err)
-	}
-
-	require.NotNil(t, readApplicationUsage.ClassificationError)
-	require.Contains(t, *readApplicationUsage.ClassificationError, "failed to classify application usage with custom rules")
-}
-
-// roundTripFunc is an adapter to allow the use of ordinary functions as http.RoundTripper.
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
-	return f(r)
-}
-
-func TestService_TitleChanged_PropogateClassificationFromLLM(t *testing.T) {
-	// Classification response that the mocked LLM returns.
-	// Note: "classification_source" is intentionally omitted here because the real
-	// LLM prompt does not ask for it. The backend (classifyWithGemini) must set it
-	// explicitly to ClassificationSourceCloudLLM after unmarshalling.
-	classificationJSON := `{"classification":"productive","reasoning":"Productive work communication","confidence_score":0.95,"tags":["work","communication"]}`
-
-	// Wrap in a valid Gemini API response envelope (candidates[].content.parts[].text)
-	geminiResponse := fmt.Sprintf(`{"candidates":[{"content":{"parts":[{"text":%q}],"role":"model"}}]}`, classificationJSON)
-
-	genaiClient, err := genai.NewClient(context.Background(), &genai.ClientConfig{
-		APIKey:  "test-key",
-		Backend: genai.BackendGeminiAPI,
-		HTTPClient: &http.Client{
-			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				return &http.Response{
-					StatusCode: 200,
-					Body:       io.NopCloser(strings.NewReader(geminiResponse)),
-					Header:     http.Header{"Content-Type": []string{"application/json"}},
-				}, nil
-			}),
-		},
-	})
-	require.NoError(t, err, "failed to create genai client")
-
-	service, db := setUpService(t, usage.WithGenaiClient(genaiClient))
-
-	url := "https://example.com/docs"
-	err = service.TitleChanged(context.Background(),
-		"/Applications/Safari.app/Contents/MacOS/Safari",
-		"Safari",
-		"Example Docs",
-		"",
-		nil,
-		&url,
-		nil,
-	)
-	require.NoError(t, err, "failed to change title")
-
-	// Read the application usage and verify classification was propagated from LLM
-	var readApplicationUsage usage.ApplicationUsage
-	require.NoError(t, db.Preload("Tags").Where("ended_at IS NULL").First(&readApplicationUsage).Error)
-
-	require.Equal(t, usage.ClassificationProductive, readApplicationUsage.Classification)
-	require.Equal(t, usage.ClassificationSourceCloudLLMGemini, readApplicationUsage.ClassificationSource)
-	require.Equal(t, "Productive work communication", readApplicationUsage.ClassificationReasoning)
-	require.Equal(t, float32(0.95), readApplicationUsage.ClassificationConfidence)
-
-	// Verify tags were propagated
-	require.Len(t, readApplicationUsage.Tags, 2)
-	require.Equal(t, "work", readApplicationUsage.Tags[0].Tag)
-	require.Equal(t, "communication", readApplicationUsage.Tags[1].Tag)
+	// 9. Quick-Allow Input Shape Parity (hostname vs full URL)
+	h.
+		Await(250*time.Millisecond).
+		ResetUsageEvents().
+		RemoveActiveWhitelists().
+		Whitelist("Chrome", "amazon.com", 6*time.Second).
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+		).
+		TitleChanged("Chrome", "Amazon", withPtr("https://amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+		)
 }

@@ -3,7 +3,7 @@ package usage
 import (
 	"context"
 	"fmt"
-	"log/slog"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -55,9 +55,11 @@ func (s *Service) PauseProtection(durationSeconds int, reason string) (Protectio
 		return ProtectionPause{}, err
 	}
 
-	if s.onProtectionPaused != nil {
-		s.onProtectionPaused(protectionPause)
+	s.eventsMu.RLock()
+	for _, fn := range s.onProtectionPaused {
+		fn(protectionPause)
 	}
+	s.eventsMu.RUnlock()
 
 	return protectionPause, nil
 }
@@ -99,9 +101,11 @@ func (s *Service) ResumeProtection(reason string) (ProtectionPause, error) {
 		return ProtectionPause{}, err
 	}
 
-	if s.onProtectionResumed != nil {
-		s.onProtectionResumed(protectionPause)
+	s.eventsMu.RLock()
+	for _, fn := range s.onProtectionResumed {
+		fn(protectionPause)
 	}
+	s.eventsMu.RUnlock()
 
 	return protectionPause, nil
 }
@@ -167,21 +171,32 @@ func (s *Service) GetPauseHistory(days int) ([]ProtectionPause, error) {
 //
 // Side effects:
 //   - Creates a ProtectionWhitelist record in the database with expiration timestamp
-func (s *Service) Whitelist(appname string, hostname string, duration time.Duration) error {
-	if duration < 5*time.Minute {
-		return fmt.Errorf("duration must be at least 5 minutes")
+func (s *Service) Whitelist(appname string, url string, duration time.Duration) error {
+	if duration <= 0 {
+		return nil
 	}
 
 	now := time.Now().Unix()
 	expiresAt := now + int64(duration.Seconds())
 
-	if duration == 0 {
-		duration = time.Hour
+	var hostname string
+	if normalized, err := parseURLNormalized(url); err == nil && normalized != nil {
+		hostname = normalized.Hostname()
+	} else if url != "" {
+		hostname = strings.ToLower(strings.TrimSpace(url))
+		hostname = strings.TrimSuffix(hostname, ".")
+		hostname = strings.TrimPrefix(hostname, "www.")
 	}
 
-	// delete any existing whitelist entries for the bundle ID and hostname
-	if err := s.db.Where("app_name = ? AND hostname = ?", appname, hostname).Delete(&ProtectionWhitelist{}).Error; err != nil {
-		return err
+	// delete any existing whitelist entries for the app and hostname
+	if hostname == "" {
+		if err := s.db.Where("app_name = ? AND (hostname IS NULL OR hostname = '')", appname).Delete(&ProtectionWhitelist{}).Error; err != nil {
+			return err
+		}
+	} else {
+		if err := s.db.Where("hostname = ?", hostname).Delete(&ProtectionWhitelist{}).Error; err != nil {
+			return err
+		}
 	}
 
 	whitelist := ProtectionWhitelist{
@@ -271,7 +286,7 @@ func (s *Service) CalculateTerminationMode(ctx context.Context, appUsage *Applic
 
 	if protectionPause.ID > 0 {
 		return TerminationDecision{
-			Mode:      TerminationModePaused,
+			Mode:      TerminationModeAllow,
 			Reasoning: "focus protection has been paused by the user",
 			Source:    TerminationModeSourcePaused,
 		}, nil
@@ -279,7 +294,15 @@ func (s *Service) CalculateTerminationMode(ctx context.Context, appUsage *Applic
 
 	// get all whitelist entries for the bundle ID and hostname
 	var whitelist ProtectionWhitelist
-	if err := s.db.Where("app_name = ? AND expires_at > ?", appUsage.Application.Name, time.Now().Unix()).Limit(1).First(&whitelist).Error; err != nil {
+	hostname := fromPtr(appUsage.Application.Hostname)
+	query := s.db.Where("expires_at > ?", time.Now().Unix())
+	if hostname == "" {
+		query = query.Where("app_name = ? AND (hostname IS NULL OR hostname = '')", appUsage.Application.Name)
+	} else {
+		query = query.Where("(hostname = ? OR hostname = ?)", hostname, "www."+hostname)
+	}
+
+	if err := query.Limit(1).First(&whitelist).Error; err != nil {
 		if err != gorm.ErrRecordNotFound {
 			return TerminationDecision{}, err
 		}
@@ -301,27 +324,16 @@ func (s *Service) CalculateTerminationMode(ctx context.Context, appUsage *Applic
 }
 
 func (s *Service) calculateTerminationModeWithCustomRules(_ context.Context, appUsage *ApplicationUsage) (TerminationDecision, error) {
-	if s.settingsService == nil {
-		slog.Warn("settings service is nil, skipping custom rules termination mode calculation")
-
-		return TerminationDecision{}, nil
-	}
-
 	sandboxCtx := createSandboxContext(appUsage.Application.Name, appUsage.BrowserURL)
 	sandboxCtx.Classification = string(appUsage.Classification)
 
-	// Get the latest custom rules code
-	customRules, err := s.settingsService.GetLatest(settings.SettingsKeyCustomRules)
-	if err != nil {
-		return TerminationDecision{}, err
-	}
-
-	if customRules == nil || customRules.Value == "" {
+	customRules := settings.GetCustomRulesJS()
+	if customRules == "" {
 		return TerminationDecision{Mode: TerminationModeNone}, nil
 	}
 
 	// Create a new sandbox with the custom rules code
-	sb, err := newSandbox(customRules.Value)
+	sb, err := newSandbox(customRules)
 	if err != nil {
 		return TerminationDecision{}, err
 	}
