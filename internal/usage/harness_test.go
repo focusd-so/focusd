@@ -28,19 +28,10 @@ type usageHarness struct {
 	service *usage.Service
 	db      *gorm.DB
 
-	mu               sync.Mutex
-	usageEvents      []*usage.ApplicationUsage
-	pausedEvents     []usage.ProtectionPause
-	resumedEvents    []usage.ProtectionPause
-	appBlockerEvents []appBlockerEvent
-}
-
-type appBlockerEvent struct {
-	AppName    string
-	Title      string
-	Reason     string
-	Tags       []string
-	BrowserURL *string
+	mu            sync.Mutex
+	usageEvents   []*usage.ApplicationUsage
+	pausedEvents  []usage.ProtectionPause
+	resumedEvents []usage.ProtectionPause
 }
 
 type usageHarnessConfig struct {
@@ -89,22 +80,7 @@ func newUsageHarness(t *testing.T, opts ...usageHarnessOption) *usageHarness {
 
 	h := &usageHarness{t: t, db: db}
 
-	h.service, err = usage.NewService(
-		ctx,
-		db,
-		usage.WithAppBlocker(func(appName, title, reason string, tags []string, browserURL *string) {
-			h.mu.Lock()
-			defer h.mu.Unlock()
-
-			h.appBlockerEvents = append(h.appBlockerEvents, appBlockerEvent{
-				AppName:    appName,
-				Title:      title,
-				Reason:     reason,
-				Tags:       append([]string(nil), tags...),
-				BrowserURL: browserURL,
-			})
-		}),
-	)
+	h.service, err = usage.NewService(ctx, db)
 	require.NoError(t, err)
 
 	h.service.OnUsageUpdated(func(appUsage *usage.ApplicationUsage) {
@@ -292,23 +268,6 @@ func (h *usageHarness) AssertUpdateEventsCount(count int) *usageHarness {
 	return h
 }
 
-func (h *usageHarness) AssertBlockerEventsCount(count int) *usageHarness {
-	h.t.Helper()
-
-	require.Equal(h.t, count, len(h.BlockerEvents()))
-	return h
-}
-
-func (h *usageHarness) AssertBlockerLastEvent(check ...func(event *appBlockerEvent)) *usageHarness {
-	h.t.Helper()
-
-	for _, c := range check {
-		c(&h.appBlockerEvents[len(h.appBlockerEvents)-1])
-	}
-
-	return h
-}
-
 func (h *usageHarness) AssertUsagesCount(count int) *usageHarness {
 	h.t.Helper()
 
@@ -359,19 +318,6 @@ func (h *usageHarness) ResetUsageEvents() *usageHarness {
 	defer h.mu.Unlock()
 	h.usageEvents = nil
 	return h
-}
-
-func (h *usageHarness) ResetBlockerEvents() *usageHarness {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.appBlockerEvents = nil
-	return h
-}
-
-func (h *usageHarness) BlockerEvents() []appBlockerEvent {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return append([]appBlockerEvent(nil), h.appBlockerEvents...)
 }
 
 func assertUsageApplicationName(t *testing.T, appName string) func(*usage.ApplicationUsage) {

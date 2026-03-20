@@ -14,7 +14,7 @@ function configure() {
     Object.freeze(Object.assign($Create.Events, {
         "daily-summary:ready": $$createType0,
         "protection:status": $$createType1,
-        "usage:update": $$createType2,
+        "usage:update": $$createType3,
     }));
 }
 
@@ -22,5 +22,6 @@ function configure() {
 const $$createType0 = usage$0.LLMDailySummary.createFrom;
 const $$createType1 = usage$0.ProtectionPause.createFrom;
 const $$createType2 = usage$0.ApplicationUsage.createFrom;
+const $$createType3 = $Create.Nullable($$createType2);
 
 configure();

@@ -53,7 +53,7 @@ func init() {
 	// Register a custom event whose associated data type is string.
 	// This is not required, but the binding generator will pick up registered events
 	// and provide a strongly typed JS/TS API for them.
-	application.RegisterEvent[usage.ApplicationUsage]("usage:update")
+	application.RegisterEvent[*usage.ApplicationUsage]("usage:update")
 	application.RegisterEvent[usage.ProtectionPause]("protection:status")
 	application.RegisterEvent[usage.LLMDailySummary]("daily-summary:ready")
 	application.RegisterEvent[any]("authctx:updated")
@@ -114,36 +114,7 @@ func main() {
 
 	identityService := identity.NewService(apiAuthenticatedClient)
 
-	usageService, err := usage.NewService(
-		ctx, db,
-		usage.WithAppBlocker(func(appName, title, reason string, tags []string, browserURL *string) {
-
-			slog.Info("blocking app", "appName", appName, "title", title, "reason", reason, "tags", tags, "browserURL", browserURL)
-
-			client := extension.HasClient(appName)
-
-			// if an extension has been connected to handle app, they should take care of blocking the app
-			if client {
-				return
-			}
-
-			if browserURL != nil {
-				slog.Info("browser url provided, blocking url", "url", *browserURL)
-				if err := native.BlockURL(*browserURL, title, reason, tags, appName); err != nil {
-					slog.Error("failed to block URL", "url", *browserURL, "error", err)
-
-					return
-				}
-			}
-
-			slog.Info("no browser url provided, blocking app", "appName", appName)
-			if err := native.BlockApp(appName, title, reason, tags); err != nil {
-				slog.Error("failed to block app", "appName", appName, "error", err)
-
-				return
-			}
-		}),
-	)
+	usageService, err := usage.NewService(ctx, db)
 	if err != nil {
 		log.Fatal("failed to create usage service: %w", err)
 	}
