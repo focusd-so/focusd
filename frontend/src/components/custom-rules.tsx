@@ -43,18 +43,18 @@ declare const Classification: {
 /**
  * Determines whether to block or allow the activity.
  */
-type TerminationModeType = "none" | "block" | "paused" | "allow";
+type EnforcementActionType = "none" | "block" | "paused" | "allow";
 
 /**
  * Global constant for termination mode values.
- * Use these values when returning a TerminationDecision.
+ * Use these values when returning a EnforcementDecision.
  * @example
  * return {
- *   terminationMode: TerminationMode.Block,
- *   terminationReasoning: "Blocked during focus hours"
+ *   enforcementAction: EnforcementAction.Block,
+ *   enforcementReason: "Blocked during focus hours"
  * };
  */
-declare const TerminationMode: {
+declare const EnforcementAction: {
   readonly None: "none";
   readonly Block: "block";
   readonly Paused: "paused";
@@ -62,13 +62,13 @@ declare const TerminationMode: {
 };
 
 /**
- * Decision returned from the terminationMode function.
+ * Decision returned from the enforcementDecision function.
  */
-interface TerminationDecision {
-  /** The termination mode to apply. Use TerminationMode constants. */
-  terminationMode: TerminationModeType;
+interface EnforcementDecision {
+  /** The termination mode to apply. Use EnforcementAction constants. */
+  enforcementAction: EnforcementActionType;
   /** Human-readable explanation for why this decision was made. */
-  terminationReasoning: string;
+  enforcementReason: string;
 }
 
 /**
@@ -108,7 +108,7 @@ interface UsageContext {
    * @example
    * // Block if used more than 30 minutes in the last hour
    * if (context.minutesUsedInPeriod(60) > 30) {
-   *   return { terminationMode: TerminationMode.Block, terminationReasoning: 'Usage limit exceeded' };
+   *   return { enforcementAction: EnforcementAction.Block, enforcementReason: 'Usage limit exceeded' };
    * }
    */
   minutesUsedInPeriod(minutes: number): number;
@@ -291,18 +291,18 @@ export function classify(context: UsageContext): ClassificationDecision | undefi
 
 /**
  * Custom termination logic (blocking).
- * Return a TerminationDecision to override the default, or undefined to keep the default.
+ * Return a EnforcementDecision to override the default, or undefined to keep the default.
  *
  * @example
  * // Block social media after 10 PM in London
  * if (context.domain === 'twitter.com' && now(Timezone.Europe_London).getHours() >= 22) {
  *   return {
- *     terminationMode: TerminationMode.Block,
- *     terminationReasoning: 'Social media blocked after 10 PM'
+ *     enforcementAction: EnforcementAction.Block,
+ *     enforcementReason: 'Social media blocked after 10 PM'
  *   };
  * }
  */
-export function terminationMode(context: UsageContext): TerminationDecision | undefined {
+export function enforcementDecision(context: UsageContext): EnforcementDecision | undefined {
   return undefined;
 }
 `;

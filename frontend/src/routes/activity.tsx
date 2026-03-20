@@ -33,7 +33,7 @@ import {
   TruncatedLabel,
   formatSmartDate,
   formatClassificationSource,
-  formatTerminationModeSource,
+  formatEnforcementSource,
 } from "@/components/usage-item";
 import type { ApplicationUsage } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
 
@@ -379,8 +379,8 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
   const statusColor = isAllowed ? "text-yellow-500" : "text-red-500";
   const iconColor = isAllowed ? "text-yellow-500/60" : "text-red-500/60";
 
-  const termSource = formatTerminationModeSource(
-    usage.termination_mode_source,
+  const termSource = formatEnforcementSource(
+    usage.enforcement_source,
     usage.classification_reasoning
   );
 

@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useUsageStore } from "@/stores/usage-store";
 import type { ApplicationUsage } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
-import { TerminationMode } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
+import { EnforcementAction } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
 
 export function isDistracting(classification?: string | null): boolean {
   if (!classification) return false;
@@ -135,7 +135,7 @@ export function formatClassificationSource(
   }
 }
 
-export function formatTerminationModeSource(
+export function formatEnforcementSource(
   source?: string | null,
   reasoning?: string | null
 ): {
@@ -252,7 +252,7 @@ export function ClassificationReasoningLabel({
   isPausedDistraction,
   isCurrentlyPaused,
   onResume,
-  terminationSource,
+  enforcementSource,
 }: {
   usage: ApplicationUsage;
   icon?: string;
@@ -262,7 +262,7 @@ export function ClassificationReasoningLabel({
   isPausedDistraction?: boolean;
   isCurrentlyPaused?: boolean;
   onResume?: () => void;
-  terminationSource?: {
+  enforcementSource?: {
     label: string;
     icon: string;
     description: string;
@@ -272,11 +272,11 @@ export function ClassificationReasoningLabel({
   if (!usage.classification_source) return null;
 
   const isCustomRulesAllow =
-    usage.termination_mode === TerminationMode.TerminationModeAllow &&
-    usage.termination_mode_source === "custom_rules";
+    usage.enforcement_action === EnforcementAction.EnforcementActionAllow &&
+    usage.enforcement_source === "custom_rules";
 
   const isCustomRulesClassification =
-    usage.classification_reasoning && usage.termination_mode_source === "custom_rules";
+    usage.classification_reasoning && usage.enforcement_source === "custom_rules";
 
   // Determine the label text based on priority
   const getLabelText = (): string => {
@@ -284,13 +284,13 @@ export function ClassificationReasoningLabel({
       return "was paused by user";
     }
     if (isCustomRulesAllow) {
-      return usage.termination_reasoning || "set by custom rules";
+      return usage.enforcement_reason || "set by custom rules";
     }
     if (isCustomRulesClassification) {
       return usage.classification_reasoning!;
     }
     if (isAllowedDistraction) {
-      return usage.termination_reasoning || "user allowed distraction";
+      return usage.enforcement_reason || "user allowed distraction";
     }
     return description;
   };
@@ -299,9 +299,9 @@ export function ClassificationReasoningLabel({
   const shouldBeLink = isCustomRulesAllow || isCustomRulesClassification || isLink;
 
   const labelText = getLabelText();
-  const prefixLabel = terminationSource?.label;
+  const prefixLabel = enforcementSource?.label;
   const displayText = prefixLabel ? `${prefixLabel}: ${labelText}` : labelText;
-  const displayIcon = isPausedDistraction ? <IconPlayerPause className="w-3 h-3 text-yellow-500/70" /> : <span className="text-[10px] opacity-70">{terminationSource?.icon || icon}</span>;
+  const displayIcon = isPausedDistraction ? <IconPlayerPause className="w-3 h-3 text-yellow-500/70" /> : <span className="text-[10px] opacity-70">{enforcementSource?.icon || icon}</span>;
 
   // Handle paused distraction display with optional resume button
   if (isPausedDistraction) {
@@ -330,7 +330,7 @@ export function ClassificationReasoningLabel({
   return (
     <span className="text-[10px] text-muted-foreground/50 flex items-center gap-1.5">
       {displayIcon}
-      {shouldBeLink || terminationSource?.isLink ? (
+      {shouldBeLink || enforcementSource?.isLink ? (
         <TruncatedLabel className="max-w-[300px]">
           <Link
             to="/settings"
@@ -395,12 +395,12 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
   // Check if this is a paused distraction
   const isPausedDistraction =
     isDistractingEvent &&
-    usage.termination_mode === TerminationMode.TerminationModePaused;
+    usage.enforcement_action === EnforcementAction.EnforcementActionPaused;
 
   const isAllowedDistraction =
     isDistractingEvent &&
-    usage.termination_mode === TerminationMode.TerminationModeAllow &&
-    (usage.termination_mode_source === "custom_rules" || usage.termination_mode_source === "whitelist");
+    usage.enforcement_action === EnforcementAction.EnforcementActionAllow &&
+    (usage.enforcement_source === "custom_rules" || usage.enforcement_source === "whitelist");
 
   // Combined flag for yellow styling
   const isYellowTheme = isPausedDistraction || isAllowedDistraction;
@@ -413,8 +413,8 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
     usage.classification_reasoning
   );
 
-  const termSource = formatTerminationModeSource(
-    usage.termination_mode_source,
+  const termSource = formatEnforcementSource(
+    usage.enforcement_source,
     usage.classification_reasoning
   );
 
@@ -437,7 +437,7 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
   const isIgnoredRule =
     !!sandboxDecision &&
     usage.classification_source !== "custom_rules" &&
-    usage.termination_mode_source !== "custom_rules";
+    usage.enforcement_source !== "custom_rules";
 
   return (
     <div
@@ -537,7 +537,7 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
               isPausedDistraction={isPausedDistraction}
               isCurrentlyPaused={isCurrentlyPaused}
               onResume={resumeProtection}
-              terminationSource={
+              enforcementSource={
                 termSource?.label === "custom rules" ? termSource : null
               }
             />
@@ -547,8 +547,8 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
                 <span className="truncate">
                   Script would have{" "}
                   <span className="font-semibold uppercase text-purple-400">
-                    {sandboxDecision.terminationMode && sandboxDecision.terminationMode !== "none"
-                      ? sandboxDecision.terminationMode
+                    {sandboxDecision.enforcementAction && sandboxDecision.enforcementAction !== "none"
+                      ? sandboxDecision.enforcementAction
                       : sandboxDecision.classification}
                   </span>{" "}
                   this.{" "}

@@ -18,10 +18,10 @@ type classificationDecision struct {
 	Tags                    []string `json:"tags"`
 }
 
-// terminationDecision is returned from the termination function
-type terminationDecision struct {
-	TerminationMode      string `json:"terminationMode"`
-	TerminationReasoning string `json:"terminationReasoning"`
+// enforcementDecision is returned from the enforcement decision function
+type enforcementDecision struct {
+	EnforcementAction string `json:"enforcementAction"`
+	EnforcementReason string `json:"enforcementReason"`
 }
 
 // sandbox executes user-defined JavaScript rules using V8
@@ -72,7 +72,7 @@ func prepareScript(code string) (string, error) {
 	// Wrap the transpiled code with CommonJS environment and expose functions to globalThis
 	preparedScript := fmt.Sprintf(`
 // Define global constants for user scripts
-var TerminationMode = {
+var EnforcementAction = {
 	None: "none",
 	Block: "block",
 	Paused: "paused",
@@ -177,10 +177,10 @@ var module = { exports: exports };
 // Check both module.exports and exports for functions
 var _exported = module.exports || exports;
 if (_exported && typeof _exported.classify === 'function') { globalThis.__classify = _exported.classify; }
-if (_exported && typeof _exported.terminationMode === 'function') { globalThis.__terminationMode = _exported.terminationMode; }
+if (_exported && typeof _exported.enforcementDecision === 'function') { globalThis.__enforcementDecision = _exported.enforcementDecision; }
 // Also check for top-level function declarations (non-exported)
 if (typeof classify === 'function') { globalThis.__classify = classify; }
-if (typeof terminationMode === 'function') { globalThis.__terminationMode = terminationMode; }
+if (typeof enforcementDecision === 'function') { globalThis.__enforcementDecision = enforcementDecision; }
 
 // Polyfill console
 if (typeof console === 'undefined') {
@@ -466,9 +466,9 @@ func (s *sandbox) invokeClassify(ctx sandboxContext) (*classificationDecision, [
 	return &decision, s.logs, nil
 }
 
-// invokeTerminationMode executes the termination function and returns the result
+// invokeEnforcementDecision executes the enforcement decision function and returns the result
 // Returns nil if the function returns undefined
-func (s *sandbox) invokeTerminationMode(ctx sandboxContext) (*terminationDecision, error) {
+func (s *sandbox) invokeEnforcementDecision(ctx sandboxContext) (*enforcementDecision, error) {
 	// Prepare script with function exports and helpers
 	preparedScript, err := prepareScript(s.code)
 	if err != nil {
@@ -484,18 +484,18 @@ func (s *sandbox) invokeTerminationMode(ctx sandboxContext) (*terminationDecisio
 	}
 
 	// Execute the function
-	resultJSON, err := s.executeFunction(v8ctx, preparedScript, "__terminationMode", ctx)
+	resultJSON, err := s.executeFunction(v8ctx, preparedScript, "__enforcementDecision", ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute terminationMode: %w", err)
+		return nil, fmt.Errorf("failed to execute enforcementDecision: %w", err)
 	}
 
 	if resultJSON == "" {
 		return nil, nil
 	}
 
-	var decision terminationDecision
+	var decision enforcementDecision
 	if err := json.Unmarshal([]byte(resultJSON), &decision); err != nil {
-		return nil, fmt.Errorf("failed to parse termination decision: %w", err)
+		return nil, fmt.Errorf("failed to parse enforcement decision: %w", err)
 	}
 
 	return &decision, nil

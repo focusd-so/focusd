@@ -344,19 +344,19 @@ func assertUsageClassification(t *testing.T, classification usage.Classification
 	}
 }
 
-func assertTerminationMode(t *testing.T, mode usage.TerminationMode) func(*usage.ApplicationUsage) {
+func assertEnforcementAction(t *testing.T, mode usage.EnforcementAction) func(*usage.ApplicationUsage) {
 	t.Helper()
 
 	return func(u *usage.ApplicationUsage) {
-		require.Equal(t, mode, u.TerminationMode)
+		require.Equal(t, mode, u.EnforcementAction)
 	}
 }
 
-func assertTerminationModeSource(t *testing.T, source usage.TerminationModeSource) func(*usage.ApplicationUsage) {
+func assertEnforcementSource(t *testing.T, source usage.EnforcementSource) func(*usage.ApplicationUsage) {
 	t.Helper()
 
 	return func(u *usage.ApplicationUsage) {
-		require.Equal(t, source, fromPtr(u.TerminationSource))
+		require.Equal(t, source, fromPtr(u.EnforcementSource))
 	}
 }
 

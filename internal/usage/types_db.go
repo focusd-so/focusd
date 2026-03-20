@@ -17,8 +17,8 @@ type (
 )
 
 const (
-	ExecutionLogTypeClassification  ExecutionLogType = "classification"
-	ExecutionLogTypeTerminationMode ExecutionLogType = "termination_mode"
+	ExecutionLogTypeClassification    ExecutionLogType = "classification"
+	ExecutionLogTypeEnforcementAction ExecutionLogType = "enforcement_action"
 )
 
 // Application represents a unique application that has been used by the user
@@ -48,13 +48,13 @@ func (a Application) TableName() string {
 
 func (a Application) NewUsage(windowTitle string, browserURL *string) ApplicationUsage {
 	return ApplicationUsage{
-		ApplicationID:   a.ID,
-		Application:     a,
-		StartedAt:       time.Now().Unix(),
-		Classification:  ClassificationNone,
-		TerminationMode: TerminationModeNone,
-		WindowTitle:     windowTitle,
-		BrowserURL:      browserURL,
+		ApplicationID:     a.ID,
+		Application:       a,
+		StartedAt:         time.Now().Unix(),
+		Classification:    ClassificationNone,
+		EnforcementAction: EnforcementActionNone,
+		WindowTitle:       windowTitle,
+		BrowserURL:        browserURL,
 	}
 }
 
@@ -67,11 +67,11 @@ func NewIdleApplication() Application {
 
 type ApplicationUsage struct {
 	// mandatory fields
-	ID              int64           `json:"id" gorm:"primaryKey;autoIncrement;not null"`
-	WindowTitle     string          `json:"window_title" gorm:"not null"`
-	StartedAt       int64           `json:"started_at" gorm:"not null"`
-	Classification  Classification  `json:"classification" gorm:"index:idx_classification"`
-	TerminationMode TerminationMode `json:"termination_mode" gorm:"not null"`
+	ID                int64             `json:"id" gorm:"primaryKey;autoIncrement;not null"`
+	WindowTitle       string            `json:"window_title" gorm:"not null"`
+	StartedAt         int64             `json:"started_at" gorm:"not null"`
+	Classification    Classification    `json:"classification" gorm:"index:idx_classification"`
+	EnforcementAction EnforcementAction `json:"enforcement_action" gorm:"not null"`
 
 	// optional fields
 	BrowserURL      *string `json:"browser_url" gorm:"type:text"`
@@ -86,9 +86,9 @@ type ApplicationUsage struct {
 	DetectedProject              *string `gorm:"index:idx_detected_project" json:"detected_project"`
 	DetectedCommunicationChannel *string `gorm:"index:idx_detected_communication_channel" json:"detected_communication_channel"`
 
-	TerminationReasoning *string                `json:"termination_reasoning"`
-	TerminationSource    *TerminationModeSource `json:"termination_mode_source"`
-	TerminationError     *string                `gorm:"index:idx_termination_mode_error" json:"termination_mode_error"`
+	EnforcementReason *EnforcementReason `json:"enforcement_reason"`
+	EnforcementSource *EnforcementSource `json:"enforcement_source"`
+	EnforcementError  *string            `gorm:"index:idx_enforcement_error" json:"enforcement_error"`
 
 	SandboxContext  *string `json:"sandbox_context" gorm:"type:text;nullable"`
 	SandboxResponse *string `json:"sandbox_response" gorm:"type:text;nullable"`

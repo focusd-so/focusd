@@ -113,22 +113,22 @@ func (s *Service) usageChanged(ctx context.Context, usage ApplicationUsage) (*Ap
 	}
 
 	// calculate termination mode.
-	terminationMode, err := s.CalculateTerminationMode(ctx, &usage)
+	enforcementAction, err := s.CalculateEnforcementDecision(ctx, &usage)
 	if err != nil {
 		termErr := err.Error()
-		usage.TerminationMode = TerminationModeNone
-		usage.TerminationError = &termErr
+		usage.EnforcementAction = EnforcementActionNone
+		usage.EnforcementError = &termErr
 	}
 
-	usage.TerminationMode = terminationMode.Mode
-	usage.TerminationReasoning = withPtr(terminationMode.Reasoning)
-	usage.TerminationSource = withPtr(terminationMode.Source)
+	usage.EnforcementAction = enforcementAction.Action
+	usage.EnforcementReason = withPtr(enforcementAction.Reason)
+	usage.EnforcementSource = withPtr(enforcementAction.Source)
 
 	if err := s.db.Save(&usage).Error; err != nil {
 		return nil, fmt.Errorf("failed to save application usage: %w", err)
 	}
 
-	if usage.TerminationMode == TerminationModeBlock {
+	if usage.EnforcementAction == EnforcementActionBlock {
 		if err := s.closeApplicationUsage(&usage); err != nil {
 			return nil, fmt.Errorf("failed to close application usage: %w", err)
 		}

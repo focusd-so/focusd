@@ -53,9 +53,9 @@ export function classify(context: UsageContext): ClassificationDecision | undefi
 
 /**
 * Custom termination logic (blocking).
-* Return a TerminationDecision to override the default, or undefined to keep the default.
+* Return a EnforcementDecision to override the default, or undefined to keep the default.
 */
-export function terminationMode(context: UsageContext): TerminationDecision | undefined {
+export function enforcementDecision(context: UsageContext): EnforcementDecision | undefined {
 	
 }
 `

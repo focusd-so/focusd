@@ -7,7 +7,7 @@ import type {
   DayInsights,
   UsageAggregation,
 } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
-import { TerminationMode, GetUsageListOptions } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
+import { EnforcementAction, GetUsageListOptions } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
 import {
   GetWhitelist,
   Whitelist,
@@ -120,7 +120,7 @@ export const useUsageStore = create<UsageState>()((set, get) => ({
       const updated = [usage, ...filtered].slice(0, 100);
 
       const blocked = new Map(state.blockedItems);
-      if (usage.termination_mode === TerminationMode.TerminationModeBlock) {
+      if (usage.enforcement_action === EnforcementAction.EnforcementActionBlock) {
         const key =
           usage.application?.hostname ||
           usage.application?.bundle_id ||
@@ -144,12 +144,14 @@ export const useUsageStore = create<UsageState>()((set, get) => ({
   initSubscription: () => {
     if (get().isSubscribed) return;
 
-    Events.On("usage:update", (event: { data: ApplicationUsage }) => {
+    Events.On("usage:update", (event) => {
+      if (!event.data) return;
       console.log("usage update", event.data);
       get().addUsage(event.data);
     });
 
-    Events.On("protection:status", (event: { data: ProtectionPause }) => {
+    Events.On("protection:status", (event) => {
+      if (!event.data) return;
       console.log("protection status update", event.data);
       set({ currentPause: event.data.id > 0 ? event.data : null });
     });
@@ -176,7 +178,7 @@ export const useUsageStore = create<UsageState>()((set, get) => ({
       });
       const blockedItemsOptions = new GetUsageListOptions({
         Date: new Date(),
-        TerminationMode: TerminationMode.TerminationModeBlock,
+        EnforcementAction: EnforcementAction.EnforcementActionBlock,
       });
       const [usages, blockedItems] = await Promise.all([
         GetUsageList(recentUsagesOptions),
@@ -355,4 +357,3 @@ useUsageStore.getState().initSubscription();
 useUsageStore.getState().initProtectionStore();
 useUsageStore.getState().fetchRecentUsages();
 useUsageStore.getState().fetchWhitelist();
-
