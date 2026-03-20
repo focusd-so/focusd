@@ -117,6 +117,9 @@ func main() {
 	usageService, err := usage.NewService(
 		ctx, db,
 		usage.WithAppBlocker(func(appName, title, reason string, tags []string, browserURL *string) {
+
+			slog.Info("blocking app", "appName", appName, "title", title, "reason", reason, "tags", tags, "browserURL", browserURL)
+
 			client := extension.HasClient(appName)
 
 			// if an extension has been connected to handle app, they should take care of blocking the app
@@ -170,7 +173,7 @@ func main() {
 			category = &event.AppCategory
 		}
 
-		err := usageService.TitleChanged(
+		appUsage, err := usageService.TitleChanged(
 			ctx,
 			event.ExecutablePath,
 			event.Title,
@@ -183,6 +186,30 @@ func main() {
 		if err != nil {
 			slog.Error("failed to handle title change", "error", err)
 		}
+
+		if appUsage.TerminationMode == usage.TerminationModeBlock {
+			tags := usage.ApplicationTagsSlice(appUsage.Tags).Tags()
+			reasoning := ""
+			if appUsage.ClassificationReasoning != nil {
+				reasoning = *appUsage.ClassificationReasoning
+			}
+
+			if url != nil {
+				slog.Info("browser url provided, blocking url", "url", *url)
+				if err := native.BlockURL(*url, event.Title, reasoning, tags, event.AppName); err != nil {
+					slog.Error("failed to block URL", "url", *url, "error", err)
+
+					return
+				}
+			}
+
+			if err := native.BlockApp(event.AppName, event.Title, reasoning, tags); err != nil {
+				slog.Error("failed to block app", "appName", event.AppName, "error", err)
+
+				return
+			}
+		}
+
 	})
 
 	var updaterService *updater.Service
@@ -235,8 +262,10 @@ func main() {
 
 	wailsApp.OnShutdown(cancel)
 
-	usageService.OnUsageUpdated(func(appUsage usage.ApplicationUsage) {
-		wailsApp.Event.Emit("usage:update", appUsage)
+	usageService.OnUsageUpdated(func(appUsage *usage.ApplicationUsage) {
+		if appUsage != nil {
+			wailsApp.Event.Emit("usage:update", appUsage)
+		}
 	})
 
 	native.OnIdleChange(func(idleSeconds float64) {

@@ -23,43 +23,48 @@ import (
 //   - if user has been idle and idle triggers again, keep the current idle usage open to ensure idempotency
 //   - if user has not been idle and idle triggers, close the current application usage and open a new idle usage
 //   - if user has been idle and idle stops, no direct usage change is performed here; the next TitleChanged event closes idle
-func (s *Service) IdleChanged(ctx context.Context, isIdle bool) error {
+func (s *Service) IdleChanged(ctx context.Context, isIdle bool) (*ApplicationUsage, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if isIdle {
 		application, err := s.getOrCreateApplication(ctx, IdleApplicationName, "", nil, nil, nil)
 		if err != nil {
-			return fmt.Errorf("failed to get or create application: %w", err)
+			return nil, fmt.Errorf("failed to get or create application: %w", err)
 		}
 
 		return s.usageChanged(ctx, application.NewUsage("", nil))
 	}
 
-	return nil
+	return nil, nil
 }
 
 // TitleChanged is called when the title of the current application changes,
 // whether it's a new application or the same application title has changed
-func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle, appName, icon string, bundleID, url, appCategory *string) error {
+func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle, appName, icon string, bundleID, browserURL, appCategory *string) (*ApplicationUsage, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	parsed, _ := parseURLNormalized(fromPtr(url))
-	url = withPtr(parsed.String())
-
-	application, err := s.getOrCreateApplication(ctx, appName, icon, bundleID, url, appCategory)
-	if err != nil {
-		return fmt.Errorf("failed to get or create application: %w", err)
+	var normalizedBrowserURL *string
+	if browserURL != nil {
+		parsed, _ := parseURLNormalized(fromPtr(browserURL))
+		normalizedBrowserURL = withPtr(parsed.String())
 	}
 
-	return s.usageChanged(ctx, application.NewUsage(windowTitle, url))
+	application, err := s.getOrCreateApplication(ctx, appName, icon, bundleID, normalizedBrowserURL, appCategory)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get or create application: %w", err)
+	}
+
+	usage, err := s.usageChanged(ctx, application.NewUsage(windowTitle, normalizedBrowserURL))
+
+	return usage, err
 }
 
-func (s *Service) usageChanged(ctx context.Context, usage ApplicationUsage) error {
+func (s *Service) usageChanged(ctx context.Context, usage ApplicationUsage) (*ApplicationUsage, error) {
 	currentApplicationUsage, err := s.getCurrentApplicationUsage()
 	if err != nil {
-		return fmt.Errorf("failed to find current application usage: %w", err)
+		return nil, fmt.Errorf("failed to find current application usage: %w", err)
 	}
 
 	// if the current application and new application usage are the same,
@@ -68,17 +73,17 @@ func (s *Service) usageChanged(ctx context.Context, usage ApplicationUsage) erro
 		usage = currentApplicationUsage
 	} else {
 		// if new application usage is detected close the current application usage before creating a new one
-		if err := s.closeApplicationUsage(currentApplicationUsage); err != nil {
-			return fmt.Errorf("failed to close current application usage: %w", err)
+		if err := s.closeApplicationUsage(&currentApplicationUsage); err != nil {
+			return nil, fmt.Errorf("failed to close current application usage: %w", err)
 		}
 
 		if err := s.saveApplicationUsage(&usage); err != nil {
-			return fmt.Errorf("failed to save application usage: %w", err)
+			return nil, fmt.Errorf("failed to save application usage: %w", err)
 		}
 	}
 
 	if usage.Application.Name == IdleApplicationName {
-		return nil
+		return &usage, nil
 	}
 
 	classification, err := s.classifyApplicationUsage(ctx, &usage)
@@ -120,18 +125,16 @@ func (s *Service) usageChanged(ctx context.Context, usage ApplicationUsage) erro
 	usage.TerminationSource = withPtr(terminationMode.Source)
 
 	if err := s.db.Save(&usage).Error; err != nil {
-		return fmt.Errorf("failed to save application usage: %w", err)
+		return nil, fmt.Errorf("failed to save application usage: %w", err)
 	}
 
 	if usage.TerminationMode == TerminationModeBlock {
-		termReason := fromPtr(usage.ClassificationReasoning)
-		tags := ApplicationTagsSlice(usage.Tags).Tags()
-		usage.EndedAt = withPtr(time.Now().Unix())
-
-		go func() { s.appBlocker(usage.Application.Name, usage.WindowTitle, termReason, tags, usage.BrowserURL) }()
+		if err := s.closeApplicationUsage(&usage); err != nil {
+			return nil, fmt.Errorf("failed to close application usage: %w", err)
+		}
 	}
 
-	return s.saveApplicationUsage(&usage)
+	return &usage, s.saveApplicationUsage(&usage)
 }
 
 func (s *Service) saveApplicationUsage(applicationUsage *ApplicationUsage) error {
@@ -141,7 +144,7 @@ func (s *Service) saveApplicationUsage(applicationUsage *ApplicationUsage) error
 
 	s.eventsMu.RLock()
 	for _, fn := range s.onUsageUpdated {
-		fn(*applicationUsage)
+		fn(applicationUsage)
 	}
 	s.eventsMu.RUnlock()
 
@@ -282,7 +285,7 @@ func (s *Service) getCurrentApplicationUsage() (ApplicationUsage, error) {
 	return application, nil
 }
 
-func (s *Service) closeApplicationUsage(app ApplicationUsage) error {
+func (s *Service) closeApplicationUsage(app *ApplicationUsage) error {
 	if app.ID == 0 {
 		return nil
 	}

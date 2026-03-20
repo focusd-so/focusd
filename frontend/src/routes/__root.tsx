@@ -81,7 +81,7 @@ function RootLayout() {
               </h1>
             )}
           </div>
-          <AccountStatus />
+          {!import.meta.env.DEV && <AccountStatus />}
         </header>
         <div className="flex flex-1 flex-col h-full overflow-hidden">
           <Outlet />

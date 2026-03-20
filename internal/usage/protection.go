@@ -172,6 +172,10 @@ func (s *Service) GetPauseHistory(days int) ([]ProtectionPause, error) {
 // Side effects:
 //   - Creates a ProtectionWhitelist record in the database with expiration timestamp
 func (s *Service) Whitelist(appname string, url string, duration time.Duration) error {
+	if duration <= 0 {
+		return nil
+	}
+
 	now := time.Now().Unix()
 	expiresAt := now + int64(duration.Seconds())
 

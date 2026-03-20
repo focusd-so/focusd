@@ -21,7 +21,7 @@ type Service struct {
 	onProtectionPaused     []func(pause ProtectionPause)
 	onProtectionResumed    []func(pause ProtectionPause)
 	onLLMDailySummaryReady []func(summary LLMDailySummary)
-	onUsageUpdated         []func(usage ApplicationUsage)
+	onUsageUpdated         []func(usage *ApplicationUsage)
 
 	// mu serializes title change processing to prevent race conditions
 	// when multiple events fire concurrently

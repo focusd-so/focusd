@@ -86,7 +86,13 @@ func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
 		).
 		AssertUpdateEventsCount(2).
-		AssertBlockerEventsCount(1)
+		AssertBlockerEventsCount(1).
+		AssertBlockerLastEvent(
+			func(event *appBlockerEvent) {
+				require.Equal(t, "Chrome", event.AppName)
+				require.Equal(t, "https://www.amazon.com", fromPtr(event.BrowserURL))
+			},
+		)
 
 	// user pauses all protection and opens amazon and linkedin, should not be blocked
 	h.
@@ -211,4 +217,87 @@ func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 			assertTerminationMode(t, usage.TerminationModeBlock),
 			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
 		)
+
+	// 6. Pause Expiry While Whitelist Is Still Active
+	h.
+		Await(250*time.Millisecond).
+		ResetBlockerEvents().
+		ResetUsageEvents().
+		Pause(3, "pause shorter than whitelist").
+		Whitelist("Chrome", "https://www.amazon.com", 7*time.Second).
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourcePaused),
+		).
+		AssertBlockerEventsCount(0).
+		Await(4*time.Second).
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+		).
+		AssertBlockerEventsCount(0)
+
+	// 7. Whitelist Expiry While Pause Is Still Active
+	h.
+		ResetBlockerEvents().
+		ResetUsageEvents().
+		Pause(8, "pause longer than whitelist").
+		Whitelist("Chrome", "https://www.amazon.com", 2*time.Second).
+		Await(3*time.Second).
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourcePaused),
+		).
+		AssertBlockerEventsCount(0).
+		Await(6*time.Second).
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeBlock),
+			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+		).
+		AssertBlockerEventsCount(1)
+
+	// 8. Manual Resume Does Not Clear Active Whitelist
+	h.
+		Await(250*time.Millisecond).
+		ResetBlockerEvents().
+		ResetUsageEvents().
+		Whitelist("Chrome", "https://www.amazon.com", 10*time.Second).
+		Pause(10, "manual resume should preserve whitelist").
+		Resume("user resumed protection manually").
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+		).
+		AssertBlockerEventsCount(0).
+		TitleChanged("Chrome", "Linkedin", withPtr("https://www.linkedin.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeBlock),
+			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+		).
+		AssertBlockerEventsCount(1)
+
+	// 9. Quick-Allow Input Shape Parity (hostname vs full URL)
+	h.
+		Await(250*time.Millisecond).
+		ResetBlockerEvents().
+		ResetUsageEvents().
+		RemoveActiveWhitelists().
+		Whitelist("Chrome", "amazon.com", 6*time.Second).
+		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+		).
+		AssertBlockerEventsCount(0).
+		TitleChanged("Chrome", "Amazon", withPtr("https://amazon.com")).
+		AssertLastUsage(
+			assertTerminationMode(t, usage.TerminationModeAllow),
+			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+		).
+		AssertBlockerEventsCount(0)
 }

@@ -29,7 +29,7 @@ type usageHarness struct {
 	db      *gorm.DB
 
 	mu               sync.Mutex
-	usageEvents      []usage.ApplicationUsage
+	usageEvents      []*usage.ApplicationUsage
 	pausedEvents     []usage.ProtectionPause
 	resumedEvents    []usage.ProtectionPause
 	appBlockerEvents []appBlockerEvent
@@ -107,7 +107,7 @@ func newUsageHarness(t *testing.T, opts ...usageHarnessOption) *usageHarness {
 	)
 	require.NoError(t, err)
 
-	h.service.OnUsageUpdated(func(appUsage usage.ApplicationUsage) {
+	h.service.OnUsageUpdated(func(appUsage *usage.ApplicationUsage) {
 		h.mu.Lock()
 		defer h.mu.Unlock()
 		h.usageEvents = append(h.usageEvents, appUsage)
@@ -137,7 +137,8 @@ func memoryDSNForHarness(t *testing.T) string {
 func (h *usageHarness) TitleChanged(appName, windowTitle string, browserURL *string) *usageHarness {
 	h.t.Helper()
 	h.retryLocked(func() error {
-		return h.service.TitleChanged(context.Background(), appName, windowTitle, appName, "", nil, browserURL, nil)
+		_, err := h.service.TitleChanged(context.Background(), appName, windowTitle, appName, "", nil, browserURL, nil)
+		return err
 	})
 	return h
 }
@@ -151,7 +152,8 @@ func (h *usageHarness) Await(dur time.Duration) *usageHarness {
 func (h *usageHarness) TitleChangedRaw(executablePath, windowTitle, appName, icon string, bundleID, browserURL, appCategory *string) *usageHarness {
 	h.t.Helper()
 	h.retryLocked(func() error {
-		return h.service.TitleChanged(context.Background(), executablePath, windowTitle, appName, icon, bundleID, browserURL, appCategory)
+		_, err := h.service.TitleChanged(context.Background(), executablePath, windowTitle, appName, icon, bundleID, browserURL, appCategory)
+		return err
 	})
 	return h
 }
@@ -165,7 +167,8 @@ func (h *usageHarness) EnterIdle() *usageHarness {
 func (h *usageHarness) IdleChanged(isIdle bool) *usageHarness {
 	h.t.Helper()
 	h.retryLocked(func() error {
-		return h.service.IdleChanged(context.Background(), isIdle)
+		_, err := h.service.IdleChanged(context.Background(), isIdle)
+		return err
 	})
 	return h
 }
@@ -296,6 +299,16 @@ func (h *usageHarness) AssertBlockerEventsCount(count int) *usageHarness {
 	return h
 }
 
+func (h *usageHarness) AssertBlockerLastEvent(check ...func(event *appBlockerEvent)) *usageHarness {
+	h.t.Helper()
+
+	for _, c := range check {
+		c(&h.appBlockerEvents[len(h.appBlockerEvents)-1])
+	}
+
+	return h
+}
+
 func (h *usageHarness) AssertUsagesCount(count int) *usageHarness {
 	h.t.Helper()
 
@@ -335,10 +348,10 @@ func (h *usageHarness) retryLocked(fn func() error) {
 	}
 }
 
-func (h *usageHarness) UsageEvents() []usage.ApplicationUsage {
+func (h *usageHarness) UsageEvents() []*usage.ApplicationUsage {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return append([]usage.ApplicationUsage(nil), h.usageEvents...)
+	return append([]*usage.ApplicationUsage(nil), h.usageEvents...)
 }
 
 func (h *usageHarness) ResetUsageEvents() *usageHarness {
