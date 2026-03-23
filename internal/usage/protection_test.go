@@ -1,7 +1,11 @@
 package usage_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -286,7 +290,8 @@ func setUpServiceWithSettings(t *testing.T, customRules string) (*usage.Service,
 
 	db, _ := gorm.Open(sqlite.Open(memoryDSN(t)), &gorm.Config{})
 
-	viper.SetDefault("custom_rules_js", []string{customRules})
+	encoded := base64.StdEncoding.EncodeToString([]byte(customRules))
+	viper.Set("custom_rules_js", []string{encoded})
 
 	service, err := usage.NewService(context.Background(), db)
 	require.NoError(t, err)
@@ -416,6 +421,125 @@ export function enforcementDecision(ctx) {
 		require.Equal(t, usage.EnforcementActionAllow, decision.Action)
 		require.Equal(t, usage.EnforcementSourceApplication, decision.Source)
 		require.Equal(t, "non distracting usage", decision.Reason)
+	})
+}
+
+func TestProtection_CalculateEnforcementDecision_CustomRules_ExecutionLogs(t *testing.T) {
+	t.Run("stores enforcement response and console logs", func(t *testing.T) {
+		customRules := `
+export function enforcementDecision(ctx) {
+	console.log("enforcement executed", ctx.appName)
+	if (ctx.appName == "Slack") {
+		return {
+			enforcementAction: EnforcementAction.Block,
+			enforcementReason: "Slack is blocked by custom rule",
+		}
+	}
+	return undefined;
+}
+`
+		service, db := setUpServiceWithSettings(t, customRules)
+
+		appUsage := &usage.ApplicationUsage{
+			Classification: usage.ClassificationNeutral,
+			Application:    usage.Application{Name: "Slack"},
+		}
+
+		decision, err := service.CalculateEnforcementDecision(context.Background(), appUsage)
+		require.NoError(t, err)
+		require.NotEqual(t, usage.EnforcementActionNone, decision.Action)
+		require.NotNil(t, appUsage.EnforcementSandboxContext)
+		require.NotNil(t, appUsage.EnforcementSandboxResponse)
+		require.NotNil(t, appUsage.EnforcementSandboxLogs)
+
+		var log usage.SandboxExecutionLog
+		err = db.Where("type = ?", string(usage.ExecutionLogTypeEnforcementAction)).Order("id DESC").Limit(1).First(&log).Error
+		require.NoError(t, err)
+
+		require.NotNil(t, log.Response)
+		require.Nil(t, log.Error)
+		require.NotNil(t, log.FinishedAt)
+		require.Contains(t, strings.Trim(log.Logs, "\n"), "enforcement executed")
+
+		var response struct {
+			EnforcementAction string `json:"enforcementAction"`
+			EnforcementReason string `json:"enforcementReason"`
+		}
+		err = json.Unmarshal([]byte(*log.Response), &response)
+		require.NoError(t, err)
+		require.Equal(t, "block", response.EnforcementAction)
+		require.Equal(t, "Slack is blocked by custom rule", response.EnforcementReason)
+
+		require.Contains(t, log.Context, `"appName":"Slack"`)
+	})
+
+	t.Run("stores no response when decision is undefined", func(t *testing.T) {
+		customRules := `
+export function enforcementDecision(ctx) {
+	console.log("undefined decision for", ctx.appName)
+	return undefined;
+}
+`
+		service, db := setUpServiceWithSettings(t, customRules)
+
+		appUsage := &usage.ApplicationUsage{
+			Classification: usage.ClassificationNeutral,
+			Application:    usage.Application{Name: "VSCode"},
+		}
+
+		decision, err := service.CalculateEnforcementDecision(context.Background(), appUsage)
+		require.NoError(t, err)
+		require.Equal(t, usage.EnforcementActionAllow, decision.Action)
+		require.Equal(t, usage.EnforcementSourceApplication, decision.Source)
+		require.NotNil(t, appUsage.EnforcementSandboxContext)
+		require.NotNil(t, appUsage.EnforcementSandboxResponse)
+		require.NotNil(t, appUsage.EnforcementSandboxLogs)
+
+		var log usage.SandboxExecutionLog
+		err = db.Where("type = ?", string(usage.ExecutionLogTypeEnforcementAction)).Order("id DESC").Limit(1).First(&log).Error
+		require.NoError(t, err)
+
+		require.NotNil(t, log.Response)
+		require.Equal(t, "no response", *log.Response)
+		require.Nil(t, log.Error)
+		require.Contains(t, strings.Trim(log.Logs, "\n"), "undefined decision for")
+	})
+
+	t.Run("stores errors for failed enforcement execution", func(t *testing.T) {
+		customRules := `
+export function enforcementDecision(ctx) {
+	console.log("about to fail", ctx.appName)
+	throw new Error("enforcement fail");
+}
+`
+		service, db := setUpServiceWithSettings(t, customRules)
+
+		appUsage := &usage.ApplicationUsage{
+			Classification: usage.ClassificationNeutral,
+			Application:    usage.Application{Name: "Mail"},
+		}
+
+		_, err := service.CalculateEnforcementDecision(context.Background(), appUsage)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to execute enforcementDecision")
+		require.NotNil(t, appUsage.EnforcementSandboxContext)
+		require.NotNil(t, appUsage.EnforcementSandboxResponse)
+		require.NotNil(t, appUsage.EnforcementSandboxLogs)
+
+		var log usage.SandboxExecutionLog
+		err = db.Where("type = ?", string(usage.ExecutionLogTypeEnforcementAction)).Order("id DESC").Limit(1).First(&log).Error
+		require.NoError(t, err)
+
+		require.NotNil(t, log.Error)
+		require.Contains(t, *log.Error, "enforcement fail")
+		require.NotNil(t, log.Response)
+		require.Equal(t, "no response", *log.Response)
+
+		var logs []string
+		err = json.NewDecoder(bytes.NewBufferString(log.Logs)).Decode(&logs)
+		require.NoError(t, err)
+		require.NotEmpty(t, logs)
+		require.Contains(t, strings.Join(logs, "\n"), "about to fail")
 	})
 }
 

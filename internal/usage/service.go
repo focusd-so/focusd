@@ -63,6 +63,9 @@ func migrateEnforcementColumns(db *gorm.DB) error {
 			{"termination_reasoning", "enforcement_reason"},
 			{"termination_mode_source", "enforcement_source"},
 			{"termination_mode_error", "enforcement_error"},
+			{"sandbox_context", "classification_sandbox_context"},
+			{"sandbox_response", "classification_sandbox_response"},
+			{"sandbox_logs", "classification_sandbox_logs"},
 		}
 
 		for _, pair := range renames {

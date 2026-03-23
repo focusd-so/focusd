@@ -1,14 +1,15 @@
 package usage
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"gorm.io/gorm"
 
-	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
 	"github.com/focusd-so/focusd/internal/identity"
 	"github.com/focusd-so/focusd/internal/settings"
 )
@@ -266,7 +267,7 @@ func (s *Service) CalculateEnforcementDecision(ctx context.Context, appUsage *Ap
 
 	if customRulesDecision.Action != "" && customRulesDecision.Action != EnforcementActionNone {
 		tier := identity.GetAccountTier()
-		if tier != apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE {
+		if hasCustomRulesExecutionAccess(tier) {
 			return customRulesDecision, nil
 		}
 	}
@@ -332,13 +333,75 @@ func (s *Service) calculateEnforcementDecisionWithCustomRules(_ context.Context,
 		return EnforcementDecision{Action: EnforcementActionNone}, nil
 	}
 
-	// Create a new sandbox with the custom rules code
-	sb, err := newSandbox(customRules)
+	contextJSON, err := json.Marshal(sandboxCtx)
 	if err != nil {
 		return EnforcementDecision{}, err
 	}
 
-	decision, err := sb.invokeEnforcementDecision(sandboxCtx)
+	executionLog := SandboxExecutionLog{
+		Context:   string(contextJSON),
+		CreatedAt: time.Now().Unix(),
+		Type:      string(ExecutionLogTypeEnforcementAction),
+	}
+
+	if err := s.db.Create(&executionLog).Error; err != nil {
+		return EnforcementDecision{}, err
+	}
+
+	finalizeExecutionLog := func(decision *enforcementDecision, logs []string, invokeErr error) error {
+		if invokeErr != nil {
+			errMsg := invokeErr.Error()
+			executionLog.Error = &errMsg
+		}
+
+		if decision != nil {
+			respJSON, marshalErr := json.Marshal(decision)
+			if marshalErr != nil {
+				errMsg := fmt.Errorf("failed to marshal response: %w", marshalErr).Error()
+				executionLog.Error = &errMsg
+			} else {
+				respJSONStr := string(respJSON)
+				executionLog.Response = &respJSONStr
+			}
+		} else {
+			txt := "no response"
+			executionLog.Response = &txt
+		}
+
+		finishedAt := time.Now().Unix()
+		executionLog.FinishedAt = &finishedAt
+
+		b := new(bytes.Buffer)
+		if err := json.NewEncoder(b).Encode(logs); err != nil {
+			return err
+		}
+		executionLog.Logs = b.String()
+
+		appUsage.EnforcementSandboxContext = withPtr(executionLog.Context)
+		appUsage.EnforcementSandboxResponse = executionLog.Response
+		appUsage.EnforcementSandboxLogs = withPtr(executionLog.Logs)
+
+		if err := s.db.Save(&executionLog).Error; err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	// Create a new sandbox with the custom rules code
+	sb, err := newSandbox(customRules)
+	if err != nil {
+		if logErr := finalizeExecutionLog(nil, nil, err); logErr != nil {
+			return EnforcementDecision{}, logErr
+		}
+		return EnforcementDecision{}, err
+	}
+
+	decision, logs, err := sb.invokeEnforcementDecision(sandboxCtx)
+	if logErr := finalizeExecutionLog(decision, logs, err); logErr != nil {
+		return EnforcementDecision{}, logErr
+	}
+
 	if err != nil {
 		return EnforcementDecision{}, err
 	}

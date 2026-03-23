@@ -83,7 +83,7 @@ function RootLayout() {
           </div>
           {!import.meta.env.DEV && <AccountStatus />}
         </header>
-        <div className="flex flex-1 flex-col h-full overflow-hidden">
+        <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
           <Outlet />
         </div>
       </SidebarInset>

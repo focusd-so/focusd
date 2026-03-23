@@ -451,7 +451,7 @@ export function CustomRules() {
             size="sm"
             className="h-7 px-3 bg-violet-600 hover:bg-violet-500 text-white text-[11px] font-bold rounded-lg transition-all"
           >
-            Upgrade Now
+            Get Plus
           </Button>
         </div>
       )}

@@ -468,11 +468,11 @@ func (s *sandbox) invokeClassify(ctx sandboxContext) (*classificationDecision, [
 
 // invokeEnforcementDecision executes the enforcement decision function and returns the result
 // Returns nil if the function returns undefined
-func (s *sandbox) invokeEnforcementDecision(ctx sandboxContext) (*enforcementDecision, error) {
+func (s *sandbox) invokeEnforcementDecision(ctx sandboxContext) (*enforcementDecision, []string, error) {
 	// Prepare script with function exports and helpers
 	preparedScript, err := prepareScript(s.code)
 	if err != nil {
-		return nil, fmt.Errorf("failed to prepare script: %w", err)
+		return nil, nil, fmt.Errorf("failed to prepare script: %w", err)
 	}
 
 	v8ctx := v8.NewContext(s.isolate)
@@ -480,23 +480,23 @@ func (s *sandbox) invokeEnforcementDecision(ctx sandboxContext) (*enforcementDec
 
 	// Setup V8 context with __console_log and __getShiftedTimestamp
 	if err := s.setupContext(ctx, v8ctx); err != nil {
-		return nil, fmt.Errorf("failed to setup context: %w", err)
+		return nil, nil, fmt.Errorf("failed to setup context: %w", err)
 	}
 
 	// Execute the function
 	resultJSON, err := s.executeFunction(v8ctx, preparedScript, "__enforcementDecision", ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute enforcementDecision: %w", err)
+		return nil, s.logs, fmt.Errorf("failed to execute enforcementDecision: %w", err)
 	}
 
 	if resultJSON == "" {
-		return nil, nil
+		return nil, s.logs, nil
 	}
 
 	var decision enforcementDecision
 	if err := json.Unmarshal([]byte(resultJSON), &decision); err != nil {
-		return nil, fmt.Errorf("failed to parse enforcement decision: %w", err)
+		return nil, s.logs, fmt.Errorf("failed to parse enforcement decision: %w", err)
 	}
 
-	return &decision, nil
+	return &decision, s.logs, nil
 }

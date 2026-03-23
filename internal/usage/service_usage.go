@@ -14,7 +14,6 @@ import (
 	"golang.org/x/net/publicsuffix"
 	"gorm.io/gorm"
 
-	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
 	"github.com/focusd-so/focusd/internal/identity"
 )
 
@@ -107,9 +106,9 @@ func (s *Service) usageChanged(ctx context.Context, usage ApplicationUsage) (*Ap
 			}
 		}
 
-		usage.SandboxContext = withPtr(classification.SandboxContext)
-		usage.SandboxResponse = classification.SandboxResponse
-		usage.SandboxLogs = withPtr(classification.SandboxLogs)
+		usage.ClassificationSandboxContext = withPtr(classification.SandboxContext)
+		usage.ClassificationSandboxResponse = classification.SandboxResponse
+		usage.ClassificationSandboxLogs = withPtr(classification.SandboxLogs)
 	}
 
 	// calculate termination mode.
@@ -159,7 +158,7 @@ func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage
 	}
 
 	tier := identity.GetAccountTier()
-	isPaid := tier != apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE
+	isPaid := hasCustomRulesExecutionAccess(tier)
 
 	if customRulesResp != nil && isPaid {
 		return customRulesResp, nil
@@ -168,7 +167,11 @@ func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage
 	// Do obviously classification next, eg social media, news, shopping, etc.
 	classification, err := s.classifyObviously(ctx, applicationUsage.Application.Name, applicationUsage.BrowserURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to classify application usage with obviously: %w", err)
+		if customRulesResp == nil {
+			return nil, fmt.Errorf("failed to classify application usage with obviously: %w", err)
+		}
+
+		slog.Warn("failed to classify with obvious rules after custom rules; continuing to LLM fallback", "error", err)
 	}
 
 	if classification != nil {
@@ -183,6 +186,23 @@ func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage
 	slog.Info("classifying application usage with LLM")
 	resp, err := s.ClassifyWithLLM(ctx, applicationUsage.Application.Name, applicationUsage.WindowTitle, applicationUsage.BrowserURL, applicationUsage.Application.BundleID, applicationUsage.Application.AppCategory)
 	if err != nil {
+		if customRulesResp != nil {
+			fallbackResp := &ClassificationResponse{
+				Classification:       ClassificationNone,
+				ClassificationSource: ClassificationSourceObviously,
+				Reasoning:            "Custom rules matched but fallback classification is unavailable",
+				ConfidenceScore:      0,
+				Tags:                 []string{"other"},
+				SandboxContext:       customRulesResp.SandboxContext,
+				SandboxResponse:      customRulesResp.SandboxResponse,
+				SandboxLogs:          customRulesResp.SandboxLogs,
+			}
+
+			slog.Warn("failed to classify with LLM after custom rules; returning sandbox-backed fallback", "error", err)
+
+			return fallbackResp, nil
+		}
+
 		return nil, fmt.Errorf("failed to classify application usage with LLM: %w", err)
 	}
 

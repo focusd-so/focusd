@@ -90,9 +90,13 @@ type ApplicationUsage struct {
 	EnforcementSource *EnforcementSource `json:"enforcement_source"`
 	EnforcementError  *string            `gorm:"index:idx_enforcement_error" json:"enforcement_error"`
 
-	SandboxContext  *string `json:"sandbox_context" gorm:"type:text;nullable"`
-	SandboxResponse *string `json:"sandbox_response" gorm:"type:text;nullable"`
-	SandboxLogs     *string `json:"sandbox_logs" gorm:"type:text;nullable"`
+	ClassificationSandboxContext  *string `json:"classification_sandbox_context" gorm:"type:text;nullable"`
+	ClassificationSandboxResponse *string `json:"classification_sandbox_response" gorm:"type:text;nullable"`
+	ClassificationSandboxLogs     *string `json:"classification_sandbox_logs" gorm:"type:text;nullable"`
+
+	EnforcementSandboxContext  *string `json:"enforcement_sandbox_context" gorm:"type:text;nullable"`
+	EnforcementSandboxResponse *string `json:"enforcement_sandbox_response" gorm:"type:text;nullable"`
+	EnforcementSandboxLogs     *string `json:"enforcement_sandbox_logs" gorm:"type:text;nullable"`
 
 	// relations
 	Tags          []ApplicationUsageTags `gorm:"foreignKey:UsageID" json:"tags"`
