@@ -237,7 +237,7 @@ func (s *Service) RemoveWhitelist(id int64) error {
 	return s.db.Delete(&ProtectionWhitelist{}, id).Error
 }
 
-// CalculateEnforcementDecision determines whether an application or website should be blocked, allowed, or paused based on classification, custom rules, protection status, and whitelist entries.
+// CalculateEnforcementDecision determines whether usage should be blocked, allowed, or paused.
 //
 // This function evaluates multiple factors in order of priority:
 // 1. Custom rules (if configured) - highest priority
@@ -246,16 +246,11 @@ func (s *Service) RemoveWhitelist(id int64) error {
 // 4. Whitelist entries - temporarily whitelisted bundle ID/hostname combinations are allowed
 // 5. Default blocking - distracting usage is blocked when protection is active
 //
-// Parameters:
-//   - bundleID: The application bundle identifier (e.g., "com.example.app")
-//   - hostname: The website hostname (e.g., "example.com") - empty string for non-browser apps
-//   - domain: The domain name extracted from the URL
-//   - url: The full URL being accessed
-//   - classification: The classification result indicating whether the usage is distracting
-//   - enforcementAction: The requested termination mode (may be overridden by custom rules)
+// Parameter:
+//   - appUsage: Usage details for the current app or site event
 //
 // Returns:
-//   - EnforcementDecision: A decision containing the mode (Allow/Block/Paused), reasoning, and source
+//   - EnforcementDecision: A decision containing the action (Allow/Block/Paused), reasoning, and source
 //   - error: Database error if protection status or whitelist lookup fails
 func (s *Service) CalculateEnforcementDecision(ctx context.Context, appUsage *ApplicationUsage) (EnforcementDecision, error) {
 	classification := appUsage.Classification
@@ -326,12 +321,15 @@ func (s *Service) CalculateEnforcementDecision(ctx context.Context, appUsage *Ap
 
 func (s *Service) calculateEnforcementDecisionWithCustomRules(_ context.Context, appUsage *ApplicationUsage) (EnforcementDecision, error) {
 	sandboxCtx := createSandboxContext(appUsage.Application.Name, appUsage.BrowserURL)
-	sandboxCtx.Classification = string(appUsage.Classification)
+	sandboxCtx.Usage.Metadata.Title = appUsage.WindowTitle
+	sandboxCtx.Usage.Metadata.Classification = string(appUsage.Classification)
 
 	customRules := settings.GetCustomRulesJS()
 	if customRules == "" {
 		return EnforcementDecision{Action: EnforcementActionNone}, nil
 	}
+
+	s.enrichSandboxContext(&sandboxCtx)
 
 	contextJSON, err := json.Marshal(sandboxCtx)
 	if err != nil {
@@ -348,7 +346,7 @@ func (s *Service) calculateEnforcementDecisionWithCustomRules(_ context.Context,
 		return EnforcementDecision{}, err
 	}
 
-	finalizeExecutionLog := func(decision *enforcementDecision, logs []string, invokeErr error) error {
+	finalizeExecutionLog := func(decision *enforcement, logs []string, invokeErr error) error {
 		if invokeErr != nil {
 			errMsg := invokeErr.Error()
 			executionLog.Error = &errMsg
@@ -397,7 +395,7 @@ func (s *Service) calculateEnforcementDecisionWithCustomRules(_ context.Context,
 		return EnforcementDecision{}, err
 	}
 
-	decision, logs, err := sb.invokeEnforcementDecision(sandboxCtx)
+	decision, logs, err := sb.invokeEnforcement(sandboxCtx)
 	if logErr := finalizeExecutionLog(decision, logs, err); logErr != nil {
 		return EnforcementDecision{}, logErr
 	}

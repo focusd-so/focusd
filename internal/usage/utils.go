@@ -115,18 +115,16 @@ func fetchMainContent(ctx context.Context, rawURL string) (string, error) {
 }
 
 func createSandboxContext(appName string, url *string) sandboxContext {
-	sandboxCtx := sandboxContext{
-		AppName: appName,
-	}
+	sandboxCtx := NewSandboxContext(WithAppNameContext(appName))
 
 	if url != nil {
-		sandboxCtx.URL = *url
+		sandboxCtx.Usage.Metadata.URL = *url
 
 		u, err := parseURLNormalized(*url)
 		if err == nil {
-			sandboxCtx.Hostname = u.Hostname()
-			sandboxCtx.Path = u.Path
-			sandboxCtx.Domain, _ = publicsuffix.EffectiveTLDPlusOne(u.Hostname())
+			sandboxCtx.Usage.Metadata.Hostname = u.Hostname()
+			sandboxCtx.Usage.Metadata.Path = u.Path
+			sandboxCtx.Usage.Metadata.Domain, _ = publicsuffix.EffectiveTLDPlusOne(u.Hostname())
 		}
 	}
 

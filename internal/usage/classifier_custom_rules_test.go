@@ -15,9 +15,9 @@ import (
 var customRulesApps = `
 /**
 * Custom classification logic.
-* Return a ClassificationDecision to override the default, or undefined to keep the default.
+ * Return a Classify to override the default, or undefined to keep the default.
 */
-export function classify(context: UsageContext): ClassificationDecision | undefined {
+export function classify(context: Context): Classify | undefined {
 	console.log("should capture this");
 
 	if (now().getHours() == 10 && now().getMinutes() > 0 && now().getMinutes() < 30) {
@@ -30,7 +30,7 @@ export function classify(context: UsageContext): ClassificationDecision | undefi
 
 	console.log("and this too");
 
-	if (context.appName == "Slack") {
+	if (context.usage.metadata.appName == "Slack") {
 		return {
 			classification: Classification.Neutral,
 			classificationReasoning: "Slack is a neutral app",
@@ -40,7 +40,7 @@ export function classify(context: UsageContext): ClassificationDecision | undefi
 
 	console.log("also this");
 
-	if (context.minutesSinceLastBlock >= 20 && context.minutesUsedSinceLastBlock < 5 && context.appName == "Discord") {
+	if (context.usage.insights.minutesSinceLastBlock >= 20 && context.usage.insights.minutesUsedSinceLastBlock < 5 && context.usage.metadata.appName == "Discord") {
 		return {
 			classification: Classification.Neutral,
 			classificationReasoning: "Allow using 5 mins every 20 mins",
@@ -52,17 +52,17 @@ export function classify(context: UsageContext): ClassificationDecision | undefi
 }
 
 /**
-* Custom termination logic (blocking).
-* Return a EnforcementDecision to override the default, or undefined to keep the default.
+ * Custom enforcement logic.
+ * Return an Enforcement to override the default, or undefined to keep the default.
 */
-export function enforcementDecision(context: UsageContext): EnforcementDecision | undefined {
+export function enforcement(context: Context): Enforcement | undefined {
 	
 }
 `
 
 var customRulesWithMinutesUsedInPeriod = `
-export function classify(context: UsageContext): ClassificationDecision | undefined {
-	const minutesUsed = context.minutesUsedInPeriod(60);
+export function classify(context: Context): Classify | undefined {
+	const minutesUsed = context.usage.insights.minutesUsedInPeriod(60);
 	
 	if (minutesUsed > 30) {
 		return {
@@ -81,9 +81,9 @@ export function classify(context: UsageContext): ClassificationDecision | undefi
 `
 
 var customRulesWebsite = `
-export function classify(context: UsageContext): ClassificationDecision | undefined {
+export function classify(context: Context): Classify | undefined {
 	// Match by domain
-	if (context.domain === "youtube.com") {
+	if (context.usage.metadata.domain === "youtube.com") {
 		return {
 			classification: Classification.Distracting,
 			classificationReasoning: "YouTube is distracting",
@@ -92,7 +92,7 @@ export function classify(context: UsageContext): ClassificationDecision | undefi
 	}
 	
 	// Match by hostname (subdomain-aware)
-	if (context.hostname === "docs.google.com") {
+	if (context.usage.metadata.hostname === "docs.google.com") {
 		return {
 			classification: Classification.Productive,
 			classificationReasoning: "Google Docs is productive",
@@ -101,7 +101,7 @@ export function classify(context: UsageContext): ClassificationDecision | undefi
 	}
 	
 	// Match by path
-	if (context.hostname === "github.com" && context.path.startsWith("/pulls")) {
+	if (context.usage.metadata.hostname === "github.com" && context.usage.metadata.path.startsWith("/pulls")) {
 		return {
 			classification: Classification.Productive,
 			classificationReasoning: "Reviewing pull requests",
@@ -110,7 +110,7 @@ export function classify(context: UsageContext): ClassificationDecision | undefi
 	}
 	
 	// Match by full URL
-	if (context.url === "https://twitter.com/home") {
+	if (context.usage.metadata.url === "https://twitter.com/home") {
 		return {
 			classification: Classification.Distracting,
 			classificationReasoning: "Twitter home feed",

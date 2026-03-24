@@ -11,15 +11,15 @@ import (
 	v8 "rogchap.com/v8go"
 )
 
-// classificationDecision is returned from the classify function
-type classificationDecision struct {
+// classificationResult is returned from the classify function.
+type classificationResult struct {
 	Classification          string   `json:"classification"`
 	ClassificationReasoning string   `json:"classificationReasoning"`
 	Tags                    []string `json:"tags"`
 }
 
-// enforcementDecision is returned from the enforcement decision function
-type enforcementDecision struct {
+// enforcement is returned from the enforcement function.
+type enforcement struct {
 	EnforcementAction string `json:"enforcementAction"`
 	EnforcementReason string `json:"enforcementReason"`
 }
@@ -177,10 +177,10 @@ var module = { exports: exports };
 // Check both module.exports and exports for functions
 var _exported = module.exports || exports;
 if (_exported && typeof _exported.classify === 'function') { globalThis.__classify = _exported.classify; }
-if (_exported && typeof _exported.enforcementDecision === 'function') { globalThis.__enforcementDecision = _exported.enforcementDecision; }
+if (_exported && typeof _exported.enforcement === 'function') { globalThis.__enforcement = _exported.enforcement; }
 // Also check for top-level function declarations (non-exported)
 if (typeof classify === 'function') { globalThis.__classify = classify; }
-if (typeof enforcementDecision === 'function') { globalThis.__enforcementDecision = enforcementDecision; }
+if (typeof enforcement === 'function') { globalThis.__enforcement = enforcement; }
 
 // Polyfill console
 if (typeof console === 'undefined') {
@@ -296,7 +296,7 @@ func (s *sandbox) setupContext(ctx sandboxContext, v8ctx *v8.Context) error {
 		return fmt.Errorf("failed to set __console_log function: %w", err)
 	}
 
-	// Inject __minutesUsedInPeriod function (bundleID, hostname, minutes) -> int64
+	// Inject __minutesUsedInPeriod function (appName, hostname, minutes) -> int64
 	if ctx.MinutesUsedInPeriod != nil {
 		usageCb := v8.NewFunctionTemplate(s.isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
 			args := info.Args()
@@ -305,11 +305,11 @@ func (s *sandbox) setupContext(ctx sandboxContext, v8ctx *v8.Context) error {
 				return val
 			}
 
-			bundleID := args[0].String()
+			appName := args[0].String()
 			hostname := args[1].String()
 			minutes := int64(args[2].Integer())
 
-			result, err := ctx.MinutesUsedInPeriod(bundleID, hostname, minutes)
+			result, err := ctx.MinutesUsedInPeriod(appName, hostname, minutes)
 			if err != nil {
 				slog.Debug("failed to query minutes used", "error", err)
 				val, _ := v8.NewValue(s.isolate, int32(0))
@@ -323,22 +323,6 @@ func (s *sandbox) setupContext(ctx sandboxContext, v8ctx *v8.Context) error {
 		usageFn := usageCb.GetFunction(v8ctx)
 		if err := global.Set("__minutesUsedInPeriod", usageFn); err != nil {
 			return fmt.Errorf("failed to set __minutesUsedInPeriod function: %w", err)
-		}
-	}
-
-	// Inject __minutesSinceLastBlockValue as a pre-computed value
-	if ctx.MinutesSinceLastBlock != nil {
-		val, _ := v8.NewValue(s.isolate, int32(*ctx.MinutesSinceLastBlock))
-		if err := global.Set("__minutesSinceLastBlockValue", val); err != nil {
-			return fmt.Errorf("failed to set __minutesSinceLastBlockValue: %w", err)
-		}
-	}
-
-	// Inject __minutesUsedSinceLastBlockValue as a pre-computed value
-	if ctx.MinutesUsedSinceLastBlock != nil {
-		val, _ := v8.NewValue(s.isolate, int32(*ctx.MinutesUsedSinceLastBlock))
-		if err := global.Set("__minutesUsedSinceLastBlockValue", val); err != nil {
-			return fmt.Errorf("failed to set __minutesUsedSinceLastBlockValue: %w", err)
 		}
 	}
 
@@ -372,30 +356,30 @@ func (s *sandbox) executeFunction(v8ctx *v8.Context, preparedScript string, func
 	}
 
 	// Call the function
-	// Add minutesUsedInPeriod as a method on the context object
+	// Add minutesUsedInPeriod as a method on usage.insights.
 	callScript := fmt.Sprintf(`
 		(function() {
 			const ctx = %s;
-				// Add minutesUsedInPeriod method to context
+			if (!ctx.usage) {
+				ctx.usage = {};
+			}
+
+			if (!ctx.usage.metadata) {
+				ctx.usage.metadata = {};
+			}
+
+			if (!ctx.usage.insights) {
+				ctx.usage.insights = {};
+			}
+
+			// Add minutesUsedInPeriod method to usage.insights.
 			if (typeof __minutesUsedInPeriod === 'function') {
-				ctx.minutesUsedInPeriod = function(minutes) {
-					return __minutesUsedInPeriod(ctx.bundleID, ctx.hostname, minutes);
+				ctx.usage.insights.minutesUsedInPeriod = function(minutes) {
+					return __minutesUsedInPeriod(ctx.usage.metadata.appName, ctx.usage.metadata.hostname, minutes);
 				};
 			} else {
-				ctx.minutesUsedInPeriod = function(minutes) { return 0; };
+				ctx.usage.insights.minutesUsedInPeriod = function(minutes) { return 0; };
 			}
-
-			// Add minutesSinceLastBlock as a method that returns the pre-computed value
-			if (typeof __minutesSinceLastBlockValue === 'number') {
-				ctx.minutesSinceLastBlock = __minutesSinceLastBlockValue;
-			} else {
-				ctx.minutesSinceLastBlock = -1;
-			}
-
-			// Add minutesUsedSinceLastBlock as a method that returns the pre-computed value
-			if (typeof __minutesUsedSinceLastBlockValue === 'number') {
-				ctx.minutesUsedSinceLastBlock = __minutesUsedSinceLastBlockValue;
-			} 
 
 			const result = %s(ctx);
 			if (result === undefined || result === null) {
@@ -432,7 +416,7 @@ func (s *sandbox) close() {
 
 // invokeClassify executes the classify function and returns the result
 // Returns nil if the function returns undefined
-func (s *sandbox) invokeClassify(ctx sandboxContext) (*classificationDecision, []string, error) {
+func (s *sandbox) invokeClassify(ctx sandboxContext) (*classificationResult, []string, error) {
 	// Prepare script with function exports and helpers
 	preparedScript, err := prepareScript(s.code)
 	if err != nil {
@@ -453,7 +437,7 @@ func (s *sandbox) invokeClassify(ctx sandboxContext) (*classificationDecision, [
 		return nil, s.logs, fmt.Errorf("failed to execute classify: %w", err)
 	}
 
-	var decision classificationDecision
+	var decision classificationResult
 
 	if resultJSON == "" {
 		return nil, s.logs, nil
@@ -466,9 +450,9 @@ func (s *sandbox) invokeClassify(ctx sandboxContext) (*classificationDecision, [
 	return &decision, s.logs, nil
 }
 
-// invokeEnforcementDecision executes the enforcement decision function and returns the result
+// invokeEnforcement executes the enforcement function and returns the result.
 // Returns nil if the function returns undefined
-func (s *sandbox) invokeEnforcementDecision(ctx sandboxContext) (*enforcementDecision, []string, error) {
+func (s *sandbox) invokeEnforcement(ctx sandboxContext) (*enforcement, []string, error) {
 	// Prepare script with function exports and helpers
 	preparedScript, err := prepareScript(s.code)
 	if err != nil {
@@ -484,16 +468,16 @@ func (s *sandbox) invokeEnforcementDecision(ctx sandboxContext) (*enforcementDec
 	}
 
 	// Execute the function
-	resultJSON, err := s.executeFunction(v8ctx, preparedScript, "__enforcementDecision", ctx)
+	resultJSON, err := s.executeFunction(v8ctx, preparedScript, "__enforcement", ctx)
 	if err != nil {
-		return nil, s.logs, fmt.Errorf("failed to execute enforcementDecision: %w", err)
+		return nil, s.logs, fmt.Errorf("failed to execute enforcement: %w", err)
 	}
 
 	if resultJSON == "" {
 		return nil, s.logs, nil
 	}
 
-	var decision enforcementDecision
+	var decision enforcement
 	if err := json.Unmarshal([]byte(resultJSON), &decision); err != nil {
 		return nil, s.logs, fmt.Errorf("failed to parse enforcement decision: %w", err)
 	}

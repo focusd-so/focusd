@@ -273,8 +273,8 @@ func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 
 func TestService_Classification(t *testing.T) {
 	customRulesOverrideAmazon := `
-export function classify(context: UsageContext): ClassificationDecision | undefined {
-	if (context.domain === "amazon.com") {
+export function classify(context: Context): Classify | undefined {
+	if (context.usage.metadata.domain === "amazon.com") {
 		return {
 			classification: Classification.Productive,
 			classificationReasoning: "Amazon is productive for procurement work",
@@ -322,8 +322,8 @@ export function classify(context: UsageContext): ClassificationDecision | undefi
 		h := newUsageHarness(t,
 			withAccountTier(apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS),
 			withCustomRulesJS(`
-export function classify(context: UsageContext): ClassificationDecision | undefined {
-	if (context.domain === "not-amazon.com") {
+export function classify(context: Context): Classify | undefined {
+	if (context.usage.metadata.domain === "not-amazon.com") {
 		return {
 			classification: Classification.Productive,
 			classificationReasoning: "Unreachable rule",

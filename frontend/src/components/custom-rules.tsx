@@ -25,7 +25,7 @@ type ClassificationType = "unknown" | "productive" | "distracting" | "neutral" |
 
 /**
  * Global constant for classification values.
- * Use these values when returning a ClassificationDecision.
+ * Use these values when returning a Classify.
  * @example
  * return {
  *   classification: Classification.Productive,
@@ -46,8 +46,8 @@ declare const Classification: {
 type EnforcementActionType = "none" | "block" | "paused" | "allow";
 
 /**
- * Global constant for termination mode values.
- * Use these values when returning a EnforcementDecision.
+ * Global constant for enforcement action values.
+ * Use these values when returning an Enforcement.
  * @example
  * return {
  *   enforcementAction: EnforcementAction.Block,
@@ -62,9 +62,9 @@ declare const EnforcementAction: {
 };
 
 /**
- * Decision returned from the enforcementDecision function.
+ * Result returned from the enforcement function.
  */
-interface EnforcementDecision {
+interface Enforcement {
   /** The termination mode to apply. Use EnforcementAction constants. */
   enforcementAction: EnforcementActionType;
   /** Human-readable explanation for why this decision was made. */
@@ -72,9 +72,9 @@ interface EnforcementDecision {
 }
 
 /**
- * Decision returned from the classify function.
+ * Result returned from the classify function.
  */
-interface ClassificationDecision {
+interface Classify {
   /** The classification to apply. Use Classification constants. */
   classification: ClassificationType;
   /** Human-readable explanation for why this classification was chosen. */
@@ -82,36 +82,80 @@ interface ClassificationDecision {
 }
 
 /**
- * Provides context for the current rule execution including usage data.
+ * Non-numeric details about the current app/site being evaluated.
  */
-interface UsageContext {
+interface UsageMetadata {
   /** The display name of the application (e.g., 'Safari', 'Slack'). */
-  readonly appName?: string;
-  /** The application's bundle identifier (e.g., 'com.apple.Safari'). */
-  readonly bundleID: string;
-  /** The hostname if the activity is a website (e.g., 'www.github.com'). */
+  readonly appName: string;
+  /** The window title if available. */
+  readonly title: string;
+  /** The hostname if the activity is a website (e.g., 'docs.github.com'). */
   readonly hostname: string;
   /** The registered domain extracted from the hostname (e.g., 'github.com'). */
   readonly domain: string;
+  /** The URL path (e.g., '/pulls/assigned'). */
+  readonly path: string;
   /** The full URL if available. */
   readonly url: string;
   /** The current classification of this usage (may be empty if not yet classified). */
   readonly classification: string;
+}
+
+interface InsightsToday {
+  readonly productiveMinutes: number;
+  readonly distractingMinutes: number;
+  readonly idleMinutes: number;
+  readonly otherMinutes: number;
+  readonly focusScore: number;
+  readonly distractionCount: number;
+  readonly blockedCount: number;
+}
+
+/**
+ * Numeric metrics scoped to the current usage target.
+ */
+interface UsageInsights {
+  /** Distracting minutes for this app/site today. */
+  readonly distractingMinutes: number;
+  /** Blocked attempts for this app/site today. */
+  readonly blockedCount: number;
   /** Minutes since this app/site was last blocked (-1 if never blocked). */
   readonly minutesSinceLastBlock: number;
   /** Total minutes of usage since this app/site was last blocked (-1 if never blocked). */
   readonly minutesUsedSinceLastBlock: number;
+  /** Duration (minutes) of the last blocked session for this app/site (-1 if never blocked). */
+  readonly lastBlockedDurationMinutes: number;
   /**
    * Returns total minutes this app/site was used in the last N minutes.
-   * @param minutes - The time window to check (e.g., 60 for last hour, 30 for last 30 minutes)
-   * @returns Total minutes of usage in the specified time window
-   * @example
-   * // Block if used more than 30 minutes in the last hour
-   * if (context.minutesUsedInPeriod(60) > 30) {
-   *   return { enforcementAction: EnforcementAction.Block, enforcementReason: 'Usage limit exceeded' };
-   * }
+   * @param minutes - Time window in minutes (e.g. 60 for last hour)
    */
   minutesUsedInPeriod(minutes: number): number;
+}
+
+interface InsightsContext {
+  readonly today: InsightsToday;
+  readonly topDistractions: Record<string, number>;
+  readonly topBlocked: Record<string, number>;
+  readonly projectBreakdown: Record<string, number>;
+  readonly communicationBreakdown: Record<string, { name: string; channel: string; duration_seconds: number }>;
+}
+
+interface UsageContext {
+  readonly metadata: UsageMetadata;
+  readonly insights: UsageInsights;
+}
+
+/**
+ * Full context passed into classify/enforcement.
+ *
+ * Structure:
+ * - context.usage.metadata => descriptive fields for the current app/site
+ * - context.usage.insights => numeric fields for the current app/site
+ * - context.insights => broader daily/global dashboard insights
+ */
+interface Context {
+  readonly usage: UsageContext;
+  readonly insights: InsightsContext;
 }
 
 // ============ Timezone Constants ============
@@ -273,36 +317,68 @@ declare const console: {
 `;
 
 const starterRulesTS = `/**
- * Custom classification logic.
- * Return a ClassificationDecision to override the default, or undefined to keep the default.
+ * Quick reference
  *
- * @example
- * // Classify all GitHub activity as productive
- * if (context.domain === 'github.com') {
+ * context.usage.metadata.*
+ * - appName, title, hostname, domain, path, url, classification
+ *
+ * context.usage.insights.*
+ * - distractingMinutes, blockedCount
+ * - minutesSinceLastBlock (-1 means never blocked)
+ * - minutesUsedSinceLastBlock (-1 means never blocked)
+ * - lastBlockedDurationMinutes (-1 means never blocked)
+ * - minutesUsedInPeriod(minutes)
+ *
+ * context.insights.today.*
+ * - productiveMinutes, distractingMinutes, idleMinutes, otherMinutes
+ * - focusScore, distractionCount, blockedCount
+ */
+
+/**
+ * Custom classification logic.
+ * Return a Classify to override the default, or undefined to keep the default.
+ *
+ * Example 1: classify a domain as productive
+ * if (context.usage.metadata.domain === 'github.com') {
  *   return {
  *     classification: Classification.Productive,
  *     classificationReasoning: 'GitHub is a development tool'
  *   };
  * }
+ *
+ * Example 2: classify as distracting after 30 minutes in the last hour
+ * if (context.usage.insights.minutesUsedInPeriod(60) > 30) {
+ *   return {
+ *     classification: Classification.Distracting,
+ *     classificationReasoning: 'Exceeded hourly usage budget'
+ *   };
+ * }
  */
-export function classify(context: UsageContext): ClassificationDecision | undefined {
+export function classify(context: Context): Classify | undefined {
   return undefined;
 }
 
 /**
- * Custom termination logic (blocking).
- * Return a EnforcementDecision to override the default, or undefined to keep the default.
+ * Custom enforcement logic.
+ * Return an Enforcement to override the default, or undefined to keep the default.
  *
- * @example
- * // Block social media after 10 PM in London
- * if (context.domain === 'twitter.com' && now(Timezone.Europe_London).getHours() >= 22) {
+ * Example 1: block social media after 10 PM in London
+ * if (context.usage.metadata.domain === 'twitter.com' && now(Timezone.Europe_London).getHours() >= 22) {
  *   return {
  *     enforcementAction: EnforcementAction.Block,
  *     enforcementReason: 'Social media blocked after 10 PM'
  *   };
  * }
+ *
+ * Example 2: strict mode if distraction is already high today
+ * if (context.insights.today.distractingMinutes >= 90 && context.usage.insights.blockedCount >= 3) {
+ *   return {
+ *     enforcementAction: EnforcementAction.Block,
+ *     enforcementReason: 'High distraction day with repeated blocked attempts'
+ *   };
+ * }
  */
-export function enforcementDecision(context: UsageContext): EnforcementDecision | undefined {
+export function enforcement(context: Context): Enforcement | undefined {
   return undefined;
 }
 `;
