@@ -238,8 +238,8 @@ func (s *Service) computeLLMDaySummaryInput(date time.Time) (LLMDaySummaryInput,
 }
 
 func (s *Service) enrichWithDBStats(input *LLMDaySummaryInput, date time.Time) {
-	blockMode := TerminationModeBlock
-	blockedUsages, err := s.GetUsageList(GetUsageListOptions{Date: &date, TerminationMode: &blockMode})
+	blockMode := EnforcementActionBlock
+	blockedUsages, err := s.GetUsageList(GetUsageListOptions{Date: &date, EnforcementAction: &blockMode})
 	if err == nil {
 		input.BlockedAttemptCount = len(blockedUsages)
 	}

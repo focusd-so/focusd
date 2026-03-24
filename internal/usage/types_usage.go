@@ -1,21 +1,23 @@
 package usage
 
 type (
-	TerminationMode       string
-	TerminationModeSource string
-	Classification        string
-	ClassificationSource  string
+	EnforcementAction    string
+	EnforcementSource    string
+	EnforcementReason    string
+	Classification       string
+	ClassificationSource string
 )
 
 const (
-	TerminationModeNone  TerminationMode = "none"
-	TerminationModeBlock TerminationMode = "block"
-	TerminationModeAllow TerminationMode = "allow"
+	EnforcementActionNone   EnforcementAction = "none"
+	EnforcementActionBlock  EnforcementAction = "block"
+	EnforcementActionPaused EnforcementAction = "paused"
+	EnforcementActionAllow  EnforcementAction = "allow"
 
-	TerminationModeSourceApplication TerminationModeSource = "application"
-	TerminationModeSourceCustomRules TerminationModeSource = "custom_rules"
-	TerminationModeSourceWhitelist   TerminationModeSource = "whitelist"
-	TerminationModeSourcePaused      TerminationModeSource = "paused"
+	EnforcementSourceApplication EnforcementSource = "application"
+	EnforcementSourceCustomRules EnforcementSource = "custom_rules"
+	EnforcementSourceWhitelist   EnforcementSource = "whitelist"
+	EnforcementSourcePaused      EnforcementSource = "paused"
 
 	ClassificationSourceUserSet           ClassificationSource = "user_set"
 	ClassificationSourceObviously         ClassificationSource = "obviously"
@@ -38,10 +40,10 @@ func (c Classification) IsProductiveOrDistracting() bool {
 	return c == ClassificationProductive || c == ClassificationDistracting
 }
 
-type TerminationDecision struct {
-	Mode      TerminationMode
-	Reasoning string
-	Source    TerminationModeSource
+type EnforcementDecision struct {
+	Action EnforcementAction
+	Reason EnforcementReason
+	Source EnforcementSource
 }
 
 type ClassificationResponse struct {

@@ -82,8 +82,8 @@ func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 			assertUsageApplicationName(t, "Chrome"),
 			assertUsageHostname(t, "amazon.com"),
 			assertUsageClassification(t, usage.ClassificationDistracting),
-			assertTerminationMode(t, usage.TerminationModeBlock),
-			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+			assertEnforcementAction(t, usage.EnforcementActionBlock),
+			assertEnforcementSource(t, usage.EnforcementSourceApplication),
 		).
 		AssertUpdateEventsCount(2)
 
@@ -96,8 +96,8 @@ func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 			assertUsageApplicationName(t, "Chrome"),
 			assertUsageHostname(t, "amazon.com"),
 			assertUsageClassification(t, usage.ClassificationDistracting),
-			assertTerminationMode(t, usage.TerminationModeAllow),
-			assertTerminationModeSource(t, usage.TerminationModeSourcePaused),
+			assertEnforcementAction(t, usage.EnforcementActionAllow),
+			assertEnforcementSource(t, usage.EnforcementSourcePaused),
 		).
 		AssertUpdateEventsCount(2).
 		TitleChanged("Chrome", "Linkedin", withPtr("https://www.linkedin.com")).
@@ -105,8 +105,8 @@ func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 			assertUsageApplicationName(t, "Chrome"),
 			assertUsageHostname(t, "linkedin.com"),
 			assertUsageClassification(t, usage.ClassificationDistracting),
-			assertTerminationMode(t, usage.TerminationModeAllow),
-			assertTerminationModeSource(t, usage.TerminationModeSourcePaused),
+			assertEnforcementAction(t, usage.EnforcementActionAllow),
+			assertEnforcementSource(t, usage.EnforcementSourcePaused),
 		).
 		AssertUpdateEventsCount(5)
 
@@ -120,8 +120,8 @@ func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 			assertUsageApplicationName(t, "Chrome"),
 			assertUsageHostname(t, "amazon.com"),
 			assertUsageClassification(t, usage.ClassificationDistracting),
-			assertTerminationMode(t, usage.TerminationModeBlock),
-			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+			assertEnforcementAction(t, usage.EnforcementActionBlock),
+			assertEnforcementSource(t, usage.EnforcementSourceApplication),
 		).
 		AssertUpdateEventsCount(3)
 
@@ -132,24 +132,24 @@ func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 		AssertLastUsage(
 			assertUsageHostname(t, "amazon.com"),
 			assertUsageClassification(t, usage.ClassificationDistracting),
-			assertTerminationMode(t, usage.TerminationModeAllow),
-			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+			assertEnforcementAction(t, usage.EnforcementActionAllow),
+			assertEnforcementSource(t, usage.EnforcementSourceWhitelist),
 		).
 		TitleChanged("Chrome", "Linkedin", withPtr("https://www.linkedin.com")).
 		AssertPreviousUsage(assertUsageClosed(t)).
 		AssertLastUsage(
 			assertUsageHostname(t, "linkedin.com"),
 			assertUsageClassification(t, usage.ClassificationDistracting),
-			assertTerminationMode(t, usage.TerminationModeBlock),
-			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+			assertEnforcementAction(t, usage.EnforcementActionBlock),
+			assertEnforcementSource(t, usage.EnforcementSourceApplication),
 		).
 		Await(time.Second*4).
 		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
 		AssertLastUsage(
 			assertUsageHostname(t, "amazon.com"),
 			assertUsageClassification(t, usage.ClassificationDistracting),
-			assertTerminationMode(t, usage.TerminationModeBlock),
-			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+			assertEnforcementAction(t, usage.EnforcementActionBlock),
+			assertEnforcementSource(t, usage.EnforcementSourceApplication),
 		)
 
 	// 2. Manual Pause Resumption
@@ -157,15 +157,15 @@ func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 		Pause(10, "test early resume").
 		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
 		AssertLastUsage(
-			assertTerminationMode(t, usage.TerminationModeAllow),
-			assertTerminationModeSource(t, usage.TerminationModeSourcePaused),
+			assertEnforcementAction(t, usage.EnforcementActionAllow),
+			assertEnforcementSource(t, usage.EnforcementSourcePaused),
 		).
 		Await(time.Second).
 		Resume("user clicked resume").
 		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
 		AssertLastUsage(
-			assertTerminationMode(t, usage.TerminationModeBlock),
-			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+			assertEnforcementAction(t, usage.EnforcementActionBlock),
+			assertEnforcementSource(t, usage.EnforcementSourceApplication),
 		)
 
 	// 3. Whitelist Overwriting / Extension
@@ -176,8 +176,8 @@ func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 		Await(time.Second*3).
 		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
 		AssertLastUsage(
-			assertTerminationMode(t, usage.TerminationModeAllow),
-			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+			assertEnforcementAction(t, usage.EnforcementActionAllow),
+			assertEnforcementSource(t, usage.EnforcementSourceWhitelist),
 		)
 
 	// 4. Cross-Browser Whitelist
@@ -185,8 +185,8 @@ func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 		TitleChanged("Safari", "Amazon", withPtr("https://www.amazon.com")).
 		AssertLastUsage(
 			assertUsageApplicationName(t, "Safari"),
-			assertTerminationMode(t, usage.TerminationModeAllow),
-			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+			assertEnforcementAction(t, usage.EnforcementActionAllow),
+			assertEnforcementSource(t, usage.EnforcementSourceWhitelist),
 		)
 
 	// 5. Manual Whitelist Removal
@@ -194,8 +194,8 @@ func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 		RemoveActiveWhitelists().
 		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
 		AssertLastUsage(
-			assertTerminationMode(t, usage.TerminationModeBlock),
-			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+			assertEnforcementAction(t, usage.EnforcementActionBlock),
+			assertEnforcementSource(t, usage.EnforcementSourceApplication),
 		)
 
 	// 6. Pause Expiry While Whitelist Is Still Active
@@ -206,14 +206,14 @@ func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 		Whitelist("Chrome", "https://www.amazon.com", 7*time.Second).
 		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
 		AssertLastUsage(
-			assertTerminationMode(t, usage.TerminationModeAllow),
-			assertTerminationModeSource(t, usage.TerminationModeSourcePaused),
+			assertEnforcementAction(t, usage.EnforcementActionAllow),
+			assertEnforcementSource(t, usage.EnforcementSourcePaused),
 		).
 		Await(4*time.Second).
 		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
 		AssertLastUsage(
-			assertTerminationMode(t, usage.TerminationModeAllow),
-			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+			assertEnforcementAction(t, usage.EnforcementActionAllow),
+			assertEnforcementSource(t, usage.EnforcementSourceWhitelist),
 		)
 
 	// 7. Whitelist Expiry While Pause Is Still Active
@@ -224,14 +224,14 @@ func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 		Await(3*time.Second).
 		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
 		AssertLastUsage(
-			assertTerminationMode(t, usage.TerminationModeAllow),
-			assertTerminationModeSource(t, usage.TerminationModeSourcePaused),
+			assertEnforcementAction(t, usage.EnforcementActionAllow),
+			assertEnforcementSource(t, usage.EnforcementSourcePaused),
 		).
 		Await(6*time.Second).
 		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
 		AssertLastUsage(
-			assertTerminationMode(t, usage.TerminationModeBlock),
-			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+			assertEnforcementAction(t, usage.EnforcementActionBlock),
+			assertEnforcementSource(t, usage.EnforcementSourceApplication),
 		)
 
 	// 8. Manual Resume Does Not Clear Active Whitelist
@@ -243,13 +243,13 @@ func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 		Resume("user resumed protection manually").
 		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
 		AssertLastUsage(
-			assertTerminationMode(t, usage.TerminationModeAllow),
-			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+			assertEnforcementAction(t, usage.EnforcementActionAllow),
+			assertEnforcementSource(t, usage.EnforcementSourceWhitelist),
 		).
 		TitleChanged("Chrome", "Linkedin", withPtr("https://www.linkedin.com")).
 		AssertLastUsage(
-			assertTerminationMode(t, usage.TerminationModeBlock),
-			assertTerminationModeSource(t, usage.TerminationModeSourceApplication),
+			assertEnforcementAction(t, usage.EnforcementActionBlock),
+			assertEnforcementSource(t, usage.EnforcementSourceApplication),
 		)
 
 	// 9. Quick-Allow Input Shape Parity (hostname vs full URL)
@@ -260,12 +260,12 @@ func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 		Whitelist("Chrome", "amazon.com", 6*time.Second).
 		TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
 		AssertLastUsage(
-			assertTerminationMode(t, usage.TerminationModeAllow),
-			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+			assertEnforcementAction(t, usage.EnforcementActionAllow),
+			assertEnforcementSource(t, usage.EnforcementSourceWhitelist),
 		).
 		TitleChanged("Chrome", "Amazon", withPtr("https://amazon.com")).
 		AssertLastUsage(
-			assertTerminationMode(t, usage.TerminationModeAllow),
-			assertTerminationModeSource(t, usage.TerminationModeSourceWhitelist),
+			assertEnforcementAction(t, usage.EnforcementActionAllow),
+			assertEnforcementSource(t, usage.EnforcementSourceWhitelist),
 		)
 }

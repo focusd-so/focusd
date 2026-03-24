@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { Browser } from "@wailsio/runtime";
 import {
   IconWorld,
   IconAppWindow,
@@ -16,8 +17,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useUsageStore } from "@/stores/usage-store";
+import { useAccountStore } from "@/stores/account-store";
 import type { ApplicationUsage } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
-import { TerminationMode } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
+import { EnforcementAction } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
 
 export function isDistracting(classification?: string | null): boolean {
   if (!classification) return false;
@@ -135,7 +137,7 @@ export function formatClassificationSource(
   }
 }
 
-export function formatTerminationModeSource(
+export function formatEnforcementSource(
   source?: string | null,
   reasoning?: string | null
 ): {
@@ -252,7 +254,7 @@ export function ClassificationReasoningLabel({
   isPausedDistraction,
   isCurrentlyPaused,
   onResume,
-  terminationSource,
+  enforcementSource,
 }: {
   usage: ApplicationUsage;
   icon?: string;
@@ -262,7 +264,7 @@ export function ClassificationReasoningLabel({
   isPausedDistraction?: boolean;
   isCurrentlyPaused?: boolean;
   onResume?: () => void;
-  terminationSource?: {
+  enforcementSource?: {
     label: string;
     icon: string;
     description: string;
@@ -272,11 +274,11 @@ export function ClassificationReasoningLabel({
   if (!usage.classification_source) return null;
 
   const isCustomRulesAllow =
-    usage.termination_mode === TerminationMode.TerminationModeAllow &&
-    usage.termination_mode_source === "custom_rules";
+    usage.enforcement_action === EnforcementAction.EnforcementActionAllow &&
+    usage.enforcement_source === "custom_rules";
 
   const isCustomRulesClassification =
-    usage.classification_reasoning && usage.termination_mode_source === "custom_rules";
+    usage.classification_reasoning && usage.enforcement_source === "custom_rules";
 
   // Determine the label text based on priority
   const getLabelText = (): string => {
@@ -284,13 +286,13 @@ export function ClassificationReasoningLabel({
       return "was paused by user";
     }
     if (isCustomRulesAllow) {
-      return usage.termination_reasoning || "set by custom rules";
+      return usage.enforcement_reason || "set by custom rules";
     }
     if (isCustomRulesClassification) {
       return usage.classification_reasoning!;
     }
     if (isAllowedDistraction) {
-      return usage.termination_reasoning || "user allowed distraction";
+      return usage.enforcement_reason || "user allowed distraction";
     }
     return description;
   };
@@ -299,9 +301,9 @@ export function ClassificationReasoningLabel({
   const shouldBeLink = isCustomRulesAllow || isCustomRulesClassification || isLink;
 
   const labelText = getLabelText();
-  const prefixLabel = terminationSource?.label;
+  const prefixLabel = enforcementSource?.label;
   const displayText = prefixLabel ? `${prefixLabel}: ${labelText}` : labelText;
-  const displayIcon = isPausedDistraction ? <IconPlayerPause className="w-3 h-3 text-yellow-500/70" /> : <span className="text-[10px] opacity-70">{terminationSource?.icon || icon}</span>;
+  const displayIcon = isPausedDistraction ? <IconPlayerPause className="w-3 h-3 text-yellow-500/70" /> : <span className="text-[10px] opacity-70">{enforcementSource?.icon || icon}</span>;
 
   // Handle paused distraction display with optional resume button
   if (isPausedDistraction) {
@@ -330,8 +332,8 @@ export function ClassificationReasoningLabel({
   return (
     <span className="text-[10px] text-muted-foreground/50 flex items-center gap-1.5">
       {displayIcon}
-      {shouldBeLink || terminationSource?.isLink ? (
-        <TruncatedLabel className="max-w-[300px]">
+      {shouldBeLink || enforcementSource?.isLink ? (
+        <TruncatedLabel className="max-w-[170px] sm:max-w-[260px]">
           <Link
             to="/settings"
             search={{ tab: "rules" }}
@@ -341,7 +343,7 @@ export function ClassificationReasoningLabel({
           </Link>
         </TruncatedLabel>
       ) : (
-        <TruncatedLabel className="max-w-[300px]">{displayText}</TruncatedLabel>
+        <TruncatedLabel className="max-w-[170px] sm:max-w-[260px]">{displayText}</TruncatedLabel>
       )}
     </span>
   );
@@ -387,6 +389,7 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
   const isGrayTheme = isNeutralOrSystem(usage.classification);
   const resumeProtection = useUsageStore((state) => state.resumeProtection);
   const currentPause = useUsageStore((state) => state.currentPause);
+  const checkoutLink = useAccountStore((state) => state.checkoutLink);
   const [showLogs, setShowLogs] = useState(false);
 
   // Check if there's currently an active pause
@@ -395,12 +398,12 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
   // Check if this is a paused distraction
   const isPausedDistraction =
     isDistractingEvent &&
-    usage.termination_mode === TerminationMode.TerminationModePaused;
+    usage.enforcement_action === EnforcementAction.EnforcementActionPaused;
 
   const isAllowedDistraction =
     isDistractingEvent &&
-    usage.termination_mode === TerminationMode.TerminationModeAllow &&
-    (usage.termination_mode_source === "custom_rules" || usage.termination_mode_source === "whitelist");
+    usage.enforcement_action === EnforcementAction.EnforcementActionAllow &&
+    (usage.enforcement_source === "custom_rules" || usage.enforcement_source === "whitelist");
 
   // Combined flag for yellow styling
   const isYellowTheme = isPausedDistraction || isAllowedDistraction;
@@ -413,8 +416,8 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
     usage.classification_reasoning
   );
 
-  const termSource = formatTerminationModeSource(
-    usage.termination_mode_source,
+  const termSource = formatEnforcementSource(
+    usage.enforcement_source,
     usage.classification_reasoning
   );
 
@@ -424,27 +427,68 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
       ? usage.ended_at - usage.started_at
       : null;
 
+  const classificationSandboxContext =
+    (usage as any).classification_sandbox_context ?? (usage as any).sandbox_context;
+  const classificationSandboxResponse =
+    (usage as any).classification_sandbox_response ?? (usage as any).sandbox_response;
+  const classificationSandboxLogs =
+    (usage as any).classification_sandbox_logs ?? (usage as any).sandbox_logs;
+
+  const enforcementSandboxContext = (usage as any).enforcement_sandbox_context;
+  const enforcementSandboxResponse = (usage as any).enforcement_sandbox_response;
+  const enforcementSandboxLogs = (usage as any).enforcement_sandbox_logs;
+
+  const hasSandboxResult = (response?: string | null) => {
+    if (!response) return false;
+    const normalized = response.trim().toLowerCase();
+    return normalized !== "" && normalized !== "no response" && normalized !== "null";
+  };
+
+  const hasClassificationSandbox =
+    hasSandboxResult(classificationSandboxResponse);
+  const hasEnforcementSandbox = hasSandboxResult(enforcementSandboxResponse);
+  const hasAnySandbox = hasClassificationSandbox || hasEnforcementSandbox;
+
   // Detect script execution that was ignored (Free tier)
   let sandboxDecision: any = null;
   try {
-    if (usage.sandbox_response && usage.sandbox_response !== "no response") {
-      sandboxDecision = JSON.parse(usage.sandbox_response);
+    if (enforcementSandboxResponse && enforcementSandboxResponse !== "no response") {
+      sandboxDecision = JSON.parse(enforcementSandboxResponse);
+    } else if (classificationSandboxResponse && classificationSandboxResponse !== "no response") {
+      sandboxDecision = JSON.parse(classificationSandboxResponse);
     }
   } catch (e) {
     // ignore
   }
 
+  const actualDidBlock = usage.enforcement_action === EnforcementAction.EnforcementActionBlock;
+  let scriptDidBlock = false;
+  let hasScriptDecision = false;
+  if (sandboxDecision) {
+    if (sandboxDecision.enforcementAction === "block") {
+      scriptDidBlock = true;
+      hasScriptDecision = true;
+    } else if (sandboxDecision.enforcementAction === "allow") {
+      scriptDidBlock = false;
+      hasScriptDecision = true;
+    } else if (sandboxDecision.classification) {
+      scriptDidBlock = isDistracting(sandboxDecision.classification);
+      hasScriptDecision = true;
+    }
+  }
+
   const isIgnoredRule =
-    !!sandboxDecision &&
+    hasScriptDecision &&
     usage.classification_source !== "custom_rules" &&
-    usage.termination_mode_source !== "custom_rules";
+    usage.enforcement_source !== "custom_rules" &&
+    scriptDidBlock !== actualDidBlock;
 
   return (
     <div
       className={`flex flex-col p-1.5 rounded-lg border transition-all ${theme.container}`}
     >
-      <div className="flex items-center justify-between w-full">
-        <div className="flex items-center gap-2 truncate">
+      <div className="flex items-start justify-between w-full gap-2 min-w-0">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           {/* Icon Container */}
           <div
             className={`w-8 h-8 rounded-md flex items-center justify-center overflow-hidden shrink-0 ${theme.iconBg}`}
@@ -467,7 +511,7 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
           </div>
 
           {/* Text Content */}
-          <div className="flex flex-col truncate">
+          <div className="flex min-w-0 flex-1 flex-col truncate">
             <TruncatedLabel className="text-xs font-semibold text-foreground truncate leading-tight">
               {usage.application?.hostname || usage.application?.name || "Unknown"}
             </TruncatedLabel>
@@ -487,17 +531,53 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
                 </Link>
               )}
               <span className="text-muted-foreground/40 text-[10px]">—</span>
-              <TruncatedLabel className="text-[10px] text-muted-foreground truncate max-w-[250px]">
+              <TruncatedLabel className="text-[10px] text-muted-foreground truncate max-w-[130px] sm:max-w-[210px] lg:max-w-[250px]">
                 {usage.window_title || (isWeb ? "Browsing" : "Using app")}
               </TruncatedLabel>
             </div>
+            {isIgnoredRule && (
+              <div className="self-start text-[9px] text-purple-400/80 bg-purple-500/5 px-1.5 py-0.5 rounded border border-purple-500/10 mt-1 flex items-center gap-1 animate-in fade-in slide-in-from-left-1 duration-500">
+                <IconTerminal className="w-2.5 h-2.5 shrink-0" />
+                <span className="truncate">
+                  Script would have{" "}
+                  <span className="font-semibold uppercase text-purple-400">
+                    {scriptDidBlock ? "blocked" : "allowed"}
+                  </span>{" "}
+                  this on paid tiers.
+                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {checkoutLink && (
+                    <>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          Browser.OpenURL(checkoutLink);
+                        }}
+                        className="underline hover:text-purple-300 font-medium whitespace-nowrap"
+                      >
+                        Get Plus
+                      </button>
+                      <span className="text-purple-500/40">·</span>
+                    </>
+                  )}
+                  <Link
+                    to="/settings"
+                    search={{ tab: "rules" }}
+                    className="underline hover:text-purple-300 font-medium whitespace-nowrap"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Activate custom rules
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Right Side Group */}
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="flex flex-col items-end gap-1">
-            <div className="flex items-center gap-1.5">
+        <div className="flex min-w-0 items-start gap-2 pl-1">
+          <div className="flex min-w-0 flex-col items-end gap-1">
+            <div className="flex flex-wrap items-center justify-end gap-1">
               {durationSeconds != null && durationSeconds >= 0 && (
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-semibold text-foreground/90 tabular-nums">
@@ -537,36 +617,14 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
               isPausedDistraction={isPausedDistraction}
               isCurrentlyPaused={isCurrentlyPaused}
               onResume={resumeProtection}
-              terminationSource={
+              enforcementSource={
                 termSource?.label === "custom rules" ? termSource : null
               }
             />
-            {isIgnoredRule && (
-              <div className="text-[9px] text-purple-400/80 bg-purple-500/5 px-1.5 py-0.5 rounded border border-purple-500/10 mt-1 flex items-center gap-1 animate-in fade-in slide-in-from-right-1 duration-500">
-                <IconTerminal className="w-2.5 h-2.5 shrink-0" />
-                <span className="truncate">
-                  Script would have{" "}
-                  <span className="font-semibold uppercase text-purple-400">
-                    {sandboxDecision.terminationMode && sandboxDecision.terminationMode !== "none"
-                      ? sandboxDecision.terminationMode
-                      : sandboxDecision.classification}
-                  </span>{" "}
-                  this.{" "}
-                  <Link
-                    to="/settings"
-                    search={{ tab: "rules" }}
-                    className="underline hover:text-purple-300 font-medium"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Upgrade to Pro
-                  </Link>
-                </span>
-              </div>
-            )}
           </div>
 
           {/* Sandbox Logs Toggle */}
-          {(usage.sandbox_context || usage.sandbox_response || usage.sandbox_logs) && (
+          {hasAnySandbox && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -591,34 +649,81 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
       {/* Expanded Logs */}
       {showLogs && (
         <div className="w-full mt-2 pt-2 border-t border-border/20 space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 mb-1 block">
-                Context
+          {hasClassificationSandbox && (
+            <div className="space-y-3">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 block">
+                Classification Sandbox
               </span>
-              <pre className="text-[10px] text-muted-foreground/70 bg-background/30 rounded p-1.5 overflow-x-auto max-h-[150px] overflow-y-auto font-mono whitespace-pre-wrap break-all border border-border/10">
-                {tryParseJSON(usage.sandbox_context)}
-              </pre>
-            </div>
-            <div>
-              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 mb-1 block">
-                Response
-              </span>
-              <pre className="text-[10px] text-green-400/60 bg-background/30 rounded p-1.5 overflow-x-auto max-h-[150px] overflow-y-auto font-mono whitespace-pre-wrap break-all border border-border/10">
-                {tryParseJSON(usage.sandbox_response)}
-              </pre>
-            </div>
-          </div>
 
-          {usage.sandbox_logs && usage.sandbox_logs !== "null" && (
-            <div>
-              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 mb-1 flex items-center gap-1">
-                <IconTerminal className="w-3 h-3" />
-                Console Logs
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 mb-1 block">
+                    Context
+                  </span>
+                  <pre className="text-[10px] text-muted-foreground/70 bg-background/30 rounded p-1.5 overflow-x-auto max-h-[150px] overflow-y-auto font-mono whitespace-pre-wrap break-all border border-border/10">
+                    {tryParseJSON(classificationSandboxContext)}
+                  </pre>
+                </div>
+                <div>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 mb-1 block">
+                    Response
+                  </span>
+                  <pre className="text-[10px] text-green-400/60 bg-background/30 rounded p-1.5 overflow-x-auto max-h-[150px] overflow-y-auto font-mono whitespace-pre-wrap break-all border border-border/10">
+                    {tryParseJSON(classificationSandboxResponse)}
+                  </pre>
+                </div>
+              </div>
+
+              {classificationSandboxLogs && classificationSandboxLogs !== "null" && (
+                <div>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 mb-1 flex items-center gap-1">
+                    <IconTerminal className="w-3 h-3" />
+                    Console Logs
+                  </span>
+                  <pre className="text-[10px] text-yellow-400/60 bg-background/30 rounded p-1.5 overflow-x-auto max-h-[150px] overflow-y-auto font-mono whitespace-pre-wrap break-all border border-border/10">
+                    {formatSandboxLogs(classificationSandboxLogs)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          )}
+
+          {hasEnforcementSandbox && (
+            <div className="space-y-3">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 block">
+                Enforcement Sandbox
               </span>
-              <pre className="text-[10px] text-yellow-400/60 bg-background/30 rounded p-1.5 overflow-x-auto max-h-[150px] overflow-y-auto font-mono whitespace-pre-wrap break-all border border-border/10">
-                {formatSandboxLogs(usage.sandbox_logs)}
-              </pre>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 mb-1 block">
+                    Context
+                  </span>
+                  <pre className="text-[10px] text-muted-foreground/70 bg-background/30 rounded p-1.5 overflow-x-auto max-h-[150px] overflow-y-auto font-mono whitespace-pre-wrap break-all border border-border/10">
+                    {tryParseJSON(enforcementSandboxContext)}
+                  </pre>
+                </div>
+                <div>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 mb-1 block">
+                    Response
+                  </span>
+                  <pre className="text-[10px] text-green-400/60 bg-background/30 rounded p-1.5 overflow-x-auto max-h-[150px] overflow-y-auto font-mono whitespace-pre-wrap break-all border border-border/10">
+                    {tryParseJSON(enforcementSandboxResponse)}
+                  </pre>
+                </div>
+              </div>
+
+              {enforcementSandboxLogs && enforcementSandboxLogs !== "null" && (
+                <div>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 mb-1 flex items-center gap-1">
+                    <IconTerminal className="w-3 h-3" />
+                    Console Logs
+                  </span>
+                  <pre className="text-[10px] text-yellow-400/60 bg-background/30 rounded p-1.5 overflow-x-auto max-h-[150px] overflow-y-auto font-mono whitespace-pre-wrap break-all border border-border/10">
+                    {formatSandboxLogs(enforcementSandboxLogs)}
+                  </pre>
+                </div>
+              )}
             </div>
           )}
         </div>

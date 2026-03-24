@@ -1,14 +1,15 @@
 package usage
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"gorm.io/gorm"
 
-	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
 	"github.com/focusd-so/focusd/internal/identity"
 	"github.com/focusd-so/focusd/internal/settings"
 )
@@ -236,7 +237,7 @@ func (s *Service) RemoveWhitelist(id int64) error {
 	return s.db.Delete(&ProtectionWhitelist{}, id).Error
 }
 
-// CalculateTerminationMode determines whether an application or website should be blocked, allowed, or paused based on classification, custom rules, protection status, and whitelist entries.
+// CalculateEnforcementDecision determines whether an application or website should be blocked, allowed, or paused based on classification, custom rules, protection status, and whitelist entries.
 //
 // This function evaluates multiple factors in order of priority:
 // 1. Custom rules (if configured) - highest priority
@@ -251,44 +252,44 @@ func (s *Service) RemoveWhitelist(id int64) error {
 //   - domain: The domain name extracted from the URL
 //   - url: The full URL being accessed
 //   - classification: The classification result indicating whether the usage is distracting
-//   - terminationMode: The requested termination mode (may be overridden by custom rules)
+//   - enforcementAction: The requested termination mode (may be overridden by custom rules)
 //
 // Returns:
-//   - TerminationDecision: A decision containing the mode (Allow/Block/Paused), reasoning, and source
+//   - EnforcementDecision: A decision containing the mode (Allow/Block/Paused), reasoning, and source
 //   - error: Database error if protection status or whitelist lookup fails
-func (s *Service) CalculateTerminationMode(ctx context.Context, appUsage *ApplicationUsage) (TerminationDecision, error) {
+func (s *Service) CalculateEnforcementDecision(ctx context.Context, appUsage *ApplicationUsage) (EnforcementDecision, error) {
 	classification := appUsage.Classification
 
-	customRulesDecision, err := s.calculateTerminationModeWithCustomRules(ctx, appUsage)
+	customRulesDecision, err := s.calculateEnforcementDecisionWithCustomRules(ctx, appUsage)
 	if err != nil {
-		return TerminationDecision{}, fmt.Errorf("failed to calculate termination mode with custom rules: %w", err)
+		return EnforcementDecision{}, fmt.Errorf("failed to calculate enforcement decision with custom rules: %w", err)
 	}
 
-	if customRulesDecision.Mode != "" && customRulesDecision.Mode != TerminationModeNone {
+	if customRulesDecision.Action != "" && customRulesDecision.Action != EnforcementActionNone {
 		tier := identity.GetAccountTier()
-		if tier != apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE {
+		if hasCustomRulesExecutionAccess(tier) {
 			return customRulesDecision, nil
 		}
 	}
 
 	if classification != ClassificationDistracting {
-		return TerminationDecision{
-			Mode:      TerminationModeAllow,
-			Reasoning: "non distracting usage",
-			Source:    TerminationModeSourceApplication,
+		return EnforcementDecision{
+			Action: EnforcementActionAllow,
+			Reason: "non distracting usage",
+			Source: EnforcementSourceApplication,
 		}, nil
 	}
 
 	protectionPause, err := s.GetProtectionStatus()
 	if err != nil {
-		return TerminationDecision{}, err
+		return EnforcementDecision{}, err
 	}
 
 	if protectionPause.ID > 0 {
-		return TerminationDecision{
-			Mode:      TerminationModeAllow,
-			Reasoning: "focus protection has been paused by the user",
-			Source:    TerminationModeSourcePaused,
+		return EnforcementDecision{
+			Action: EnforcementActionAllow,
+			Reason: "focus protection has been paused by the user",
+			Source: EnforcementSourcePaused,
 		}, nil
 	}
 
@@ -304,52 +305,114 @@ func (s *Service) CalculateTerminationMode(ctx context.Context, appUsage *Applic
 
 	if err := query.Limit(1).First(&whitelist).Error; err != nil {
 		if err != gorm.ErrRecordNotFound {
-			return TerminationDecision{}, err
+			return EnforcementDecision{}, err
 		}
 	}
 
 	if whitelist.ID > 0 {
-		return TerminationDecision{
-			Mode:      TerminationModeAllow,
-			Reasoning: "temporarily allowed usage by user",
-			Source:    TerminationModeSourceWhitelist,
+		return EnforcementDecision{
+			Action: EnforcementActionAllow,
+			Reason: "temporarily allowed usage by user",
+			Source: EnforcementSourceWhitelist,
 		}, nil
 	}
 
-	return TerminationDecision{
-		Mode:      TerminationModeBlock,
-		Reasoning: "distracting usage, focus protection is enabled",
-		Source:    TerminationModeSourceApplication,
+	return EnforcementDecision{
+		Action: EnforcementActionBlock,
+		Reason: "distracting usage, focus protection is enabled",
+		Source: EnforcementSourceApplication,
 	}, nil
 }
 
-func (s *Service) calculateTerminationModeWithCustomRules(_ context.Context, appUsage *ApplicationUsage) (TerminationDecision, error) {
+func (s *Service) calculateEnforcementDecisionWithCustomRules(_ context.Context, appUsage *ApplicationUsage) (EnforcementDecision, error) {
 	sandboxCtx := createSandboxContext(appUsage.Application.Name, appUsage.BrowserURL)
 	sandboxCtx.Classification = string(appUsage.Classification)
 
 	customRules := settings.GetCustomRulesJS()
 	if customRules == "" {
-		return TerminationDecision{Mode: TerminationModeNone}, nil
+		return EnforcementDecision{Action: EnforcementActionNone}, nil
+	}
+
+	contextJSON, err := json.Marshal(sandboxCtx)
+	if err != nil {
+		return EnforcementDecision{}, err
+	}
+
+	executionLog := SandboxExecutionLog{
+		Context:   string(contextJSON),
+		CreatedAt: time.Now().Unix(),
+		Type:      string(ExecutionLogTypeEnforcementAction),
+	}
+
+	if err := s.db.Create(&executionLog).Error; err != nil {
+		return EnforcementDecision{}, err
+	}
+
+	finalizeExecutionLog := func(decision *enforcementDecision, logs []string, invokeErr error) error {
+		if invokeErr != nil {
+			errMsg := invokeErr.Error()
+			executionLog.Error = &errMsg
+		}
+
+		if decision != nil {
+			respJSON, marshalErr := json.Marshal(decision)
+			if marshalErr != nil {
+				errMsg := fmt.Errorf("failed to marshal response: %w", marshalErr).Error()
+				executionLog.Error = &errMsg
+			} else {
+				respJSONStr := string(respJSON)
+				executionLog.Response = &respJSONStr
+			}
+		} else {
+			txt := "no response"
+			executionLog.Response = &txt
+		}
+
+		finishedAt := time.Now().Unix()
+		executionLog.FinishedAt = &finishedAt
+
+		b := new(bytes.Buffer)
+		if err := json.NewEncoder(b).Encode(logs); err != nil {
+			return err
+		}
+		executionLog.Logs = b.String()
+
+		appUsage.EnforcementSandboxContext = withPtr(executionLog.Context)
+		appUsage.EnforcementSandboxResponse = executionLog.Response
+		appUsage.EnforcementSandboxLogs = withPtr(executionLog.Logs)
+
+		if err := s.db.Save(&executionLog).Error; err != nil {
+			return err
+		}
+
+		return nil
 	}
 
 	// Create a new sandbox with the custom rules code
 	sb, err := newSandbox(customRules)
 	if err != nil {
-		return TerminationDecision{}, err
+		if logErr := finalizeExecutionLog(nil, nil, err); logErr != nil {
+			return EnforcementDecision{}, logErr
+		}
+		return EnforcementDecision{}, err
 	}
 
-	decision, err := sb.invokeTerminationMode(sandboxCtx)
+	decision, logs, err := sb.invokeEnforcementDecision(sandboxCtx)
+	if logErr := finalizeExecutionLog(decision, logs, err); logErr != nil {
+		return EnforcementDecision{}, logErr
+	}
+
 	if err != nil {
-		return TerminationDecision{}, err
+		return EnforcementDecision{}, err
 	}
 
 	if decision == nil {
-		return TerminationDecision{Mode: TerminationModeNone}, nil
+		return EnforcementDecision{Action: EnforcementActionNone}, nil
 	}
 
-	return TerminationDecision{
-		Mode:      TerminationMode(decision.TerminationMode),
-		Reasoning: decision.TerminationReasoning,
-		Source:    TerminationModeSourceCustomRules,
+	return EnforcementDecision{
+		Action: EnforcementAction(decision.EnforcementAction),
+		Reason: EnforcementReason(decision.EnforcementReason),
+		Source: EnforcementSourceCustomRules,
 	}, nil
 }

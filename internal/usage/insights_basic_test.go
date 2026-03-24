@@ -523,7 +523,7 @@ func TestGetUsageList_NoMatchesWithNarrowWindow(t *testing.T) {
 	require.Len(t, result, 0, "no usages should match a narrow window with no data")
 }
 
-func TestGetUsageList_TerminationModeFilter(t *testing.T) {
+func TestGetUsageList_EnforcementActionFilter(t *testing.T) {
 	service, db := setUpService(t)
 
 	starts := []time.Time{
@@ -532,80 +532,80 @@ func TestGetUsageList_TerminationModeFilter(t *testing.T) {
 		time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC),
 		time.Date(2025, 6, 15, 14, 0, 0, 0, time.UTC),
 	}
-	modes := []usage.TerminationMode{
-		usage.TerminationModeNone,
-		usage.TerminationModeBlock,
-		usage.TerminationModeAllow,
+	modes := []usage.EnforcementAction{
+		usage.EnforcementActionNone,
+		usage.EnforcementActionBlock,
+		usage.EnforcementActionAllow,
 	}
 	dur := 1800
 	for i := range starts {
 		endAt := starts[i].Unix() + int64(dur)
 		u := usage.ApplicationUsage{
-			StartedAt:       starts[i].Unix(),
-			EndedAt:         &endAt,
-			DurationSeconds: &dur,
-			Classification:  usage.ClassificationProductive,
-			TerminationMode: modes[i],
-			Application:     usage.Application{Name: "App"},
+			StartedAt:         starts[i].Unix(),
+			EndedAt:           &endAt,
+			DurationSeconds:   &dur,
+			Classification:    usage.ClassificationProductive,
+			EnforcementAction: modes[i],
+			Application:       usage.Application{Name: "App"},
 		}
 		require.NoError(t, db.Create(&u).Error)
 	}
 
 	result, err := service.GetUsageList(usage.GetUsageListOptions{
-		TerminationMode: withPtr(usage.TerminationModeBlock),
+		EnforcementAction: withPtr(usage.EnforcementActionBlock),
 	})
 	require.NoError(t, err)
 	require.Len(t, result, 1, "only blocked items should be returned")
-	require.Equal(t, usage.TerminationModeBlock, result[0].TerminationMode)
+	require.Equal(t, usage.EnforcementActionBlock, result[0].EnforcementAction)
 	require.Equal(t, starts[1].Unix(), result[0].StartedAt)
 }
 
-func TestGetUsageList_TerminationModeFilterNoMatches(t *testing.T) {
+func TestGetUsageList_EnforcementActionFilterNoMatches(t *testing.T) {
 	service, db := setUpService(t)
 
 	startAt := time.Date(2025, 6, 15, 10, 0, 0, 0, time.UTC)
 	endAt := startAt.Unix() + 1800
 	dur := 1800
 	u := usage.ApplicationUsage{
-		StartedAt:       startAt.Unix(),
-		EndedAt:         &endAt,
-		DurationSeconds: &dur,
-		Classification:  usage.ClassificationProductive,
-		TerminationMode: usage.TerminationModeNone,
-		Application:     usage.Application{Name: "App"},
+		StartedAt:         startAt.Unix(),
+		EndedAt:           &endAt,
+		DurationSeconds:   &dur,
+		Classification:    usage.ClassificationProductive,
+		EnforcementAction: usage.EnforcementActionNone,
+		Application:       usage.Application{Name: "App"},
 	}
 	require.NoError(t, db.Create(&u).Error)
 
 	result, err := service.GetUsageList(usage.GetUsageListOptions{
-		TerminationMode: withPtr(usage.TerminationModeBlock),
+		EnforcementAction: withPtr(usage.EnforcementActionBlock),
 	})
 	require.NoError(t, err)
 	require.Len(t, result, 0, "no rows should match an unused termination mode")
 }
 
-func TestGetUsageList_TerminationModeFilterCombinedWithDateRange(t *testing.T) {
+func TestGetUsageList_EnforcementActionFilterCombinedWithDateRange(t *testing.T) {
 	service, db := setUpService(t)
 
 	type seedUsage struct {
 		start time.Time
-		mode  usage.TerminationMode
+		mode  usage.EnforcementAction
 	}
 	seed := []seedUsage{
-		{start: time.Date(2025, 6, 15, 8, 0, 0, 0, time.UTC), mode: usage.TerminationModeBlock},
-		{start: time.Date(2025, 6, 15, 10, 0, 0, 0, time.UTC), mode: usage.TerminationModeNone},
-		{start: time.Date(2025, 6, 15, 14, 0, 0, 0, time.UTC), mode: usage.TerminationModeBlock},
-		{start: time.Date(2025, 6, 15, 18, 0, 0, 0, time.UTC), mode: usage.TerminationModeBlock},
+		{start: time.Date(2025, 6, 15, 8, 0, 0, 0, time.UTC), mode: usage.EnforcementActionBlock},
+		{start: time.Date(2025, 6, 15, 10, 0, 0, 0, time.UTC), mode: usage.EnforcementActionNone},
+		{start: time.Date(2025, 6, 15, 14, 0, 0, 0, time.UTC), mode: usage.EnforcementActionBlock},
+		{start: time.Date(2025, 6, 15, 18, 0, 0, 0, time.UTC), mode: usage.EnforcementActionBlock},
 	}
 	dur := 1800
 	for _, row := range seed {
 		endAt := row.start.Unix() + int64(dur)
 		u := usage.ApplicationUsage{
-			StartedAt:       row.start.Unix(),
-			EndedAt:         &endAt,
-			DurationSeconds: &dur,
-			Classification:  usage.ClassificationProductive,
-			TerminationMode: row.mode,
-			Application:     usage.Application{Name: "App"},
+			StartedAt:         row.start.Unix(),
+			EndedAt:           &endAt,
+			DurationSeconds:   &dur,
+			Classification:    usage.ClassificationProductive,
+			EnforcementAction: row.mode,
+			Application:       usage.Application{Name: "App"},
 		}
 		require.NoError(t, db.Create(&u).Error)
 	}
@@ -613,43 +613,43 @@ func TestGetUsageList_TerminationModeFilterCombinedWithDateRange(t *testing.T) {
 	startedAt := time.Date(2025, 6, 15, 9, 0, 0, 0, time.UTC)
 	endedAt := time.Date(2025, 6, 15, 16, 0, 0, 0, time.UTC)
 	result, err := service.GetUsageList(usage.GetUsageListOptions{
-		StartedAt:       withPtr(startedAt),
-		EndedAt:         withPtr(endedAt),
-		TerminationMode: withPtr(usage.TerminationModeBlock),
+		StartedAt:         withPtr(startedAt),
+		EndedAt:           withPtr(endedAt),
+		EnforcementAction: withPtr(usage.EnforcementActionBlock),
 	})
 	require.NoError(t, err)
 	require.Len(t, result, 1, "combined filters should return only the matching intersection")
-	require.Equal(t, usage.TerminationModeBlock, result[0].TerminationMode)
+	require.Equal(t, usage.EnforcementActionBlock, result[0].EnforcementAction)
 	require.Equal(t, time.Date(2025, 6, 15, 14, 0, 0, 0, time.UTC).Unix(), result[0].StartedAt)
 }
 
-func TestGetUsageList_TerminationModeNilIgnored(t *testing.T) {
+func TestGetUsageList_EnforcementActionNilIgnored(t *testing.T) {
 	service, db := setUpService(t)
 
 	starts := []time.Time{
 		time.Date(2025, 6, 15, 10, 0, 0, 0, time.UTC),
 		time.Date(2025, 6, 15, 11, 0, 0, 0, time.UTC),
 	}
-	modes := []usage.TerminationMode{
-		usage.TerminationModeBlock,
-		usage.TerminationModeNone,
+	modes := []usage.EnforcementAction{
+		usage.EnforcementActionBlock,
+		usage.EnforcementActionNone,
 	}
 	dur := 1200
 	for i := range starts {
 		endAt := starts[i].Unix() + int64(dur)
 		u := usage.ApplicationUsage{
-			StartedAt:       starts[i].Unix(),
-			EndedAt:         &endAt,
-			DurationSeconds: &dur,
-			Classification:  usage.ClassificationProductive,
-			TerminationMode: modes[i],
-			Application:     usage.Application{Name: "App"},
+			StartedAt:         starts[i].Unix(),
+			EndedAt:           &endAt,
+			DurationSeconds:   &dur,
+			Classification:    usage.ClassificationProductive,
+			EnforcementAction: modes[i],
+			Application:       usage.Application{Name: "App"},
 		}
 		require.NoError(t, db.Create(&u).Error)
 	}
 
 	result, err := service.GetUsageList(usage.GetUsageListOptions{
-		TerminationMode: nil,
+		EnforcementAction: nil,
 	})
 	require.NoError(t, err)
 	require.Len(t, result, 2, "nil termination mode should not filter results")

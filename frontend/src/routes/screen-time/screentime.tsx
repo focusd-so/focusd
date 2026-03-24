@@ -144,14 +144,14 @@ function ScreenTimePage() {
             size="sm"
             className={cn(
               "h-8 text-xs gap-2 transition-all",
-              screenTimeFilters.TerminationMode === "block"
+              screenTimeFilters.EnforcementAction === "block"
                 ? "bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20"
                 : "opacity-60"
             )}
             onClick={() =>
               setScreenTimeFilters({
-                TerminationMode:
-                  screenTimeFilters.TerminationMode === "block"
+                EnforcementAction:
+                  screenTimeFilters.EnforcementAction === "block"
                     ? undefined
                     : ("block" as any),
               })

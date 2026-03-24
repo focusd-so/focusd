@@ -35,8 +35,9 @@ type usageHarness struct {
 }
 
 type usageHarnessConfig struct {
-	customRulesJS string
-	llmResponse   usage.ClassificationResponse
+	customRulesJS  string
+	llmResponse    usage.ClassificationResponse
+	llmResponseRaw *string
 }
 
 type usageHarnessOption func(*usageHarnessConfig)
@@ -50,6 +51,12 @@ func withCustomRulesJS(customRules string) usageHarnessOption {
 func withDummyLLMResponse(resp usage.ClassificationResponse) usageHarnessOption {
 	return func(cfg *usageHarnessConfig) {
 		cfg.llmResponse = resp
+	}
+}
+
+func withDummyLLMResponseRaw(resp string) usageHarnessOption {
+	return func(cfg *usageHarnessConfig) {
+		cfg.llmResponseRaw = &resp
 	}
 }
 
@@ -344,19 +351,19 @@ func assertUsageClassification(t *testing.T, classification usage.Classification
 	}
 }
 
-func assertTerminationMode(t *testing.T, mode usage.TerminationMode) func(*usage.ApplicationUsage) {
+func assertEnforcementAction(t *testing.T, mode usage.EnforcementAction) func(*usage.ApplicationUsage) {
 	t.Helper()
 
 	return func(u *usage.ApplicationUsage) {
-		require.Equal(t, mode, u.TerminationMode)
+		require.Equal(t, mode, u.EnforcementAction)
 	}
 }
 
-func assertTerminationModeSource(t *testing.T, source usage.TerminationModeSource) func(*usage.ApplicationUsage) {
+func assertEnforcementSource(t *testing.T, source usage.EnforcementSource) func(*usage.ApplicationUsage) {
 	t.Helper()
 
 	return func(u *usage.ApplicationUsage) {
-		require.Equal(t, source, fromPtr(u.TerminationSource))
+		require.Equal(t, source, fromPtr(u.EnforcementSource))
 	}
 }
 
@@ -391,11 +398,17 @@ func overrideTestConfig(t *testing.T, cfg usageHarnessConfig) {
 		snapshot[key] = viperValue{isSet: viper.IsSet(key), value: viper.Get(key)}
 	}
 
-	llmRespJSON, err := json.Marshal(cfg.llmResponse)
-	require.NoError(t, err)
+	llmRespJSON := ""
+	if cfg.llmResponseRaw != nil {
+		llmRespJSON = *cfg.llmResponseRaw
+	} else {
+		respJSON, err := json.Marshal(cfg.llmResponse)
+		require.NoError(t, err)
+		llmRespJSON = string(respJSON)
+	}
 
 	viper.Set("classification_llm_provider", settings.LLMProviderDummy)
-	viper.Set("dummy_classification_response", string(llmRespJSON))
+	viper.Set("dummy_classification_response", llmRespJSON)
 
 	if cfg.customRulesJS == "" {
 		viper.Set("custom_rules_js", []string{})

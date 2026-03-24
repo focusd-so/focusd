@@ -263,9 +263,9 @@ export function ExecutionLogsSheet({
               Classify
             </Button>
             <Button
-              variant={typeFilter === "termination_mode" ? "secondary" : "ghost"}
+              variant={typeFilter === "enforcement_action" ? "secondary" : "ghost"}
               size="sm"
-              onClick={() => setTypeFilter("termination_mode")}
+              onClick={() => setTypeFilter("enforcement_action")}
               className="h-7 px-2 text-[10px] font-medium"
             >
               Terminate

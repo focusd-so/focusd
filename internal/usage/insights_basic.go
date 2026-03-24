@@ -6,17 +6,17 @@ import (
 )
 
 type GetUsageListOptions struct {
-	Date            *time.Time
-	Page            *int
-	PageSize        *int
-	StartedAt       *time.Time
-	EndedAt         *time.Time
-	TerminationMode *TerminationMode
-	Classification  *Classification
-	ApplicationID   *int64
-	ApplicationName *string
-	Hostname        *string
-	BundleID        *string
+	Date              *time.Time
+	Page              *int
+	PageSize          *int
+	StartedAt         *time.Time
+	EndedAt           *time.Time
+	EnforcementAction *EnforcementAction
+	Classification    *Classification
+	ApplicationID     *int64
+	ApplicationName   *string
+	Hostname          *string
+	BundleID          *string
 }
 
 type UsageAggregation struct {
@@ -50,8 +50,8 @@ func (s *Service) GetUsageList(options GetUsageListOptions) ([]ApplicationUsage,
 	if options.EndedAt != nil {
 		query = query.Where("ended_at <= ?", options.EndedAt.Unix())
 	}
-	if options.TerminationMode != nil {
-		query = query.Where("termination_mode = ?", *options.TerminationMode)
+	if options.EnforcementAction != nil {
+		query = query.Where("enforcement_action = ?", *options.EnforcementAction)
 	}
 	if options.Classification != nil {
 		query = query.Where("classification = ?", *options.Classification)
@@ -98,8 +98,8 @@ func (s *Service) GetUsageAggregation(options GetUsageListOptions) ([]UsageAggre
 	if options.EndedAt != nil {
 		query = query.Where("ended_at <= ?", options.EndedAt.Unix())
 	}
-	if options.TerminationMode != nil {
-		query = query.Where("termination_mode = ?", *options.TerminationMode)
+	if options.EnforcementAction != nil {
+		query = query.Where("enforcement_action = ?", *options.EnforcementAction)
 	}
 	if options.Classification != nil {
 		query = query.Where("classification = ?", *options.Classification)

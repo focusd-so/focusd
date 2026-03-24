@@ -43,18 +43,18 @@ declare const Classification: {
 /**
  * Determines whether to block or allow the activity.
  */
-type TerminationModeType = "none" | "block" | "paused" | "allow";
+type EnforcementActionType = "none" | "block" | "paused" | "allow";
 
 /**
  * Global constant for termination mode values.
- * Use these values when returning a TerminationDecision.
+ * Use these values when returning a EnforcementDecision.
  * @example
  * return {
- *   terminationMode: TerminationMode.Block,
- *   terminationReasoning: "Blocked during focus hours"
+ *   enforcementAction: EnforcementAction.Block,
+ *   enforcementReason: "Blocked during focus hours"
  * };
  */
-declare const TerminationMode: {
+declare const EnforcementAction: {
   readonly None: "none";
   readonly Block: "block";
   readonly Paused: "paused";
@@ -62,13 +62,13 @@ declare const TerminationMode: {
 };
 
 /**
- * Decision returned from the terminationMode function.
+ * Decision returned from the enforcementDecision function.
  */
-interface TerminationDecision {
-  /** The termination mode to apply. Use TerminationMode constants. */
-  terminationMode: TerminationModeType;
+interface EnforcementDecision {
+  /** The termination mode to apply. Use EnforcementAction constants. */
+  enforcementAction: EnforcementActionType;
   /** Human-readable explanation for why this decision was made. */
-  terminationReasoning: string;
+  enforcementReason: string;
 }
 
 /**
@@ -84,7 +84,7 @@ interface ClassificationDecision {
 /**
  * Provides context for the current rule execution including usage data.
  */
-interface Context {
+interface UsageContext {
   /** The display name of the application (e.g., 'Safari', 'Slack'). */
   readonly appName?: string;
   /** The application's bundle identifier (e.g., 'com.apple.Safari'). */
@@ -107,8 +107,8 @@ interface Context {
    * @returns Total minutes of usage in the specified time window
    * @example
    * // Block if used more than 30 minutes in the last hour
-   * if (ctx.minutesUsedInPeriod(60) > 30) {
-   *   return { terminationMode: TerminationMode.Block, terminationReasoning: 'Usage limit exceeded' };
+   * if (context.minutesUsedInPeriod(60) > 30) {
+   *   return { enforcementAction: EnforcementAction.Block, enforcementReason: 'Usage limit exceeded' };
    * }
    */
   minutesUsedInPeriod(minutes: number): number;
@@ -278,31 +278,31 @@ const starterRulesTS = `/**
  *
  * @example
  * // Classify all GitHub activity as productive
- * if (ctx.domain === 'github.com') {
+ * if (context.domain === 'github.com') {
  *   return {
  *     classification: Classification.Productive,
  *     classificationReasoning: 'GitHub is a development tool'
  *   };
  * }
  */
-export function classify(ctx: Context): ClassificationDecision | undefined {
+export function classify(context: UsageContext): ClassificationDecision | undefined {
   return undefined;
 }
 
 /**
  * Custom termination logic (blocking).
- * Return a TerminationDecision to override the default, or undefined to keep the default.
+ * Return a EnforcementDecision to override the default, or undefined to keep the default.
  *
  * @example
  * // Block social media after 10 PM in London
- * if (ctx.domain === 'twitter.com' && now(Timezone.Europe_London).getHours() >= 22) {
+ * if (context.domain === 'twitter.com' && now(Timezone.Europe_London).getHours() >= 22) {
  *   return {
- *     terminationMode: TerminationMode.Block,
- *     terminationReasoning: 'Social media blocked after 10 PM'
+ *     enforcementAction: EnforcementAction.Block,
+ *     enforcementReason: 'Social media blocked after 10 PM'
  *   };
  * }
  */
-export function terminationMode(ctx: Context): TerminationDecision | undefined {
+export function enforcementDecision(context: UsageContext): EnforcementDecision | undefined {
   return undefined;
 }
 `;
@@ -451,7 +451,7 @@ export function CustomRules() {
             size="sm"
             className="h-7 px-3 bg-violet-600 hover:bg-violet-500 text-white text-[11px] font-bold rounded-lg transition-all"
           >
-            Upgrade Now
+            Get Plus
           </Button>
         </div>
       )}

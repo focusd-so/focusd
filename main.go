@@ -158,7 +158,7 @@ func main() {
 			slog.Error("failed to handle title change", "error", err)
 		}
 
-		if appUsage.TerminationMode == usage.TerminationModeBlock {
+		if appUsage.EnforcementAction == usage.EnforcementActionBlock {
 			tags := usage.ApplicationTagsSlice(appUsage.Tags).Tags()
 			reasoning := ""
 			if appUsage.ClassificationReasoning != nil {

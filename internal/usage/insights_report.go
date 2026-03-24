@@ -54,11 +54,11 @@ func (s *Service) GetDayInsights(date time.Time) (DayInsights, error) {
 			insights.CommunicationBreakdown[key] = entry
 		}
 
-		if usage.TerminationMode == TerminationModeBlock {
+		if usage.EnforcementAction == EnforcementActionBlock {
 			insights.TopBlocked[usageDisplayName(usage)] += dur
 		}
 
-		if usage.Classification == ClassificationDistracting && usage.TerminationMode != TerminationModeBlock {
+		if usage.Classification == ClassificationDistracting && usage.EnforcementAction != EnforcementActionBlock {
 			insights.TopDistractions[usageDisplayName(usage)] += dur
 		}
 

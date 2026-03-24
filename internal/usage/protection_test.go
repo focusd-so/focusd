@@ -1,7 +1,11 @@
 package usage_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -286,7 +290,8 @@ func setUpServiceWithSettings(t *testing.T, customRules string) (*usage.Service,
 
 	db, _ := gorm.Open(sqlite.Open(memoryDSN(t)), &gorm.Config{})
 
-	viper.SetDefault("custom_rules_js", []string{customRules})
+	encoded := base64.StdEncoding.EncodeToString([]byte(customRules))
+	viper.Set("custom_rules_js", []string{encoded})
 
 	service, err := usage.NewService(context.Background(), db)
 	require.NoError(t, err)
@@ -294,15 +299,15 @@ func setUpServiceWithSettings(t *testing.T, customRules string) (*usage.Service,
 	return service, db
 }
 
-func TestProtection_CalculateTerminationMode_CustomRules(t *testing.T) {
+func TestProtection_CalculateEnforcementDecision_CustomRules(t *testing.T) {
 
 	t.Run("ctx.appName is accessible", func(t *testing.T) {
 		customRules := `
-export function terminationMode(ctx) {
+export function enforcementDecision(ctx) {
 	if (ctx.appName == "Slack") {
 		return {
-			terminationMode: TerminationMode.Block,
-			terminationReasoning: "Slack is blocked by custom rule",
+			enforcementAction: EnforcementAction.Block,
+			enforcementReason: "Slack is blocked by custom rule",
 		}
 	}
 	return undefined;
@@ -310,23 +315,23 @@ export function terminationMode(ctx) {
 `
 		service, _ := setUpServiceWithSettings(t, customRules)
 
-		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
+		decision, err := service.CalculateEnforcementDecision(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationNeutral,
 			Application:    usage.Application{Name: "Slack"},
 		})
 		require.NoError(t, err)
-		require.Equal(t, usage.TerminationModeBlock, decision.Mode)
-		require.Equal(t, usage.TerminationModeSourceCustomRules, decision.Source)
-		require.Equal(t, "Slack is blocked by custom rule", decision.Reasoning)
+		require.Equal(t, usage.EnforcementActionBlock, decision.Action)
+		require.Equal(t, usage.EnforcementSourceCustomRules, decision.Source)
+		require.Equal(t, "Slack is blocked by custom rule", decision.Reason)
 	})
 
 	t.Run("ctx.classification is accessible", func(t *testing.T) {
 		customRules := `
-export function terminationMode(ctx) {
+export function enforcementDecision(ctx) {
 	if (ctx.classification == "distracting") {
 		return {
-			terminationMode: TerminationMode.Block,
-			terminationReasoning: "distracting classification detected",
+			enforcementAction: EnforcementAction.Block,
+			enforcementReason: "distracting classification detected",
 		}
 	}
 	return undefined;
@@ -334,25 +339,25 @@ export function terminationMode(ctx) {
 `
 		service, _ := setUpServiceWithSettings(t, customRules)
 
-		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
+		decision, err := service.CalculateEnforcementDecision(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
 			Application:    usage.Application{Name: "YouTube"},
 		})
 		require.NoError(t, err)
-		require.Equal(t, usage.TerminationModeBlock, decision.Mode)
-		require.Equal(t, usage.TerminationModeSourceCustomRules, decision.Source)
-		require.Equal(t, "distracting classification detected", decision.Reasoning)
+		require.Equal(t, usage.EnforcementActionBlock, decision.Action)
+		require.Equal(t, usage.EnforcementSourceCustomRules, decision.Source)
+		require.Equal(t, "distracting classification detected", decision.Reason)
 	})
 
 	t.Run("ctx.hostname and ctx.domain are accessible", func(t *testing.T) {
 		// Note: parseURL strips "www." prefix, so "docs.google.com" stays as-is
 		// while domain is extracted via publicsuffix as "google.com"
 		customRules := `
-export function terminationMode(ctx) {
+export function enforcementDecision(ctx) {
 	if (ctx.hostname == "docs.google.com" && ctx.domain == "google.com") {
 		return {
-			terminationMode: TerminationMode.Block,
-			terminationReasoning: "Google Docs blocked via hostname/domain",
+			enforcementAction: EnforcementAction.Block,
+			enforcementReason: "Google Docs blocked via hostname/domain",
 		}
 	}
 	return undefined;
@@ -361,24 +366,24 @@ export function terminationMode(ctx) {
 		service, _ := setUpServiceWithSettings(t, customRules)
 
 		url := "https://docs.google.com/document/d/123"
-		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
+		decision, err := service.CalculateEnforcementDecision(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
 			BrowserURL:     &url,
 			Application:    usage.Application{Name: "Chrome"},
 		})
 		require.NoError(t, err)
-		require.Equal(t, usage.TerminationModeBlock, decision.Mode)
-		require.Equal(t, usage.TerminationModeSourceCustomRules, decision.Source)
-		require.Equal(t, "Google Docs blocked via hostname/domain", decision.Reasoning)
+		require.Equal(t, usage.EnforcementActionBlock, decision.Action)
+		require.Equal(t, usage.EnforcementSourceCustomRules, decision.Source)
+		require.Equal(t, "Google Docs blocked via hostname/domain", decision.Reason)
 	})
 
 	t.Run("ctx.url and ctx.path are accessible", func(t *testing.T) {
 		customRules := `
-export function terminationMode(ctx) {
+export function enforcementDecision(ctx) {
 	if (ctx.url == "https://github.com/pulls" && ctx.path == "/pulls") {
 		return {
-			terminationMode: TerminationMode.Allow,
-			terminationReasoning: "PR reviews are allowed",
+			enforcementAction: EnforcementAction.Allow,
+			enforcementReason: "PR reviews are allowed",
 		}
 	}
 	return undefined;
@@ -387,53 +392,172 @@ export function terminationMode(ctx) {
 		service, _ := setUpServiceWithSettings(t, customRules)
 
 		url := "https://github.com/pulls"
-		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
+		decision, err := service.CalculateEnforcementDecision(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
 			BrowserURL:     &url,
 			Application:    usage.Application{Name: "Chrome"},
 		})
 		require.NoError(t, err)
-		require.Equal(t, usage.TerminationModeAllow, decision.Mode)
-		require.Equal(t, usage.TerminationModeSourceCustomRules, decision.Source)
-		require.Equal(t, "PR reviews are allowed", decision.Reasoning)
+		require.Equal(t, usage.EnforcementActionAllow, decision.Action)
+		require.Equal(t, usage.EnforcementSourceCustomRules, decision.Source)
+		require.Equal(t, "PR reviews are allowed", decision.Reason)
 	})
 
 	t.Run("returns undefined falls through to default", func(t *testing.T) {
 		customRules := `
-export function terminationMode(ctx) {
+export function enforcementDecision(ctx) {
 	return undefined;
 }
 `
 		service, _ := setUpServiceWithSettings(t, customRules)
 
-		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
+		decision, err := service.CalculateEnforcementDecision(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationNeutral,
 			Application:    usage.Application{Name: "VSCode"},
 		})
 		require.NoError(t, err)
 		// When custom rules return undefined, falls through to default logic.
 		// Non-distracting classification results in Allow from the application source.
-		require.Equal(t, usage.TerminationModeAllow, decision.Mode)
-		require.Equal(t, usage.TerminationModeSourceApplication, decision.Source)
-		require.Equal(t, "non distracting usage", decision.Reasoning)
+		require.Equal(t, usage.EnforcementActionAllow, decision.Action)
+		require.Equal(t, usage.EnforcementSourceApplication, decision.Source)
+		require.Equal(t, "non distracting usage", decision.Reason)
 	})
 }
 
-func TestProtection_CalculateTerminationMode_ProtectionPaused(t *testing.T) {
+func TestProtection_CalculateEnforcementDecision_CustomRules_ExecutionLogs(t *testing.T) {
+	t.Run("stores enforcement response and console logs", func(t *testing.T) {
+		customRules := `
+export function enforcementDecision(ctx) {
+	console.log("enforcement executed", ctx.appName)
+	if (ctx.appName == "Slack") {
+		return {
+			enforcementAction: EnforcementAction.Block,
+			enforcementReason: "Slack is blocked by custom rule",
+		}
+	}
+	return undefined;
+}
+`
+		service, db := setUpServiceWithSettings(t, customRules)
+
+		appUsage := &usage.ApplicationUsage{
+			Classification: usage.ClassificationNeutral,
+			Application:    usage.Application{Name: "Slack"},
+		}
+
+		decision, err := service.CalculateEnforcementDecision(context.Background(), appUsage)
+		require.NoError(t, err)
+		require.NotEqual(t, usage.EnforcementActionNone, decision.Action)
+		require.NotNil(t, appUsage.EnforcementSandboxContext)
+		require.NotNil(t, appUsage.EnforcementSandboxResponse)
+		require.NotNil(t, appUsage.EnforcementSandboxLogs)
+
+		var log usage.SandboxExecutionLog
+		err = db.Where("type = ?", string(usage.ExecutionLogTypeEnforcementAction)).Order("id DESC").Limit(1).First(&log).Error
+		require.NoError(t, err)
+
+		require.NotNil(t, log.Response)
+		require.Nil(t, log.Error)
+		require.NotNil(t, log.FinishedAt)
+		require.Contains(t, strings.Trim(log.Logs, "\n"), "enforcement executed")
+
+		var response struct {
+			EnforcementAction string `json:"enforcementAction"`
+			EnforcementReason string `json:"enforcementReason"`
+		}
+		err = json.Unmarshal([]byte(*log.Response), &response)
+		require.NoError(t, err)
+		require.Equal(t, "block", response.EnforcementAction)
+		require.Equal(t, "Slack is blocked by custom rule", response.EnforcementReason)
+
+		require.Contains(t, log.Context, `"appName":"Slack"`)
+	})
+
+	t.Run("stores no response when decision is undefined", func(t *testing.T) {
+		customRules := `
+export function enforcementDecision(ctx) {
+	console.log("undefined decision for", ctx.appName)
+	return undefined;
+}
+`
+		service, db := setUpServiceWithSettings(t, customRules)
+
+		appUsage := &usage.ApplicationUsage{
+			Classification: usage.ClassificationNeutral,
+			Application:    usage.Application{Name: "VSCode"},
+		}
+
+		decision, err := service.CalculateEnforcementDecision(context.Background(), appUsage)
+		require.NoError(t, err)
+		require.Equal(t, usage.EnforcementActionAllow, decision.Action)
+		require.Equal(t, usage.EnforcementSourceApplication, decision.Source)
+		require.NotNil(t, appUsage.EnforcementSandboxContext)
+		require.NotNil(t, appUsage.EnforcementSandboxResponse)
+		require.NotNil(t, appUsage.EnforcementSandboxLogs)
+
+		var log usage.SandboxExecutionLog
+		err = db.Where("type = ?", string(usage.ExecutionLogTypeEnforcementAction)).Order("id DESC").Limit(1).First(&log).Error
+		require.NoError(t, err)
+
+		require.NotNil(t, log.Response)
+		require.Equal(t, "no response", *log.Response)
+		require.Nil(t, log.Error)
+		require.Contains(t, strings.Trim(log.Logs, "\n"), "undefined decision for")
+	})
+
+	t.Run("stores errors for failed enforcement execution", func(t *testing.T) {
+		customRules := `
+export function enforcementDecision(ctx) {
+	console.log("about to fail", ctx.appName)
+	throw new Error("enforcement fail");
+}
+`
+		service, db := setUpServiceWithSettings(t, customRules)
+
+		appUsage := &usage.ApplicationUsage{
+			Classification: usage.ClassificationNeutral,
+			Application:    usage.Application{Name: "Mail"},
+		}
+
+		_, err := service.CalculateEnforcementDecision(context.Background(), appUsage)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to execute enforcementDecision")
+		require.NotNil(t, appUsage.EnforcementSandboxContext)
+		require.NotNil(t, appUsage.EnforcementSandboxResponse)
+		require.NotNil(t, appUsage.EnforcementSandboxLogs)
+
+		var log usage.SandboxExecutionLog
+		err = db.Where("type = ?", string(usage.ExecutionLogTypeEnforcementAction)).Order("id DESC").Limit(1).First(&log).Error
+		require.NoError(t, err)
+
+		require.NotNil(t, log.Error)
+		require.Contains(t, *log.Error, "enforcement fail")
+		require.NotNil(t, log.Response)
+		require.Equal(t, "no response", *log.Response)
+
+		var logs []string
+		err = json.NewDecoder(bytes.NewBufferString(log.Logs)).Decode(&logs)
+		require.NoError(t, err)
+		require.NotEmpty(t, logs)
+		require.Contains(t, strings.Join(logs, "\n"), "about to fail")
+	})
+}
+
+func TestProtection_CalculateEnforcementDecision_ProtectionPaused(t *testing.T) {
 	service, _ := setUpService(t)
 
 	protectionPause, err := service.PauseProtection(1000, "test")
 	require.NoError(t, err)
 	require.NotEqual(t, int64(0), protectionPause.ID)
 
-	decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
+	decision, err := service.CalculateEnforcementDecision(context.Background(), &usage.ApplicationUsage{
 		Classification: usage.ClassificationDistracting,
 		Application:    usage.Application{Name: "YouTube"},
 	})
 	require.NoError(t, err)
-	require.Equal(t, usage.TerminationModeAllow, decision.Mode)
-	require.Equal(t, usage.TerminationModeSourcePaused, decision.Source)
-	require.Equal(t, "focus protection has been paused by the user", decision.Reasoning)
+	require.Equal(t, usage.EnforcementActionAllow, decision.Action)
+	require.Equal(t, usage.EnforcementSourcePaused, decision.Source)
+	require.Equal(t, "focus protection has been paused by the user", decision.Reason)
 }
 
 func TestProtection_AllowedByWhitelist(t *testing.T) {
@@ -443,14 +567,14 @@ func TestProtection_AllowedByWhitelist(t *testing.T) {
 		err := service.Whitelist("/usr/bin/app", "", 30*time.Minute)
 		require.NoError(t, err)
 
-		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
+		decision, err := service.CalculateEnforcementDecision(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
 			Application:    usage.Application{Name: "/usr/bin/app"},
 		})
 		require.NoError(t, err)
-		require.Equal(t, usage.TerminationModeAllow, decision.Mode)
-		require.Equal(t, usage.TerminationModeSourceWhitelist, decision.Source)
-		require.Equal(t, "temporarily allowed usage by user", decision.Reasoning)
+		require.Equal(t, usage.EnforcementActionAllow, decision.Action)
+		require.Equal(t, usage.EnforcementSourceWhitelist, decision.Source)
+		require.Equal(t, "temporarily allowed usage by user", decision.Reason)
 	})
 
 	t.Run("whitelisted by executable path and hostname", func(t *testing.T) {
@@ -460,14 +584,14 @@ func TestProtection_AllowedByWhitelist(t *testing.T) {
 		require.NoError(t, err)
 
 		hostname := "example.com"
-		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
+		decision, err := service.CalculateEnforcementDecision(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
 			Application:    usage.Application{Name: "/usr/bin/app", Hostname: &hostname},
 		})
 		require.NoError(t, err)
-		require.Equal(t, usage.TerminationModeAllow, decision.Mode)
-		require.Equal(t, usage.TerminationModeSourceWhitelist, decision.Source)
-		require.Equal(t, "temporarily allowed usage by user", decision.Reasoning)
+		require.Equal(t, usage.EnforcementActionAllow, decision.Action)
+		require.Equal(t, usage.EnforcementSourceWhitelist, decision.Source)
+		require.Equal(t, "temporarily allowed usage by user", decision.Reason)
 	})
 
 	t.Run("does not allow other hostnames in same browser", func(t *testing.T) {
@@ -477,13 +601,13 @@ func TestProtection_AllowedByWhitelist(t *testing.T) {
 		require.NoError(t, err)
 
 		youtube := "youtube.com"
-		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
+		decision, err := service.CalculateEnforcementDecision(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
 			Application:    usage.Application{Name: "Google Chrome", Hostname: &youtube},
 		})
 		require.NoError(t, err)
-		require.Equal(t, usage.TerminationModeBlock, decision.Mode)
-		require.Equal(t, usage.TerminationModeSourceApplication, decision.Source)
+		require.Equal(t, usage.EnforcementActionBlock, decision.Action)
+		require.Equal(t, usage.EnforcementSourceApplication, decision.Source)
 	})
 
 	t.Run("strips www when evaluating whitelist", func(t *testing.T) {
@@ -493,13 +617,13 @@ func TestProtection_AllowedByWhitelist(t *testing.T) {
 		require.NoError(t, err)
 
 		hostname := "youtube.com"
-		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
+		decision, err := service.CalculateEnforcementDecision(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
 			Application:    usage.Application{Name: "Google Chrome", Hostname: &hostname},
 		})
 		require.NoError(t, err)
-		require.Equal(t, usage.TerminationModeAllow, decision.Mode)
-		require.Equal(t, usage.TerminationModeSourceWhitelist, decision.Source)
+		require.Equal(t, usage.EnforcementActionAllow, decision.Action)
+		require.Equal(t, usage.EnforcementSourceWhitelist, decision.Source)
 	})
 
 	t.Run("subdomains remain distinct", func(t *testing.T) {
@@ -509,11 +633,11 @@ func TestProtection_AllowedByWhitelist(t *testing.T) {
 		require.NoError(t, err)
 
 		drive := "drive.google.com"
-		decision, err := service.CalculateTerminationMode(context.Background(), &usage.ApplicationUsage{
+		decision, err := service.CalculateEnforcementDecision(context.Background(), &usage.ApplicationUsage{
 			Classification: usage.ClassificationDistracting,
 			Application:    usage.Application{Name: "Google Chrome", Hostname: &drive},
 		})
 		require.NoError(t, err)
-		require.Equal(t, usage.TerminationModeBlock, decision.Mode)
+		require.Equal(t, usage.EnforcementActionBlock, decision.Action)
 	})
 }
