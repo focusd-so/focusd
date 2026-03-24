@@ -7,6 +7,7 @@ import (
 	"embed"
 	_ "embed"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/gorilla/websocket"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -106,11 +108,6 @@ func main() {
 		db = setupDB()
 	)
 
-	mux, _, err := setUpWebServer(ctx, extensionSessionAPIKey)
-	if err != nil {
-		log.Fatal("failed to setup web server: %w", err)
-	}
-
 	settingsService, err := settings.NewService(configDir)
 	if err != nil {
 		log.Fatal("failed to create settings service: %w", err)
@@ -131,6 +128,11 @@ func main() {
 	usageService, err := usage.NewService(ctx, db)
 	if err != nil {
 		log.Fatal("failed to create usage service: %w", err)
+	}
+
+	mux, _, err := setUpWebServer(ctx, extensionSessionAPIKey, usageService)
+	if err != nil {
+		log.Fatal("failed to setup web server: %w", err)
 	}
 
 	usageService.RegisterHTTPHandlers(mux)
@@ -170,30 +172,10 @@ func main() {
 		)
 		if err != nil {
 			slog.Error("failed to handle title change", "error", err)
+			return
 		}
 
-		if appUsage.EnforcementAction == usage.EnforcementActionBlock {
-			tags := usage.ApplicationTagsSlice(appUsage.Tags).Tags()
-			reasoning := ""
-			if appUsage.ClassificationReasoning != nil {
-				reasoning = *appUsage.ClassificationReasoning
-			}
-
-			if url != nil {
-				slog.Info("browser url provided, blocking url", "url", *url)
-				if err := native.BlockURL(*url, event.Title, reasoning, tags, event.AppName); err != nil {
-					slog.Error("failed to block URL", "url", *url, "error", err)
-
-					return
-				}
-			}
-
-			if err := native.BlockApp(event.AppName, event.Title, reasoning, tags); err != nil {
-				slog.Error("failed to block app", "appName", event.AppName, "error", err)
-
-				return
-			}
-		}
+		handleBlockedUsage(appUsage, event.AppName, event.Title, url)
 
 	})
 
@@ -443,7 +425,117 @@ func setupDB() *gorm.DB {
 	return gormDB
 }
 
-func setUpWebServer(ctx context.Context, extensionSessionAPIKey string) (*chi.Mux, int, error) {
+type extensionEnvelope struct {
+	Type    string          `json:"type"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+type pageTitleChangedPayload struct {
+	TabID     int     `json:"tabId"`
+	Title     string  `json:"title"`
+	WindowID  int     `json:"windowId"`
+	URL       *string `json:"url"`
+	Timestamp string  `json:"timestamp"`
+}
+
+type pageTitleClassifiedPayload struct {
+	TabID int                     `json:"tabId"`
+	Title string                  `json:"title"`
+	Usage *usage.ApplicationUsage `json:"usage"`
+}
+
+type pageTitleErrorPayload struct {
+	TabID int    `json:"tabId"`
+	Error string `json:"error"`
+}
+
+func handleExtensionMessage(ctx context.Context, usageService *usage.Service, applicationName string, conn *websocket.Conn, payload []byte) error {
+	var envelope extensionEnvelope
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		return writePageTitleError(conn, 0, fmt.Sprintf("invalid message payload: %v", err))
+	}
+
+	switch envelope.Type {
+	case "page_title_changed":
+		var message pageTitleChangedPayload
+		if err := json.Unmarshal(envelope.Payload, &message); err != nil {
+			return writePageTitleError(conn, 0, fmt.Sprintf("invalid page_title_changed payload: %v", err))
+		}
+
+		if message.Title == "" {
+			return writePageTitleError(conn, message.TabID, "title is required")
+		}
+
+		var browserURL *string
+		if message.URL != nil && *message.URL != "" {
+			browserURL = message.URL
+		}
+
+		appUsage, err := usageService.TitleChanged(
+			ctx,
+			applicationName,
+			message.Title,
+			applicationName,
+			"",
+			nil,
+			browserURL,
+			nil,
+		)
+		if err != nil {
+			slog.Error("failed to handle extension page title change", "error", err, "application_name", applicationName, "tab_id", message.TabID)
+			return writePageTitleError(conn, message.TabID, err.Error())
+		}
+
+		handleBlockedUsage(appUsage, applicationName, message.Title, browserURL)
+
+		return conn.WriteJSON(map[string]any{
+			"type": "page_title_classified",
+			"payload": pageTitleClassifiedPayload{
+				TabID: message.TabID,
+				Title: message.Title,
+				Usage: appUsage,
+			},
+		})
+	default:
+		return nil
+	}
+}
+
+func writePageTitleError(conn *websocket.Conn, tabID int, errMsg string) error {
+	return conn.WriteJSON(map[string]any{
+		"type": "page_title_error",
+		"payload": pageTitleErrorPayload{
+			TabID: tabID,
+			Error: errMsg,
+		},
+	})
+}
+
+func handleBlockedUsage(appUsage *usage.ApplicationUsage, appName, title string, browserURL *string) {
+	if appUsage == nil || appUsage.EnforcementAction != usage.EnforcementActionBlock {
+		return
+	}
+
+	tags := usage.ApplicationTagsSlice(appUsage.Tags).Tags()
+	reasoning := ""
+	if appUsage.ClassificationReasoning != nil {
+		reasoning = *appUsage.ClassificationReasoning
+	}
+
+	if browserURL != nil {
+		slog.Info("browser url provided, blocking url", "url", *browserURL)
+		if err := native.BlockURL(*browserURL, title, reasoning, tags, appName); err != nil {
+			slog.Error("failed to block URL", "url", *browserURL, "error", err)
+			return
+		}
+	}
+
+	if err := native.BlockApp(appName, title, reasoning, tags); err != nil {
+		slog.Error("failed to block app", "appName", appName, "error", err)
+	}
+}
+
+func setUpWebServer(ctx context.Context, extensionSessionAPIKey string, usageService *usage.Service) (*chi.Mux, int, error) {
 	const port = 50533
 
 	r := chi.NewRouter()
@@ -457,7 +549,9 @@ func setUpWebServer(ctx context.Context, extensionSessionAPIKey string) (*chi.Mu
 	r.Route("/extension", func(r chi.Router) {
 		r.Get("/bootstrap", extension.BootstrapHandler(extensionWSURL, tokenProvider))
 		r.With(extension.RequireAPIKey(tokenProvider)).Get("/ws", func(w http.ResponseWriter, req *http.Request) {
-			if _, err := extension.Connect(w, req); err != nil {
+			if _, err := extension.Connect(w, req, func(applicationName string, conn *websocket.Conn, payload []byte) error {
+				return handleExtensionMessage(ctx, usageService, applicationName, conn, payload)
+			}); err != nil {
 				slog.Warn("extension websocket connection failed", "error", err)
 			}
 		})

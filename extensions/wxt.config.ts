@@ -7,7 +7,7 @@ export default defineConfig({
     name: "Focusd Bridge",
     description: "Connects browser activity to the local Focusd app",
     version: "0.0.1",
-    permissions: ["nativeMessaging"],
+    permissions: ["nativeMessaging", "tabs"],
     host_permissions: ["http://127.0.0.1:50533/*", "ws://127.0.0.1:50533/*"],
     browser_specific_settings: {
       gecko: {

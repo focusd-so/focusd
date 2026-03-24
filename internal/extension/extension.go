@@ -21,6 +21,8 @@ type BootstrapResponse struct {
 	Version string `json:"version"`
 }
 
+type MessageHandler func(applicationName string, conn *websocket.Conn, payload []byte) error
+
 // Hub tracks active websocket clients.
 type extensionHub struct {
 	mu       sync.RWMutex
@@ -75,7 +77,7 @@ func BootstrapHandler(wsURL string, tokenProvider func() string) http.HandlerFun
 
 // Connect upgrades the request to websocket and tracks the client.
 // When the connection is lost, the client is removed from the hub.
-func Connect(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
+func Connect(w http.ResponseWriter, r *http.Request, handler MessageHandler) (*websocket.Conn, error) {
 	request := ConnectRequest{
 		ApplicationName: strings.TrimSpace(r.URL.Query().Get("application_name")),
 	}
@@ -95,7 +97,13 @@ func Connect(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
 	hub.clients[request.ApplicationName] = conn
 	hub.mu.Unlock()
 
-	go watch(request.ApplicationName, conn)
+	if handler == nil {
+		handler = func(string, *websocket.Conn, []byte) error {
+			return nil
+		}
+	}
+
+	go watch(request.ApplicationName, conn, handler)
 
 	return conn, nil
 }
@@ -114,11 +122,20 @@ func ClientCount() int {
 	return len(hub.clients)
 }
 
-func watch(applicationName string, conn *websocket.Conn) {
+func watch(applicationName string, conn *websocket.Conn, handler MessageHandler) {
 	defer remove(applicationName, conn)
 
 	for {
-		if _, _, err := conn.ReadMessage(); err != nil {
+		messageType, payload, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+
+		if messageType != websocket.TextMessage {
+			continue
+		}
+
+		if err := handler(applicationName, conn, payload); err != nil {
 			return
 		}
 	}

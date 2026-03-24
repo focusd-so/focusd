@@ -23,7 +23,38 @@ type ConnectionInfo = {
   applicationName: string;
 };
 
+type PageTitleChangedMessage = {
+  type: "page_title_changed";
+  payload: {
+    tabId: number;
+    title: string;
+    windowId: number;
+    url?: string;
+    timestamp: string;
+  };
+};
+
+type PageTitleClassifiedMessage = {
+  type: "page_title_classified";
+  payload: {
+    tabId: number;
+    title: string;
+    usage: Record<string, unknown>;
+  };
+};
+
+type PageTitleErrorMessage = {
+  type: "page_title_error";
+  payload: {
+    tabId: number;
+    error: string;
+  };
+};
+
+type IncomingWSMessage = PageTitleClassifiedMessage | PageTitleErrorMessage;
+
 let reconnectDelay = RECONNECT_BASE_DELAY_MS;
+const latestUsageByTabId = new Map<number, Record<string, unknown>>();
 
 void startBridge();
 
@@ -107,12 +138,38 @@ function connectWebSocket(info: ConnectionInfo): Promise<void> {
     wsURL.searchParams.set("application_name", info.applicationName);
 
     const ws = new WebSocket(wsURL.toString());
+    let stopTabTitleListener: (() => void) | null = null;
 
     ws.onopen = () => {
       reconnectDelay = RECONNECT_BASE_DELAY_MS;
+      stopTabTitleListener = startTabTitleListener(ws);
+    };
+
+    ws.onmessage = (event) => {
+      if (typeof event.data !== "string") {
+        return;
+      }
+
+      let message: IncomingWSMessage;
+      try {
+        message = JSON.parse(event.data) as IncomingWSMessage;
+      } catch {
+        return;
+      }
+
+      if (message.type === "page_title_classified") {
+        latestUsageByTabId.set(message.payload.tabId, message.payload.usage);
+        return;
+      }
+
+      if (message.type === "page_title_error") {
+        console.warn("focusd page title classification error", message.payload);
+      }
     };
 
     ws.onclose = () => {
+      stopTabTitleListener?.();
+      stopTabTitleListener = null;
       resolve();
     };
 
@@ -120,6 +177,41 @@ function connectWebSocket(info: ConnectionInfo): Promise<void> {
       ws.close();
     };
   });
+}
+
+function startTabTitleListener(ws: WebSocket) {
+  const onTabUpdated: Parameters<typeof browser.tabs.onUpdated.addListener>[0] = (
+    tabId,
+    changeInfo,
+    tab
+  ) => {
+    if (!changeInfo.title || ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    const message: PageTitleChangedMessage = {
+      type: "page_title_changed",
+      payload: {
+        tabId,
+        title: changeInfo.title,
+        windowId: tab.windowId,
+        url: tab.url,
+        timestamp: new Date().toISOString()
+      }
+    };
+
+    try {
+      ws.send(JSON.stringify(message));
+    } catch {
+      ws.close();
+    }
+  };
+
+  browser.tabs.onUpdated.addListener(onTabUpdated);
+
+  return () => {
+    browser.tabs.onUpdated.removeListener(onTabUpdated);
+  };
 }
 
 function detectApplicationName() {
