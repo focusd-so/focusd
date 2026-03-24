@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"embed"
 	_ "embed"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
@@ -63,6 +65,13 @@ func init() {
 // and starts a goroutine that emits a time-based event every second. It subsequently runs the application and
 // logs any error that might occur.
 func main() {
+	if isNativeMessagingHostMode() {
+		if err := nativemessaging.ServeHost(); err != nil {
+			log.Fatalf("failed to serve native messaging host: %v", err)
+		}
+		return
+	}
+
 	userdir, err := os.UserHomeDir()
 	if err != nil {
 		log.Fatalf("failed to get user home directory: %v", err)
@@ -84,6 +93,11 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	extensionSessionAPIKey, err := generateSessionAPIKey()
+	if err != nil {
+		log.Fatalf("failed to generate extension session API key: %v", err)
+	}
+
 	if err := nativemessaging.EnsureHostManifests(); err != nil {
 		slog.Error("failed to ensure native messaging manifests", "error", err)
 	}
@@ -92,7 +106,7 @@ func main() {
 		db = setupDB()
 	)
 
-	mux, _, err := setUpWebServer(ctx)
+	mux, _, err := setUpWebServer(ctx, extensionSessionAPIKey)
 	if err != nil {
 		log.Fatal("failed to setup web server: %w", err)
 	}
@@ -429,11 +443,25 @@ func setupDB() *gorm.DB {
 	return gormDB
 }
 
-func setUpWebServer(ctx context.Context) (*chi.Mux, int, error) {
+func setUpWebServer(ctx context.Context, extensionSessionAPIKey string) (*chi.Mux, int, error) {
 	const port = 50533
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
+
+	extensionWSURL := fmt.Sprintf("ws://127.0.0.1:%d/extension/ws", port)
+	tokenProvider := func() string {
+		return extensionSessionAPIKey
+	}
+
+	r.Route("/extension", func(r chi.Router) {
+		r.Get("/bootstrap", extension.BootstrapHandler(extensionWSURL, tokenProvider))
+		r.With(extension.RequireAPIKey(tokenProvider)).Get("/ws", func(w http.ResponseWriter, req *http.Request) {
+			if _, err := extension.Connect(w, req); err != nil {
+				slog.Warn("extension websocket connection failed", "error", err)
+			}
+		})
+	})
 
 	slog.Info("web server running on port", "port", port)
 
@@ -458,4 +486,23 @@ func setUpWebServer(ctx context.Context) (*chi.Mux, int, error) {
 	}()
 
 	return r, port, nil
+}
+
+func isNativeMessagingHostMode() bool {
+	for _, arg := range os.Args[1:] {
+		if arg == "--native-messaging-host" {
+			return true
+		}
+	}
+
+	return false
+}
+
+func generateSessionAPIKey() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+
+	return base64.RawURLEncoding.EncodeToString(buf), nil
 }

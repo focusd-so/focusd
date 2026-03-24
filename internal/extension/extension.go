@@ -1,9 +1,11 @@
 package extension
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -11,6 +13,12 @@ import (
 
 type ConnectRequest struct {
 	ApplicationName string `json:"application_name"`
+}
+
+type BootstrapResponse struct {
+	WSURL   string `json:"ws_url"`
+	APIKey  string `json:"api_key"`
+	Version string `json:"version"`
 }
 
 // Hub tracks active websocket clients.
@@ -31,16 +39,51 @@ var hub = &extensionHub{
 	},
 }
 
+func RequireAPIKey(tokenProvider func() string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			expected := tokenProvider()
+			actual := strings.TrimSpace(r.URL.Query().Get("api_key"))
+
+			if expected == "" || actual == "" {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			if subtle.ConstantTimeCompare([]byte(expected), []byte(actual)) != 1 {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func BootstrapHandler(wsURL string, tokenProvider func() string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		response := BootstrapResponse{
+			WSURL:   wsURL,
+			APIKey:  tokenProvider(),
+			Version: "1",
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}
+}
+
 // Connect upgrades the request to websocket and tracks the client.
 // When the connection is lost, the client is removed from the hub.
 func Connect(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
-	var request ConnectRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		return nil, err
+	request := ConnectRequest{
+		ApplicationName: strings.TrimSpace(r.URL.Query().Get("application_name")),
 	}
 
 	if request.ApplicationName == "" {
-		return nil, errors.New("application name is required")
+		err := errors.New("application name is required")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return nil, err
 	}
 
 	conn, err := hub.upgrader.Upgrade(w, r, nil)
