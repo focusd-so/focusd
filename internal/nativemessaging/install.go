@@ -55,20 +55,25 @@ func EnsureHostManifests() error {
 		return fmt.Errorf("resolve user home directory: %w", err)
 	}
 
+	launcherPath, err := ensureNativeMessagingLauncher(execPath, home)
+	if err != nil {
+		return fmt.Errorf("prepare native messaging launcher: %w", err)
+	}
+
 	chromeIDs := readListEnv("FOCUSD_CHROME_EXTENSION_IDS", defaultChromeExtensionIDs)
 	firefoxIDs := readListEnv("FOCUSD_FIREFOX_EXTENSION_IDS", defaultFirefoxExtensionIDs)
 
 	chromeManifest := hostManifest{
 		Name:           hostName,
 		Description:    hostDescription,
-		Path:           execPath,
+		Path:           launcherPath,
 		Type:           "stdio",
 		AllowedOrigins: toChromeOrigins(chromeIDs),
 	}
 	firefoxManifest := hostManifest{
 		Name:              hostName,
 		Description:       hostDescription,
-		Path:              execPath,
+		Path:              launcherPath,
 		Type:              "stdio",
 		AllowedExtensions: firefoxIDs,
 	}
@@ -162,4 +167,26 @@ func writeManifest(path string, manifest hostManifest) error {
 	}
 
 	return nil
+}
+
+func ensureNativeMessagingLauncher(execPath, home string) (string, error) {
+	launcherPath := filepath.Join(home, ".focusd", "bin", "focusd-native-messaging-host.sh")
+	launcherDir := filepath.Dir(launcherPath)
+
+	if err := os.MkdirAll(launcherDir, 0700); err != nil {
+		return "", fmt.Errorf("create launcher directory: %w", err)
+	}
+
+	escapedExecPath := strings.ReplaceAll(execPath, `"`, `\"`)
+	content := strings.Join([]string{
+		"#!/bin/sh",
+		"exec \"" + escapedExecPath + "\" --native-messaging-host",
+		"",
+	}, "\n")
+
+	if err := os.WriteFile(launcherPath, []byte(content), 0700); err != nil {
+		return "", fmt.Errorf("write launcher script: %w", err)
+	}
+
+	return launcherPath, nil
 }
