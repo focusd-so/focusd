@@ -269,3 +269,6 @@ func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 			assertEnforcementSource(t, usage.EnforcementSourceWhitelist),
 		)
 }
+
+func TestService_Classification(t *testing.T) {
+}
