@@ -303,10 +303,10 @@ func setUpServiceWithSettings(t *testing.T, customRules string) (*usage.Service,
 
 func TestProtection_CalculateEnforcementDecision_CustomRules(t *testing.T) {
 
-	t.Run("ctx.usage.metadata.appName is accessible", func(t *testing.T) {
+	t.Run("ctx.usage.meta.appName is accessible", func(t *testing.T) {
 		customRules := `
 export function enforcement(ctx) {
-	if (ctx.usage.metadata.appName == "Slack") {
+	if (ctx.usage.meta.appName == "Slack") {
 		return {
 			enforcementAction: EnforcementAction.Block,
 			enforcementReason: "Slack is blocked by custom rule",
@@ -327,10 +327,10 @@ export function enforcement(ctx) {
 		require.Equal(t, usage.EnforcementReason("Slack is blocked by custom rule"), decision.Reason)
 	})
 
-	t.Run("ctx.usage.metadata.classification is accessible", func(t *testing.T) {
+	t.Run("ctx.usage.meta.classification is accessible", func(t *testing.T) {
 		customRules := `
 export function enforcement(ctx) {
-	if (ctx.usage.metadata.classification == "distracting") {
+	if (ctx.usage.meta.classification == "distracting") {
 		return {
 			enforcementAction: EnforcementAction.Block,
 			enforcementReason: "distracting classification detected",
@@ -351,12 +351,12 @@ export function enforcement(ctx) {
 		require.Equal(t, usage.EnforcementReason("distracting classification detected"), decision.Reason)
 	})
 
-	t.Run("ctx.usage.metadata.hostname and ctx.usage.metadata.domain are accessible", func(t *testing.T) {
+	t.Run("ctx.usage.meta.host and ctx.usage.meta.domain are accessible", func(t *testing.T) {
 		// Note: parseURL strips "www." prefix, so "docs.google.com" stays as-is
 		// while domain is extracted via publicsuffix as "google.com"
 		customRules := `
 export function enforcement(ctx) {
-	if (ctx.usage.metadata.hostname == "docs.google.com" && ctx.usage.metadata.domain == "google.com") {
+	if (ctx.usage.meta.host == "docs.google.com" && ctx.usage.meta.domain == "google.com") {
 		return {
 			enforcementAction: EnforcementAction.Block,
 			enforcementReason: "Google Docs blocked via hostname/domain",
@@ -379,10 +379,10 @@ export function enforcement(ctx) {
 		require.Equal(t, usage.EnforcementReason("Google Docs blocked via hostname/domain"), decision.Reason)
 	})
 
-	t.Run("ctx.usage.metadata.url and ctx.usage.metadata.path are accessible", func(t *testing.T) {
+	t.Run("ctx.usage.meta.url and ctx.usage.meta.path are accessible", func(t *testing.T) {
 		customRules := `
 export function enforcement(ctx) {
-	if (ctx.usage.metadata.url == "https://github.com/pulls" && ctx.usage.metadata.path == "/pulls") {
+	if (ctx.usage.meta.url == "https://github.com/pulls" && ctx.usage.meta.path == "/pulls") {
 		return {
 			enforcementAction: EnforcementAction.Allow,
 			enforcementReason: "PR reviews are allowed",
@@ -430,8 +430,8 @@ func TestProtection_CalculateEnforcementDecision_CustomRules_ExecutionLogs(t *te
 	t.Run("stores enforcement response and console logs", func(t *testing.T) {
 		customRules := `
 export function enforcement(ctx) {
-	console.log("enforcement executed", ctx.usage.metadata.appName)
-	if (ctx.usage.metadata.appName == "Slack") {
+	console.log("enforcement executed", ctx.usage.meta.appName)
+	if (ctx.usage.meta.appName == "Slack") {
 		return {
 			enforcementAction: EnforcementAction.Block,
 			enforcementReason: "Slack is blocked by custom rule",
@@ -478,7 +478,7 @@ export function enforcement(ctx) {
 	t.Run("stores no response when decision is undefined", func(t *testing.T) {
 		customRules := `
 export function enforcement(ctx) {
-	console.log("undefined decision for", ctx.usage.metadata.appName)
+	console.log("undefined decision for", ctx.usage.meta.appName)
 	return undefined;
 }
 `
@@ -510,7 +510,7 @@ export function enforcement(ctx) {
 	t.Run("stores errors for failed enforcement execution", func(t *testing.T) {
 		customRules := `
 export function enforcement(ctx) {
-	console.log("about to fail", ctx.usage.metadata.appName)
+	console.log("about to fail", ctx.usage.meta.appName)
 	throw new Error("enforcement fail");
 }
 `

@@ -45,6 +45,9 @@ declare const Classification: {
  */
 type EnforcementActionType = "none" | "block" | "paused" | "allow";
 
+/** Minutes unit used across usage summaries. */
+type Minutes = number;
+
 /**
  * Global constant for enforcement action values.
  * Use these values when returning an Enforcement.
@@ -81,16 +84,34 @@ interface Classify {
   classificationReasoning: string;
 }
 
-/**
- * Non-numeric details about the current app/site being evaluated.
- */
-interface UsageMetadata {
+interface UsageBlocks {
+  /** Blocked attempts for this app/site today. */
+  readonly count: number;
+}
+
+interface UsageDuration {
+  /** Distracting minutes for this app/site today. */
+  readonly today: Minutes;
+  /** Minutes since this app/site was last blocked (null if never blocked). */
+  readonly sinceLastBlock: Minutes | null;
+  /** Total minutes of usage since this app/site was last blocked (null if never blocked). */
+  readonly usedSinceLastBlock: Minutes | null;
+  /** Duration (minutes) of the last blocked session for this app/site (null if never blocked). */
+  readonly lastBlocked: Minutes | null;
+  /**
+   * Returns total minutes this app/site was used in the last N minutes.
+   * @param minutes - Time window in minutes (e.g. 60 for last hour)
+   */
+  last(minutes: number): number;
+}
+
+interface UsageMeta {
   /** The display name of the application (e.g., 'Safari', 'Slack'). */
   readonly appName: string;
   /** The window title if available. */
   readonly title: string;
   /** The hostname if the activity is a website (e.g., 'docs.github.com'). */
-  readonly hostname: string;
+  readonly host: string;
   /** The registered domain extracted from the hostname (e.g., 'github.com'). */
   readonly domain: string;
   /** The URL path (e.g., '/pulls/assigned'). */
@@ -101,62 +122,43 @@ interface UsageMetadata {
   readonly classification: string;
 }
 
-interface InsightsToday {
-  readonly productiveMinutes: number;
-  readonly distractingMinutes: number;
-  readonly idleMinutes: number;
-  readonly otherMinutes: number;
-  readonly focusScore: number;
-  readonly distractionCount: number;
-  readonly blockedCount: number;
-}
-
-/**
- * Numeric metrics scoped to the current usage target.
- */
-interface UsageInsights {
-  /** Distracting minutes for this app/site today. */
-  readonly distractingMinutes: number;
-  /** Blocked attempts for this app/site today. */
-  readonly blockedCount: number;
-  /** Minutes since this app/site was last blocked (-1 if never blocked). */
-  readonly minutesSinceLastBlock: number;
-  /** Total minutes of usage since this app/site was last blocked (-1 if never blocked). */
-  readonly minutesUsedSinceLastBlock: number;
-  /** Duration (minutes) of the last blocked session for this app/site (-1 if never blocked). */
-  readonly lastBlockedDurationMinutes: number;
-  /**
-   * Returns total minutes this app/site was used in the last N minutes.
-   * @param minutes - Time window in minutes (e.g. 60 for last hour)
-   */
-  minutesUsedInPeriod(minutes: number): number;
-}
-
-interface InsightsContext {
-  readonly today: InsightsToday;
-  readonly topDistractions: Record<string, number>;
-  readonly topBlocked: Record<string, number>;
-  readonly projectBreakdown: Record<string, number>;
-  readonly communicationBreakdown: Record<string, { name: string; channel: string; duration_seconds: number }>;
-}
-
 interface UsageContext {
-  readonly metadata: UsageMetadata;
-  readonly insights: UsageInsights;
+  /** Current app/site descriptors. */
+  readonly meta: UsageMeta;
+  /** Duration metrics for this app/site. */
+  readonly duration: UsageDuration;
+  /** Blocking metrics for this app/site. */
+  readonly blocks: UsageBlocks;
+}
+
+interface TimeSummary {
+  readonly score: number;
+  /** Productive minutes in the period. */
+  readonly productive: Minutes;
+  /** Distracting minutes in the period. */
+  readonly distracting: Minutes;
 }
 
 /**
  * Full context passed into classify/enforcement.
  *
  * Structure:
- * - context.usage.metadata => descriptive fields for the current app/site
- * - context.usage.insights => numeric fields for the current app/site
- * - context.insights => broader daily/global dashboard insights
+ * - context.usage => current app/site details and metrics
  */
 interface Context {
   readonly usage: UsageContext;
-  readonly insights: InsightsContext;
 }
+
+/**
+ * Runtime-provided readonly global for today's summary.
+ * Type \`today.\` to explore autocomplete.
+ */
+declare const today: TimeSummary;
+/**
+ * Runtime-provided readonly global for the current hour summary.
+ * Type \`hour.\` to explore autocomplete.
+ */
+declare const hour: TimeSummary;
 
 // ============ Timezone Constants ============
 
@@ -317,21 +319,28 @@ declare const console: {
 `;
 
 const starterRulesTS = `/**
+ * Global variables (provided by runtime)
+ *
+ * today.*
+ * - score, productive (minutes), distracting (minutes)
+ *
+ * hour.*
+ * - score, productive (minutes), distracting (minutes)
+ *
  * Quick reference
  *
- * context.usage.metadata.*
- * - appName, title, hostname, domain, path, url, classification
+ * context.usage.meta.*
+ * - appName, title, host, domain, path, url, classification
  *
- * context.usage.insights.*
- * - distractingMinutes, blockedCount
- * - minutesSinceLastBlock (-1 means never blocked)
- * - minutesUsedSinceLastBlock (-1 means never blocked)
- * - lastBlockedDurationMinutes (-1 means never blocked)
- * - minutesUsedInPeriod(minutes)
+ * context.usage.*
+ * - blocks.count
+ * - duration.today
+ * - duration.sinceLastBlock (null means never blocked)
+ * - duration.usedSinceLastBlock (null means never blocked)
+ * - duration.lastBlocked (null means never blocked)
+ * - duration.last(minutes)
  *
- * context.insights.today.*
- * - productiveMinutes, distractingMinutes, idleMinutes, otherMinutes
- * - focusScore, distractionCount, blockedCount
+ * Tip: type \`today.\` or \`hour.\` for autocomplete.
  */
 
 /**
@@ -339,7 +348,7 @@ const starterRulesTS = `/**
  * Return a Classify to override the default, or undefined to keep the default.
  *
  * Example 1: classify a domain as productive
- * if (context.usage.metadata.domain === 'github.com') {
+ * if (context.usage.meta.domain === 'github.com') {
  *   return {
  *     classification: Classification.Productive,
  *     classificationReasoning: 'GitHub is a development tool'
@@ -347,7 +356,7 @@ const starterRulesTS = `/**
  * }
  *
  * Example 2: classify as distracting after 30 minutes in the last hour
- * if (context.usage.insights.minutesUsedInPeriod(60) > 30) {
+ * if (context.usage.duration.last(60) > 30) {
  *   return {
  *     classification: Classification.Distracting,
  *     classificationReasoning: 'Exceeded hourly usage budget'
@@ -363,7 +372,7 @@ export function classify(context: Context): Classify | undefined {
  * Return an Enforcement to override the default, or undefined to keep the default.
  *
  * Example 1: block social media after 10 PM in London
- * if (context.usage.metadata.domain === 'twitter.com' && now(Timezone.Europe_London).getHours() >= 22) {
+ * if (context.usage.meta.domain === 'twitter.com' && now(Timezone.Europe_London).getHours() >= 22) {
  *   return {
  *     enforcementAction: EnforcementAction.Block,
  *     enforcementReason: 'Social media blocked after 10 PM'
@@ -371,7 +380,7 @@ export function classify(context: Context): Classify | undefined {
  * }
  *
  * Example 2: strict mode if distraction is already high today
- * if (context.insights.today.distractingMinutes >= 90 && context.usage.insights.blockedCount >= 3) {
+ * if (today.distracting >= 90 && context.usage.blocks.count >= 3) {
  *   return {
  *     enforcementAction: EnforcementAction.Block,
  *     enforcementReason: 'High distraction day with repeated blocked attempts'
@@ -379,6 +388,8 @@ export function classify(context: Context): Classify | undefined {
  * }
  */
 export function enforcement(context: Context): Enforcement | undefined {
+  // Globals are available directly.
+  // Example: if (today.distracting >= 90 && hour.score < 60) { ... }
   return undefined;
 }
 `;

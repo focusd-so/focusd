@@ -356,29 +356,44 @@ func (s *sandbox) executeFunction(v8ctx *v8.Context, preparedScript string, func
 	}
 
 	// Call the function
-	// Add minutesUsedInPeriod as a method on usage.insights.
+	// Expose today/hour globals and add usage.duration.last helper.
 	callScript := fmt.Sprintf(`
 		(function() {
-			const ctx = %s;
+			const rawCtx = %s;
+			Object.defineProperty(globalThis, 'today', {
+				value: Object.freeze(rawCtx.today || {}),
+				writable: false,
+				configurable: true
+			});
+			Object.defineProperty(globalThis, 'hour', {
+				value: Object.freeze(rawCtx.hour || {}),
+				writable: false,
+				configurable: true
+			});
+
+			const ctx = {
+				usage: rawCtx.usage || {}
+			};
+
 			if (!ctx.usage) {
 				ctx.usage = {};
 			}
 
-			if (!ctx.usage.metadata) {
-				ctx.usage.metadata = {};
+			if (!ctx.usage.meta) {
+				ctx.usage.meta = {};
 			}
 
-			if (!ctx.usage.insights) {
-				ctx.usage.insights = {};
+			if (!ctx.usage.duration) {
+				ctx.usage.duration = {};
 			}
 
-			// Add minutesUsedInPeriod method to usage.insights.
+			// Add last method to usage.duration.
 			if (typeof __minutesUsedInPeriod === 'function') {
-				ctx.usage.insights.minutesUsedInPeriod = function(minutes) {
-					return __minutesUsedInPeriod(ctx.usage.metadata.appName, ctx.usage.metadata.hostname, minutes);
+				ctx.usage.duration.last = function(minutes) {
+					return __minutesUsedInPeriod(ctx.usage.meta.appName, ctx.usage.meta.host, minutes);
 				};
 			} else {
-				ctx.usage.insights.minutesUsedInPeriod = function(minutes) { return 0; };
+				ctx.usage.duration.last = function(minutes) { return 0; };
 			}
 
 			const result = %s(ctx);

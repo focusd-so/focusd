@@ -30,7 +30,7 @@ export function classify(context: Context): Classify | undefined {
 
 	console.log("and this too");
 
-	if (context.usage.metadata.appName == "Slack") {
+	if (context.usage.meta.appName == "Slack") {
 		return {
 			classification: Classification.Neutral,
 			classificationReasoning: "Slack is a neutral app",
@@ -40,7 +40,7 @@ export function classify(context: Context): Classify | undefined {
 
 	console.log("also this");
 
-	if (context.usage.insights.minutesSinceLastBlock >= 20 && context.usage.insights.minutesUsedSinceLastBlock < 5 && context.usage.metadata.appName == "Discord") {
+	if (context.usage.duration.sinceLastBlock >= 20 && context.usage.duration.usedSinceLastBlock < 5 && context.usage.meta.appName == "Discord") {
 		return {
 			classification: Classification.Neutral,
 			classificationReasoning: "Allow using 5 mins every 20 mins",
@@ -62,7 +62,7 @@ export function enforcement(context: Context): Enforcement | undefined {
 
 var customRulesWithMinutesUsedInPeriod = `
 export function classify(context: Context): Classify | undefined {
-	const minutesUsed = context.usage.insights.minutesUsedInPeriod(60);
+	const minutesUsed = context.usage.duration.last(60);
 	
 	if (minutesUsed > 30) {
 		return {
@@ -83,7 +83,7 @@ export function classify(context: Context): Classify | undefined {
 var customRulesWebsite = `
 export function classify(context: Context): Classify | undefined {
 	// Match by domain
-	if (context.usage.metadata.domain === "youtube.com") {
+	if (context.usage.meta.domain === "youtube.com") {
 		return {
 			classification: Classification.Distracting,
 			classificationReasoning: "YouTube is distracting",
@@ -92,7 +92,7 @@ export function classify(context: Context): Classify | undefined {
 	}
 	
 	// Match by hostname (subdomain-aware)
-	if (context.usage.metadata.hostname === "docs.google.com") {
+	if (context.usage.meta.host === "docs.google.com") {
 		return {
 			classification: Classification.Productive,
 			classificationReasoning: "Google Docs is productive",
@@ -101,7 +101,7 @@ export function classify(context: Context): Classify | undefined {
 	}
 	
 	// Match by path
-	if (context.usage.metadata.hostname === "github.com" && context.usage.metadata.path.startsWith("/pulls")) {
+	if (context.usage.meta.host === "github.com" && context.usage.meta.path.startsWith("/pulls")) {
 		return {
 			classification: Classification.Productive,
 			classificationReasoning: "Reviewing pull requests",
@@ -110,7 +110,7 @@ export function classify(context: Context): Classify | undefined {
 	}
 	
 	// Match by full URL
-	if (context.usage.metadata.url === "https://twitter.com/home") {
+	if (context.usage.meta.url === "https://twitter.com/home") {
 		return {
 			classification: Classification.Distracting,
 			classificationReasoning: "Twitter home feed",

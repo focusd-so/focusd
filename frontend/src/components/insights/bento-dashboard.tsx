@@ -33,7 +33,7 @@ const MIN_SECONDS_FOR_INSIGHTS = 3600;
 
 const SERIES = [
   { key: "productive", field: "productive_seconds", label: "Productive", bg: "bg-emerald-500/80", dot: "bg-emerald-500", text: "text-emerald-400" },
-  { key: "distractive", field: "distractive_seconds", label: "Distractive", bg: "bg-rose-500/80", dot: "bg-rose-500", text: "text-rose-400" },
+  { key: "distracting", field: "distracting_seconds", label: "Distracting", bg: "bg-rose-500/80", dot: "bg-rose-500", text: "text-rose-400" },
   { key: "idle", field: "idle_seconds", label: "Idle", bg: "bg-zinc-400/60", dot: "bg-zinc-400", text: "text-zinc-400" },
   { key: "other", field: "other_seconds", label: "Other", bg: "bg-amber-400/60", dot: "bg-amber-400", text: "text-amber-400" },
 ] as const;
@@ -57,7 +57,7 @@ const buildHourlySlots = (breakdown: Record<string, ProductivityScore> | null | 
     return {
       HourLabel: formatHourLabel(hour),
       productive_seconds: score?.productive_seconds ?? 0,
-      distractive_seconds: score?.distractive_seconds ?? 0,
+      distracting_seconds: score?.distracting_seconds ?? 0,
       idle_seconds: score?.idle_seconds ?? 0,
       other_seconds: score?.other_seconds ?? 0,
     };
@@ -112,7 +112,7 @@ function HourlyBreakdownChart({
 }) {
   const [visible, setVisible] = useState<Record<SeriesKey, boolean>>({
     productive: true,
-    distractive: true,
+    distracting: true,
     idle: false,
     other: false,
   });
@@ -164,9 +164,9 @@ function HourlyBreakdownChart({
               );
             }
 
-            // Stacking order top-to-bottom: distractive, other, idle, productive
+            // Stacking order top-to-bottom: distracting, other, idle, productive
             const segments = [
-              { ...SERIES[1], seconds: visible.distractive ? hour.distractive_seconds : 0 },
+              { ...SERIES[1], seconds: visible.distracting ? hour.distracting_seconds : 0 },
               { ...SERIES[3], seconds: visible.other ? hour.other_seconds : 0 },
               { ...SERIES[2], seconds: visible.idle ? hour.idle_seconds : 0 },
               { ...SERIES[0], seconds: visible.productive ? hour.productive_seconds : 0 },
@@ -308,8 +308,8 @@ export function BentoDashboard() {
   const isLoading = isStoreLoading || isQueryLoading;
 
   const productiveSeconds = overview?.productivity_score?.productive_seconds ?? 0;
-  const distractiveSeconds = overview?.productivity_score?.distractive_seconds ?? 0;
-  const totalTrackedSeconds = productiveSeconds + distractiveSeconds;
+  const distractingSeconds = overview?.productivity_score?.distracting_seconds ?? 0;
+  const totalTrackedSeconds = productiveSeconds + distractingSeconds;
   const hasEnoughData = totalTrackedSeconds >= MIN_SECONDS_FOR_INSIGHTS;
 
   const focusScore = Math.round(overview?.productivity_score?.productivity_score ?? 0);
@@ -453,14 +453,14 @@ export function BentoDashboard() {
           </CardContent>
         </Card>
 
-        {/* Distractive Hours */}
+        {/* Distracting Hours */}
         <Card className="bg-gradient-to-br from-rose-500/10 to-rose-600/5 border-rose-500/20">
           <CardContent className="pt-6">
             <p className="text-xs font-bold uppercase tracking-widest text-rose-400">
-              Distractive
+              Distracting
             </p>
             <p className="text-3xl font-bold text-rose-400 mt-1">
-              {formatDuration(distractiveSeconds)}
+              {formatDuration(distractingSeconds)}
             </p>
             <p className="text-xs text-muted-foreground mt-2">
               Time lost

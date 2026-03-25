@@ -321,8 +321,8 @@ func (s *Service) CalculateEnforcementDecision(ctx context.Context, appUsage *Ap
 
 func (s *Service) calculateEnforcementDecisionWithCustomRules(_ context.Context, appUsage *ApplicationUsage) (EnforcementDecision, error) {
 	sandboxCtx := createSandboxContext(appUsage.Application.Name, appUsage.BrowserURL)
-	sandboxCtx.Usage.Metadata.Title = appUsage.WindowTitle
-	sandboxCtx.Usage.Metadata.Classification = string(appUsage.Classification)
+	sandboxCtx.Usage.Meta.Title = appUsage.WindowTitle
+	sandboxCtx.Usage.Meta.Classification = string(appUsage.Classification)
 
 	customRules := settings.GetCustomRulesJS()
 	if customRules == "" {

@@ -11,7 +11,7 @@ import { Progress } from "@/components/ui/progress";
 interface UsageStats {
   productive_minutes: number;
   neutral_minutes: number;
-  distractive_minutes: number;
+  distracting_minutes: number;
   productivity_score: number;
 }
 
@@ -22,7 +22,7 @@ export type DailyStats = {
   date: number;
   productive_minutes: number;
   neutral_minutes: number;
-  distractive_minutes: number;
+  distracting_minutes: number;
 };
 
 interface MetricCardProps {
@@ -57,8 +57,8 @@ function getContextLabel(comparisonMode: ComparisonMode): string {
   }
 }
 
-function calculateFocusScore(productive: number, distractive: number): number {
-  const total = productive + distractive;
+function calculateFocusScore(productive: number, distracting: number): number {
+  const total = productive + distracting;
   if (total === 0) return 100; // No activity = perfect focus (no distractions)
   return (productive / total) * 100;
 }
@@ -226,11 +226,11 @@ export function HeroMetricCards({
   const totalActiveMinutes =
     stats.productive_minutes +
     stats.neutral_minutes +
-    stats.distractive_minutes;
+    stats.distracting_minutes;
 
   const focusScore = Number.isFinite(stats.productivity_score)
     ? stats.productivity_score
-    : calculateFocusScore(stats.productive_minutes, stats.distractive_minutes);
+    : calculateFocusScore(stats.productive_minutes, stats.distracting_minutes);
 
   return (
     <div className="space-y-3">
@@ -242,8 +242,8 @@ export function HeroMetricCards({
           contextLabel={contextLabel}
         />
         <MetricCard
-          title="Distractive"
-          minutes={stats.distractive_minutes}
+          title="Distracting"
+          minutes={stats.distracting_minutes}
           colorScheme="rose"
           contextLabel={contextLabel}
         />
