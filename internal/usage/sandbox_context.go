@@ -30,23 +30,31 @@ type sandboxUsageDuration struct {
 	LastBlocked        *int `json:"lastBlocked"`
 }
 
-type sandboxUsageContext struct {
-	Meta     sandboxUsageMetadata `json:"meta"`
+type sandboxPeriodSummary struct {
+	FocusScore         int `json:"focusScore"`
+	ProductiveMinutes  int `json:"productiveMinutes"`
+	DistractingMinutes int `json:"distractingMinutes"`
+}
+
+type sandboxUsageCurrentInsights struct {
 	Duration sandboxUsageDuration `json:"duration"`
 	Blocks   sandboxUsageBlocked  `json:"blocks"`
 }
 
-type sandboxPeriodSummary struct {
-	Score       int `json:"score"`
-	Productive  int `json:"productive"`
-	Distracting int `json:"distracting"`
+type sandboxUsageInsights struct {
+	Today   sandboxPeriodSummary        `json:"today"`
+	Hour    sandboxPeriodSummary        `json:"hour"`
+	Current sandboxUsageCurrentInsights `json:"current"`
+}
+
+type sandboxUsageContext struct {
+	Meta     sandboxUsageMetadata `json:"meta"`
+	Insights sandboxUsageInsights `json:"insights"`
 }
 
 // sandboxContext provides context for the current rule execution including usage data and helper functions.
 type sandboxContext struct {
-	Usage sandboxUsageContext  `json:"usage"`
-	Today sandboxPeriodSummary `json:"today"`
-	Hour  sandboxPeriodSummary `json:"hour"`
+	Usage sandboxUsageContext `json:"usage"`
 
 	// Helper functions
 	Now                 func(loc *time.Location) time.Time                                   `json:"-"`
@@ -96,13 +104,13 @@ func WithMinutesUsedInPeriodContext(minutesUsedInPeriod func(appName, hostname s
 
 func WithMinutesSinceLastBlockContext(minutesSinceLastBlock int) sandboxContextOption {
 	return func(ctx *sandboxContext) {
-		ctx.Usage.Duration.SinceLastBlock = &minutesSinceLastBlock
+		ctx.Usage.Insights.Current.Duration.SinceLastBlock = &minutesSinceLastBlock
 	}
 }
 
 func WithMinutesUsedSinceLastBlockContext(minutesUsedSinceLastBlock int) sandboxContextOption {
 	return func(ctx *sandboxContext) {
-		ctx.Usage.Duration.UsedSinceLastBlock = &minutesUsedSinceLastBlock
+		ctx.Usage.Insights.Current.Duration.UsedSinceLastBlock = &minutesUsedSinceLastBlock
 	}
 }
 

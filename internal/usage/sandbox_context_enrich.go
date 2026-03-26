@@ -78,20 +78,20 @@ func (s *Service) populateCurrentUsageContext(ctx *sandboxContext) error {
 		return err
 	}
 
-	if ctx.Usage.Duration.SinceLastBlock == nil {
+	if ctx.Usage.Insights.Current.Duration.SinceLastBlock == nil {
 		minutesSinceLastBlock := int(time.Since(time.Unix(lastBlocked.StartedAt, 0)).Minutes())
-		ctx.Usage.Duration.SinceLastBlock = &minutesSinceLastBlock
+		ctx.Usage.Insights.Current.Duration.SinceLastBlock = &minutesSinceLastBlock
 	}
 
-	if ctx.Usage.Duration.LastBlocked == nil {
+	if ctx.Usage.Insights.Current.Duration.LastBlocked == nil {
 		lastBlockedDurationMinutes := 0
 		if lastBlocked.DurationSeconds != nil {
 			lastBlockedDurationMinutes = *lastBlocked.DurationSeconds / 60
 		}
-		ctx.Usage.Duration.LastBlocked = &lastBlockedDurationMinutes
+		ctx.Usage.Insights.Current.Duration.LastBlocked = &lastBlockedDurationMinutes
 	}
 
-	if ctx.Usage.Duration.UsedSinceLastBlock == nil {
+	if ctx.Usage.Insights.Current.Duration.UsedSinceLastBlock == nil {
 		var totalSeconds int64
 		sumErr := s.scopedUsageIdentityQuery(appName, hostname).
 			Where("application_usage.started_at > ?", lastBlocked.StartedAt).
@@ -102,7 +102,7 @@ func (s *Service) populateCurrentUsageContext(ctx *sandboxContext) error {
 		}
 
 		minutesUsedSinceLastBlock := int(totalSeconds / 60)
-		ctx.Usage.Duration.UsedSinceLastBlock = &minutesUsedSinceLastBlock
+		ctx.Usage.Insights.Current.Duration.UsedSinceLastBlock = &minutesUsedSinceLastBlock
 	}
 
 	return nil
@@ -115,14 +115,14 @@ func (s *Service) populateInsightsContext(ctx *sandboxContext) error {
 		return err
 	}
 
-	ctx.Today.Productive = insights.ProductivityScore.ProductiveSeconds / 60
-	ctx.Today.Distracting = insights.ProductivityScore.DistractingSeconds / 60
-	ctx.Today.Score = insights.ProductivityScore.ProductivityScore
+	ctx.Usage.Insights.Today.ProductiveMinutes = insights.ProductivityScore.ProductiveSeconds / 60
+	ctx.Usage.Insights.Today.DistractingMinutes = insights.ProductivityScore.DistractingSeconds / 60
+	ctx.Usage.Insights.Today.FocusScore = insights.ProductivityScore.ProductivityScore
 
 	hourly := insights.ProductivityPerHourBreakdown[now.Hour()]
-	ctx.Hour.Productive = hourly.ProductiveSeconds / 60
-	ctx.Hour.Distracting = hourly.DistractingSeconds / 60
-	ctx.Hour.Score = hourly.ProductivityScore
+	ctx.Usage.Insights.Hour.ProductiveMinutes = hourly.ProductiveSeconds / 60
+	ctx.Usage.Insights.Hour.DistractingMinutes = hourly.DistractingSeconds / 60
+	ctx.Usage.Insights.Hour.FocusScore = hourly.ProductivityScore
 
 	todayKey := now.Format("2006-01-02")
 
@@ -140,7 +140,7 @@ func (s *Service) populateInsightsContext(ctx *sandboxContext) error {
 		Scan(&currentDistractingSeconds).Error; err != nil {
 		return err
 	}
-	ctx.Usage.Duration.Today = int(currentDistractingSeconds / 60)
+	ctx.Usage.Insights.Current.Duration.Today = int(currentDistractingSeconds / 60)
 
 	var currentBlockedCount int64
 	if err := s.scopedUsageIdentityQuery(appName, hostname).
@@ -149,7 +149,7 @@ func (s *Service) populateInsightsContext(ctx *sandboxContext) error {
 		Count(&currentBlockedCount).Error; err != nil {
 		return err
 	}
-	ctx.Usage.Blocks.Count = int(currentBlockedCount)
+	ctx.Usage.Insights.Current.Blocks.Count = int(currentBlockedCount)
 
 	return nil
 }

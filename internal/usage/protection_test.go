@@ -303,14 +303,15 @@ func setUpServiceWithSettings(t *testing.T, customRules string) (*usage.Service,
 
 func TestProtection_CalculateEnforcementDecision_CustomRules(t *testing.T) {
 
-	t.Run("ctx.usage.meta.appName is accessible", func(t *testing.T) {
+	t.Run("ctx.app is accessible", func(t *testing.T) {
 		customRules := `
-export function enforcement(ctx) {
-	if (ctx.usage.meta.appName == "Slack") {
-		return {
-			enforcementAction: EnforcementAction.Block,
-			enforcementReason: "Slack is blocked by custom rule",
-		}
+import { block, runtime } from "@focusd/runtime";
+
+export function enforcement() {
+	const { app } = runtime.usage;
+
+	if (app == "Slack") {
+		return block("Slack is blocked by custom rule");
 	}
 	return undefined;
 }
@@ -327,14 +328,15 @@ export function enforcement(ctx) {
 		require.Equal(t, usage.EnforcementReason("Slack is blocked by custom rule"), decision.Reason)
 	})
 
-	t.Run("ctx.usage.meta.classification is accessible", func(t *testing.T) {
+	t.Run("ctx.classification is accessible", func(t *testing.T) {
 		customRules := `
-export function enforcement(ctx) {
-	if (ctx.usage.meta.classification == "distracting") {
-		return {
-			enforcementAction: EnforcementAction.Block,
-			enforcementReason: "distracting classification detected",
-		}
+import { block, runtime } from "@focusd/runtime";
+
+export function enforcement() {
+	const { classification } = runtime.usage;
+
+	if (classification == "distracting") {
+		return block("distracting classification detected");
 	}
 	return undefined;
 }
@@ -351,16 +353,15 @@ export function enforcement(ctx) {
 		require.Equal(t, usage.EnforcementReason("distracting classification detected"), decision.Reason)
 	})
 
-	t.Run("ctx.usage.meta.host and ctx.usage.meta.domain are accessible", func(t *testing.T) {
-		// Note: parseURL strips "www." prefix, so "docs.google.com" stays as-is
-		// while domain is extracted via publicsuffix as "google.com"
+	t.Run("ctx.host and ctx.domain are accessible", func(t *testing.T) {
 		customRules := `
-export function enforcement(ctx) {
-	if (ctx.usage.meta.host == "docs.google.com" && ctx.usage.meta.domain == "google.com") {
-		return {
-			enforcementAction: EnforcementAction.Block,
-			enforcementReason: "Google Docs blocked via hostname/domain",
-		}
+import { block, runtime } from "@focusd/runtime";
+
+export function enforcement() {
+	const { host, domain } = runtime.usage;
+
+	if (host == "docs.google.com" && domain == "google.com") {
+		return block("Google Docs blocked via hostname/domain");
 	}
 	return undefined;
 }
@@ -379,14 +380,15 @@ export function enforcement(ctx) {
 		require.Equal(t, usage.EnforcementReason("Google Docs blocked via hostname/domain"), decision.Reason)
 	})
 
-	t.Run("ctx.usage.meta.url and ctx.usage.meta.path are accessible", func(t *testing.T) {
+	t.Run("ctx.url and ctx.path are accessible", func(t *testing.T) {
 		customRules := `
-export function enforcement(ctx) {
-	if (ctx.usage.meta.url == "https://github.com/pulls" && ctx.usage.meta.path == "/pulls") {
-		return {
-			enforcementAction: EnforcementAction.Allow,
-			enforcementReason: "PR reviews are allowed",
-		}
+import { allow, runtime } from "@focusd/runtime";
+
+export function enforcement() {
+	const { url, path } = runtime.usage;
+
+	if (url == "https://github.com/pulls" && path == "/pulls") {
+		return allow("PR reviews are allowed");
 	}
 	return undefined;
 }
@@ -407,7 +409,7 @@ export function enforcement(ctx) {
 
 	t.Run("returns undefined falls through to default", func(t *testing.T) {
 		customRules := `
-export function enforcement(ctx) {
+export function enforcement() {
 	return undefined;
 }
 `
@@ -429,13 +431,14 @@ export function enforcement(ctx) {
 func TestProtection_CalculateEnforcementDecision_CustomRules_ExecutionLogs(t *testing.T) {
 	t.Run("stores enforcement response and console logs", func(t *testing.T) {
 		customRules := `
-export function enforcement(ctx) {
-	console.log("enforcement executed", ctx.usage.meta.appName)
-	if (ctx.usage.meta.appName == "Slack") {
-		return {
-			enforcementAction: EnforcementAction.Block,
-			enforcementReason: "Slack is blocked by custom rule",
-		}
+import { block, runtime } from "@focusd/runtime";
+
+export function enforcement() {
+	const { app } = runtime.usage;
+
+	console.log("enforcement executed", app)
+	if (app == "Slack") {
+		return block("Slack is blocked by custom rule");
 	}
 	return undefined;
 }
@@ -477,8 +480,12 @@ export function enforcement(ctx) {
 
 	t.Run("stores no response when decision is undefined", func(t *testing.T) {
 		customRules := `
-export function enforcement(ctx) {
-	console.log("undefined decision for", ctx.usage.meta.appName)
+import { runtime } from "@focusd/runtime";
+
+export function enforcement() {
+	const { app } = runtime.usage;
+
+	console.log("undefined decision for", app)
 	return undefined;
 }
 `
@@ -509,8 +516,12 @@ export function enforcement(ctx) {
 
 	t.Run("stores errors for failed enforcement execution", func(t *testing.T) {
 		customRules := `
-export function enforcement(ctx) {
-	console.log("about to fail", ctx.usage.meta.appName)
+import { runtime } from "@focusd/runtime";
+
+export function enforcement() {
+	const { app } = runtime.usage;
+
+	console.log("about to fail", app)
 	throw new Error("enforcement fail");
 }
 `

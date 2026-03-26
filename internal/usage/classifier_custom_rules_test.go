@@ -13,109 +13,78 @@ import (
 )
 
 var customRulesApps = `
-/**
-* Custom classification logic.
- * Return a Classify to override the default, or undefined to keep the default.
-*/
-export function classify(context: Context): Classify | undefined {
+import {
+	productive,
+	neutral,
+	runtime,
+	type Classify,
+	type Enforce,
+} from "@focusd/runtime";
+
+export function classify(): Classify | undefined {
+	const { app, current } = runtime.usage;
+
 	console.log("should capture this");
 
-	if (now().getHours() == 10 && now().getMinutes() > 0 && now().getMinutes() < 30) {
-		return {
-			classification: Classification.Productive,
-			classificationReasoning: "Work-related activity",
-			tags: ["work", "productivity"],
-		}
+	if (runtime.time.now().getHours() == 10 && runtime.time.now().getMinutes() > 0 && runtime.time.now().getMinutes() < 30) {
+		return productive("Work-related activity", ["work", "productivity"]);
 	}
 
 	console.log("and this too");
 
-	if (context.usage.meta.appName == "Slack") {
-		return {
-			classification: Classification.Neutral,
-			classificationReasoning: "Slack is a neutral app",
-			tags: ["communication", "work"],
-		}
+	if (app == "Slack") {
+		return neutral("Slack is a neutral app", ["communication", "work"]);
 	}
 
 	console.log("also this");
 
-	if (context.usage.duration.sinceLastBlock >= 20 && context.usage.duration.usedSinceLastBlock < 5 && context.usage.meta.appName == "Discord") {
-		return {
-			classification: Classification.Neutral,
-			classificationReasoning: "Allow using 5 mins every 20 mins",
-			tags: ["resting", "relaxing"],
-		}
+	if (current.sinceBlock >= 20 && current.usedSinceBlock < 5 && app == "Discord") {
+		return neutral("Allow using 5 mins every 20 mins", ["resting", "relaxing"]);
 	}
 
 	return undefined;
 }
 
-/**
- * Custom enforcement logic.
- * Return an Enforcement to override the default, or undefined to keep the default.
-*/
-export function enforcement(context: Context): Enforcement | undefined {
+export function enforcement(): Enforce | undefined {
 	
 }
 `
 
 var customRulesWithMinutesUsedInPeriod = `
-export function classify(context: Context): Classify | undefined {
-	const minutesUsed = context.usage.duration.last(60);
+import { distracting, neutral, runtime, type Classify } from "@focusd/runtime";
+
+export function classify(): Classify | undefined {
+	const { current } = runtime.usage;
+	const minutesUsed = current.last(60);
 	
 	if (minutesUsed > 30) {
-		return {
-			classification: Classification.Distracting,
-			classificationReasoning: "Too much time spent: " + minutesUsed + " minutes",
-			tags: ["limit-exceeded"],
-		}
+		return distracting("Too much time spent: " + minutesUsed + " minutes", ["limit-exceeded"]);
 	}
 	
-	return {
-		classification: Classification.Neutral,
-		classificationReasoning: "Under limit: " + minutesUsed + " minutes",
-		tags: ["within-limit"],
-	}
+	return neutral("Under limit: " + minutesUsed + " minutes", ["within-limit"]);
 }
 `
 
 var customRulesWebsite = `
-export function classify(context: Context): Classify | undefined {
-	// Match by domain
-	if (context.usage.meta.domain === "youtube.com") {
-		return {
-			classification: Classification.Distracting,
-			classificationReasoning: "YouTube is distracting",
-			tags: ["video", "entertainment"],
-		}
+import { productive, distracting, runtime, type Classify } from "@focusd/runtime";
+
+export function classify(): Classify | undefined {
+	const { domain, host, path, url } = runtime.usage;
+
+	if (domain === "youtube.com") {
+		return distracting("YouTube is distracting", ["video", "entertainment"]);
 	}
 	
-	// Match by hostname (subdomain-aware)
-	if (context.usage.meta.host === "docs.google.com") {
-		return {
-			classification: Classification.Productive,
-			classificationReasoning: "Google Docs is productive",
-			tags: ["docs", "work"],
-		}
+	if (host === "docs.google.com") {
+		return productive("Google Docs is productive", ["docs", "work"]);
 	}
 	
-	// Match by path
-	if (context.usage.meta.host === "github.com" && context.usage.meta.path.startsWith("/pulls")) {
-		return {
-			classification: Classification.Productive,
-			classificationReasoning: "Reviewing pull requests",
-			tags: ["code-review", "work"],
-		}
+	if (host === "github.com" && path.startsWith("/pulls")) {
+		return productive("Reviewing pull requests", ["code-review", "work"]);
 	}
 	
-	// Match by full URL
-	if (context.usage.meta.url === "https://twitter.com/home") {
-		return {
-			classification: Classification.Distracting,
-			classificationReasoning: "Twitter home feed",
-			tags: ["social-media"],
-		}
+	if (url === "https://twitter.com/home") {
+		return distracting("Twitter home feed", ["social-media"]);
 	}
 	
 	return undefined;

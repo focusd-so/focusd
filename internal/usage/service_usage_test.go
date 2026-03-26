@@ -273,13 +273,13 @@ func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 
 func TestService_Classification(t *testing.T) {
 	customRulesOverrideAmazon := `
-export function classify(context: Context): Classify | undefined {
-	if (context.usage.meta.domain === "amazon.com") {
-		return {
-			classification: Classification.Productive,
-			classificationReasoning: "Amazon is productive for procurement work",
-			tags: ["custom", "procurement"],
-		}
+import { productive, runtime, type Classify } from "@focusd/runtime";
+
+export function classify(): Classify | undefined {
+	const { domain } = runtime.usage;
+
+	if (domain === "amazon.com") {
+		return productive("Amazon is productive for procurement work", ["custom", "procurement"]);
 	}
 
 	return undefined;
@@ -322,13 +322,13 @@ export function classify(context: Context): Classify | undefined {
 		h := newUsageHarness(t,
 			withAccountTier(apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS),
 			withCustomRulesJS(`
-export function classify(context: Context): Classify | undefined {
-	if (context.usage.meta.domain === "not-amazon.com") {
-		return {
-			classification: Classification.Productive,
-			classificationReasoning: "Unreachable rule",
-			tags: ["custom"],
-		}
+import { productive, runtime, type Classify } from "@focusd/runtime";
+
+export function classify(): Classify | undefined {
+	const { domain } = runtime.usage;
+
+	if (domain === "not-amazon.com") {
+		return productive("Unreachable rule", ["custom"]);
 	}
 
 	return undefined;

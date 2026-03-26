@@ -53,7 +53,7 @@ func formatEsbuildErrors(errors []api.Message) string {
 	return strings.Join(messages, "\n")
 }
 
-// prepareScript transpiles TypeScript and adds global function exports, console polyfill, and now() helper
+// prepareScript transpiles TypeScript and exposes @focusd/runtime as the only importable module.
 func prepareScript(code string) (string, error) {
 	// Transpile user code with CommonJS format to handle export statements
 	// Use ES2016 target to transpile async/await to generators which can run synchronously
@@ -69,24 +69,24 @@ func prepareScript(code string) (string, error) {
 
 	transpiledCode := string(result.Code)
 
-	// Wrap the transpiled code with CommonJS environment and expose functions to globalThis
+	// Wrap transpiled CommonJS with runtime module + function exports.
 	preparedScript := fmt.Sprintf(`
-// Define global constants for user scripts
-var EnforcementAction = {
-	None: "none",
-	Block: "block",
-	Paused: "paused",
-	Allow: "allow"
-};
-
-var Classification = {
+var Classification = Object.freeze({
+	Unknown: "unknown",
 	Productive: "productive",
 	Distracting: "distracting",
 	Neutral: "neutral",
 	System: "system"
-};
+});
 
-var Weekday = {
+var EnforcementAction = Object.freeze({
+	None: "none",
+	Block: "block",
+	Paused: "paused",
+	Allow: "allow"
+});
+
+var Weekday = Object.freeze({
 	Sunday: "Sunday",
 	Monday: "Monday",
 	Tuesday: "Tuesday",
@@ -94,9 +94,9 @@ var Weekday = {
 	Thursday: "Thursday",
 	Friday: "Friday",
 	Saturday: "Saturday"
-};
+});
 
-var Timezone = {
+var Timezone = Object.freeze({
 	// Americas
 	America_New_York: "America/New_York",
 	America_Chicago: "America/Chicago",
@@ -166,7 +166,71 @@ var Timezone = {
 	Pacific_Honolulu: "Pacific/Honolulu",
 	// UTC
 	UTC: "UTC"
+});
+
+function __runtimeNow(timezone) {
+	const ts = __getShiftedTimestamp(timezone);
+	return new Date(ts);
+}
+
+function __runtimeDayOfWeek(timezone) {
+	const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+	return days[__runtimeNow(timezone).getDay()];
+}
+
+function productive(reason, tags) {
+	return { classification: "productive", classificationReasoning: reason, tags: tags };
+}
+function distracting(reason, tags) {
+	return { classification: "distracting", classificationReasoning: reason, tags: tags };
+}
+function neutral(reason, tags) {
+	return { classification: "neutral", classificationReasoning: reason, tags: tags };
+}
+function block(reason) {
+	return { enforcementAction: "block", enforcementReason: reason };
+}
+function allow(reason) {
+	return { enforcementAction: "allow", enforcementReason: reason };
+}
+function pause(reason) {
+	return { enforcementAction: "paused", enforcementReason: reason };
+}
+
+var __runtimeModule = {
+	Classification: Classification,
+	EnforcementAction: EnforcementAction,
+	Timezone: Timezone,
+	Weekday: Weekday,
+	productive: productive,
+	distracting: distracting,
+	neutral: neutral,
+	block: block,
+	allow: allow,
+	pause: pause,
+	get runtime() {
+		return globalThis.__focusd_runtime_context || {
+			today: { focusScore: 0, productiveMinutes: 0, distractingMinutes: 0 },
+			hour: { focusScore: 0, productiveMinutes: 0, distractingMinutes: 0 },
+			time: {
+				now: __runtimeNow,
+				day: __runtimeDayOfWeek
+			}
+		};
+	}
 };
+Object.freeze(__runtimeModule.Classification);
+Object.freeze(__runtimeModule.EnforcementAction);
+Object.freeze(__runtimeModule.Timezone);
+Object.freeze(__runtimeModule.Weekday);
+
+function require(specifier) {
+	if (specifier === "@focusd/runtime") {
+		return __runtimeModule;
+	}
+
+	throw new Error("Unsupported import: " + specifier + ". Only '@focusd/runtime' is available.");
+}
 
 var exports = {};
 var module = { exports: exports };
@@ -198,39 +262,6 @@ if (typeof console === 'undefined') {
 	console.error = __console_log;
 	console.debug = __console_log;
 }
-
-/**
- * Returns a Date object for the current time in the specified IANA timezone.
- * Use Timezone.* constants for autocomplete, or pass any valid IANA timezone string.
- * If no timezone is provided or the string is invalid, uses local time.
- * @param {string} [timezone] - IANA timezone (e.g. Timezone.Europe_London, 'America/New_York')
- * @returns {Date}
- */
-function now(timezone) {
-    const ts = __getShiftedTimestamp(timezone);
-    return new Date(ts);
-}
-
-/**
- * Returns the day of the week in the specified IANA timezone.
- * @param {string} [timezone] - IANA timezone (e.g. Timezone.Asia_Tokyo)
- * @returns {string}
- */
-function dayOfWeek(timezone) {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[now(timezone).getDay()];
-}
-
-var __currentDay = dayOfWeek();
-var IsMonday = __currentDay === "Monday";
-var IsTuesday = __currentDay === "Tuesday";
-var IsWednesday = __currentDay === "Wednesday";
-var IsThursday = __currentDay === "Thursday";
-var IsFriday = __currentDay === "Friday";
-var IsSaturday = __currentDay === "Saturday";
-var IsSunday = __currentDay === "Sunday";
-var IsWeekday = !IsSaturday && !IsSunday;
-var IsWeekend = IsSaturday || IsSunday;
 `, transpiledCode)
 
 	return preparedScript, nil
@@ -355,48 +386,49 @@ func (s *sandbox) executeFunction(v8ctx *v8.Context, preparedScript string, func
 		return "", fmt.Errorf("failed to marshal context: %w", err)
 	}
 
-	// Call the function
-	// Expose today/hour globals and add usage.duration.last helper.
+	// Call the function with flat usage context.
 	callScript := fmt.Sprintf(`
 		(function() {
-			const rawCtx = %s;
-			Object.defineProperty(globalThis, 'today', {
-				value: Object.freeze(rawCtx.today || {}),
-				writable: false,
-				configurable: true
-			});
-			Object.defineProperty(globalThis, 'hour', {
-				value: Object.freeze(rawCtx.hour || {}),
-				writable: false,
-				configurable: true
-			});
+			var raw = %s;
+			var u = raw.usage || {};
+			var meta = u.meta || {};
+			var ins = u.insights || {};
+			var cur = ins.current || {};
+			var dur = cur.duration || {};
+			var blk = cur.blocks || {};
 
-			const ctx = {
-				usage: rawCtx.usage || {}
+			var lastFn = (typeof __minutesUsedInPeriod === 'function')
+				? function(m) { return __minutesUsedInPeriod(meta.appName || "", meta.host || "", m); }
+				: function() { return 0; };
+
+			var ctx = {
+				app: meta.appName || "",
+				title: meta.title || "",
+				domain: meta.domain || "",
+				host: meta.host || "",
+				path: meta.path || "",
+				url: meta.url || "",
+				classification: meta.classification || "",
+				current: {
+					usedToday: dur.today || 0,
+					blocks: blk.count || 0,
+					sinceBlock: dur.sinceLastBlock != null ? dur.sinceLastBlock : null,
+					usedSinceBlock: dur.usedSinceLastBlock != null ? dur.usedSinceLastBlock : null,
+					last: lastFn
+				}
 			};
 
-			if (!ctx.usage) {
-				ctx.usage = {};
-			}
+			globalThis.__focusd_runtime_context = {
+				today: ins.today || { focusScore: 0, productiveMinutes: 0, distractingMinutes: 0 },
+				hour: ins.hour || { focusScore: 0, productiveMinutes: 0, distractingMinutes: 0 },
+				time: {
+					now: __runtimeNow,
+					day: __runtimeDayOfWeek
+				},
+				usage: ctx
+			};
 
-			if (!ctx.usage.meta) {
-				ctx.usage.meta = {};
-			}
-
-			if (!ctx.usage.duration) {
-				ctx.usage.duration = {};
-			}
-
-			// Add last method to usage.duration.
-			if (typeof __minutesUsedInPeriod === 'function') {
-				ctx.usage.duration.last = function(minutes) {
-					return __minutesUsedInPeriod(ctx.usage.meta.appName, ctx.usage.meta.host, minutes);
-				};
-			} else {
-				ctx.usage.duration.last = function(minutes) { return 0; };
-			}
-
-			const result = %s(ctx);
+			var result = %s();
 			if (result === undefined || result === null) {
 				return undefined;
 			}
