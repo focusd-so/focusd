@@ -152,7 +152,7 @@ func (s *Service) computeLLMDaySummaryInput(date time.Time) (LLMDaySummaryInput,
 
 	var (
 		productiveSecs  int
-		distractiveSecs int
+		distractingSecs int
 		contextSwitches int // productive↔distracting transitions
 		prevClass       Classification
 
@@ -188,7 +188,7 @@ func (s *Service) computeLLMDaySummaryInput(date time.Time) (LLMDaySummaryInput,
 			cascade.endCascade(u.StartedAt)
 
 		case ClassificationDistracting:
-			distractiveSecs += dur
+			distractingSecs += dur
 			appDistractSecs[appName] += dur
 			appDistractVisit[appName]++
 			hourDistractSecs[startHour] += dur
@@ -219,8 +219,8 @@ func (s *Service) computeLLMDaySummaryInput(date time.Time) (LLMDaySummaryInput,
 	input := LLMDaySummaryInput{
 		Date:                    date.Format("2006-01-02"),
 		TotalProductiveMinutes:  productiveSecs / 60,
-		TotalDistractiveMinutes: distractiveSecs / 60,
-		FocusScore:              calculateProductivityScore(productiveSecs, distractiveSecs),
+		TotalDistractingMinutes: distractingSecs / 60,
+		FocusScore:              calculateProductivityScore(productiveSecs, distractingSecs),
 		ContextSwitchCount:      contextSwitches,
 		LongestFocusStretchMin:  focus.longestMinutes(),
 		DeepWorkSessions:        deep.sessions,
@@ -229,7 +229,7 @@ func (s *Service) computeLLMDaySummaryInput(date time.Time) (LLMDaySummaryInput,
 		TopDistractions:         topApps(appDistractSecs, appDistractVisit, 5),
 		TopProductiveApps:       topApps(appProductiveSecs, appProductiveVisit, 5),
 		MostProductiveHours:     peakHour(hourProductiveSecs),
-		MostDistractiveHours:    peakHour(hourDistractSecs),
+		MostDistractingHours:    peakHour(hourDistractSecs),
 	}
 
 	s.enrichWithDBStats(&input, date)
@@ -442,7 +442,7 @@ func (s *Service) computeFocusTrend(referenceDate time.Time) (avgScore int, tren
 		if err != nil {
 			continue
 		}
-		if insights.ProductivityScore.ProductiveSeconds+insights.ProductivityScore.DistractiveSeconds < minSecondsForSummary {
+		if insights.ProductivityScore.ProductiveSeconds+insights.ProductivityScore.DistractingSeconds < minSecondsForSummary {
 			continue
 		}
 		scores = append(scores, insights.ProductivityScore.ProductivityScore)

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -268,4 +269,101 @@ func TestService_ProtectionPauseAndWhitelisting(t *testing.T) {
 			assertEnforcementAction(t, usage.EnforcementActionAllow),
 			assertEnforcementSource(t, usage.EnforcementSourceWhitelist),
 		)
+}
+
+func TestService_Classification(t *testing.T) {
+	customRulesOverrideAmazon := `
+import { productive, runtime, type Classify } from "@focusd/runtime";
+
+export function classify(): Classify | undefined {
+	const { domain } = runtime.usage;
+
+	if (domain === "amazon.com") {
+		return productive("Amazon is productive for procurement work", ["custom", "procurement"]);
+	}
+
+	return undefined;
+}
+`
+
+	t.Run("custom rules override obvious classification for paid tier", func(t *testing.T) {
+		h := newUsageHarness(t,
+			withAccountTier(apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS),
+			withCustomRulesJS(customRulesOverrideAmazon),
+		)
+
+		h.
+			TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+			AssertLastUsage(
+				assertUsageClassification(t, usage.ClassificationProductive),
+				assertUsageClassificationSource(t, usage.ClassificationSourceCustomRules),
+				assertUsageClassificationReasoning(t, "Amazon is productive for procurement work"),
+				assertUsageClassificationConfidence(t, 1),
+				assertUsageTags(t, "custom", "procurement"),
+			)
+	})
+
+	t.Run("obvious classification wins when tier cannot execute custom rules", func(t *testing.T) {
+		h := newUsageHarness(t,
+			withAccountTier(apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE),
+			withCustomRulesJS(customRulesOverrideAmazon),
+		)
+
+		h.
+			TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+			AssertLastUsage(
+				assertUsageClassification(t, usage.ClassificationDistracting),
+				assertUsageClassificationSource(t, usage.ClassificationSourceObviously),
+				assertClassificationSandboxRecorded(t),
+			)
+	})
+
+	t.Run("obvious classification applies when custom rules do not match", func(t *testing.T) {
+		h := newUsageHarness(t,
+			withAccountTier(apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS),
+			withCustomRulesJS(`
+import { productive, runtime, type Classify } from "@focusd/runtime";
+
+export function classify(): Classify | undefined {
+	const { domain } = runtime.usage;
+
+	if (domain === "not-amazon.com") {
+		return productive("Unreachable rule", ["custom"]);
+	}
+
+	return undefined;
+}
+`),
+		)
+
+		h.
+			TitleChanged("Chrome", "Amazon", withPtr("https://www.amazon.com")).
+			AssertLastUsage(
+				assertUsageClassification(t, usage.ClassificationDistracting),
+				assertUsageClassificationSource(t, usage.ClassificationSourceObviously),
+			)
+	})
+
+	t.Run("LLM fallback applies when custom and obvious do not classify", func(t *testing.T) {
+		h := newUsageHarness(t,
+			withAccountTier(apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_FREE),
+			withDummyLLMResponse(usage.ClassificationResponse{
+				Classification:       usage.ClassificationNeutral,
+				ClassificationSource: usage.ClassificationSourceCloudLLMOpenAI,
+				Reasoning:            "LLM fallback for unknown website",
+				ConfidenceScore:      0.77,
+				Tags:                 []string{"llm", "fallback"},
+			}),
+		)
+
+		h.
+			TitleChanged("Chrome", "Unknown", withPtr("https://niche-unknown-example.com/rare/page")).
+			AssertLastUsage(
+				assertUsageClassification(t, usage.ClassificationNeutral),
+				assertUsageClassificationSource(t, usage.ClassificationSourceCloudLLMOpenAI),
+				assertUsageClassificationReasoning(t, "LLM fallback for unknown website"),
+				assertUsageClassificationConfidence(t, 0.77),
+				assertUsageTags(t, "llm", "fallback"),
+			)
+	})
 }

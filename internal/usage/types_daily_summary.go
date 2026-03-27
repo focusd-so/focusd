@@ -28,27 +28,27 @@ func (LLMDailySummary) TableName() string {
 // LLMDaySummaryInput is the pre-computed data that gets serialized and sent to the LLM.
 // It is never stored -- only used as an intermediate representation.
 type LLMDaySummaryInput struct {
-	Date                   string                 `json:"date"`
-	TotalProductiveMinutes int                    `json:"total_productive_minutes"`
-	TotalDistractiveMinutes int                   `json:"total_distractive_minutes"`
-	FocusScore             int                    `json:"focus_score"`
-	ContextSwitchCount     int                    `json:"context_switch_count"`
-	LongestFocusStretchMin int                    `json:"longest_focus_stretch_min"`
-	DeepWorkSessions       []LLMDeepWorkSession   `json:"deep_work_sessions"`
-	DeepWorkTotalMinutes   int                    `json:"deep_work_total_minutes"`
-	DistractionCascades    []LLMDistractionCascade `json:"distraction_cascades"`
-	TopDistractions        []LLMAppTimeSummary    `json:"top_distractions"`
-	TopProductiveApps      []LLMAppTimeSummary    `json:"top_productive_apps"`
-	MostProductiveHours    string                 `json:"most_productive_hours"`
-	MostDistractiveHours   string                 `json:"most_distractive_hours"`
-	BlockedAttemptCount    int                    `json:"blocked_attempt_count"`
-	ProtectionPauseCount   int                    `json:"protection_pause_count"`
-	AvgFocusScoreLast7Days int                    `json:"avg_focus_score_last_7_days"`
-	FocusScoreTrend        string                 `json:"focus_score_trend"`
+	Date                    string                  `json:"date"`
+	TotalProductiveMinutes  int                     `json:"total_productive_minutes"`
+	TotalDistractingMinutes int                     `json:"total_distracting_minutes"`
+	FocusScore              int                     `json:"focus_score"`
+	ContextSwitchCount      int                     `json:"context_switch_count"`
+	LongestFocusStretchMin  int                     `json:"longest_focus_stretch_min"`
+	DeepWorkSessions        []LLMDeepWorkSession    `json:"deep_work_sessions"`
+	DeepWorkTotalMinutes    int                     `json:"deep_work_total_minutes"`
+	DistractionCascades     []LLMDistractionCascade `json:"distraction_cascades"`
+	TopDistractions         []LLMAppTimeSummary     `json:"top_distractions"`
+	TopProductiveApps       []LLMAppTimeSummary     `json:"top_productive_apps"`
+	MostProductiveHours     string                  `json:"most_productive_hours"`
+	MostDistractingHours    string                  `json:"most_distracting_hours"`
+	BlockedAttemptCount     int                     `json:"blocked_attempt_count"`
+	ProtectionPauseCount    int                     `json:"protection_pause_count"`
+	AvgFocusScoreLast7Days  int                     `json:"avg_focus_score_last_7_days"`
+	FocusScoreTrend         string                  `json:"focus_score_trend"`
 }
 
 func (i LLMDaySummaryInput) hasMinimumData() bool {
-	totalTrackedSecs := (i.TotalProductiveMinutes + i.TotalDistractiveMinutes) * 60
+	totalTrackedSecs := (i.TotalProductiveMinutes + i.TotalDistractingMinutes) * 60
 	return totalTrackedSecs >= minSecondsForSummary
 }
 
@@ -60,11 +60,11 @@ type LLMDeepWorkSession struct {
 }
 
 type LLMDistractionCascade struct {
-	TriggerTime     string   `json:"trigger_time"`
-	TriggerApp      string   `json:"trigger_app"`
-	CascadeApps     []string `json:"cascade_apps"`
-	TotalMinutes    int      `json:"total_minutes"`
-	ReturnedToWork  string   `json:"returned_to_work_at"`
+	TriggerTime    string   `json:"trigger_time"`
+	TriggerApp     string   `json:"trigger_app"`
+	CascadeApps    []string `json:"cascade_apps"`
+	TotalMinutes   int      `json:"total_minutes"`
+	ReturnedToWork string   `json:"returned_to_work_at"`
 }
 
 type LLMAppTimeSummary struct {

@@ -23,7 +23,7 @@ type CommunicationBreakdown struct {
 
 type ProductivityScore struct {
 	ProductiveSeconds  int `json:"productive_seconds"`
-	DistractiveSeconds int `json:"distractive_seconds"`
+	DistractingSeconds int `json:"distracting_seconds"`
 	IdleSeconds        int `json:"idle_seconds"`
 	OtherSeconds       int `json:"other_seconds"`
 	ProductivityScore  int `json:"productivity_score"`
@@ -38,7 +38,7 @@ func (p *ProductivityScore) addSeconds(classification Classification, seconds in
 	case ClassificationProductive:
 		p.ProductiveSeconds += seconds
 	case ClassificationDistracting:
-		p.DistractiveSeconds += seconds
+		p.DistractingSeconds += seconds
 	default:
 		p.OtherSeconds += seconds
 	}

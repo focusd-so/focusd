@@ -152,7 +152,13 @@ func (s *Service) saveApplicationUsage(applicationUsage *ApplicationUsage) error
 
 func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage *ApplicationUsage) (*ClassificationResponse, error) {
 	// Do sandbox classification first, eg user defined custom rules
-	customRulesResp, err := s.ClassifyCustomRules(ctx, WithAppNameContext(applicationUsage.Application.Name), WithWindowTitleContext(applicationUsage.WindowTitle), WithBrowserURLContext(fromPtr(applicationUsage.BrowserURL)))
+	customRulesResp, err := s.ClassifyCustomRules(
+		ctx,
+		WithAppNameContext(applicationUsage.Application.Name),
+		WithWindowTitleContext(applicationUsage.WindowTitle),
+		WithBrowserURLContext(fromPtr(applicationUsage.BrowserURL)),
+		WithClassificationContext(applicationUsage.Classification),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify application usage with custom rules: %w", err)
 	}

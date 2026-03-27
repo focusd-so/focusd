@@ -18,6 +18,8 @@ func (s *Service) ClassifyCustomRules(ctx context.Context, opts ...sandboxContex
 }
 
 func (s *Service) classifyCustomRulesWithSandbox(ctx context.Context, sandboxCtx sandboxContext) (*ClassificationResponse, error) {
+	s.enrichSandboxContext(&sandboxCtx)
+
 	// Serialize the context to JSON
 	contextJSON, err := json.Marshal(sandboxCtx)
 	if err != nil {
@@ -33,18 +35,6 @@ func (s *Service) classifyCustomRulesWithSandbox(ctx context.Context, sandboxCtx
 
 	if err := s.db.Create(&executionLog).Error; err != nil {
 		return nil, err
-	}
-
-	if sandboxCtx.Now == nil {
-		sandboxCtx.Now = func(loc *time.Location) time.Time {
-			return time.Now().In(loc)
-		}
-	}
-
-	if sandboxCtx.MinutesUsedInPeriod == nil {
-		sandboxCtx.MinutesUsedInPeriod = func(bundleID, hostname string, durationMinutes int64) (int64, error) {
-			return 0, nil
-		}
 	}
 
 	resp, logs, err := s.classifySandbox(ctx, sandboxCtx)
@@ -98,7 +88,7 @@ func (s *Service) classifyCustomRulesWithSandbox(ctx context.Context, sandboxCtx
 	}, nil
 }
 
-func (s *Service) classifySandbox(ctx context.Context, sandboxCtx sandboxContext) (desicion *classificationDecision, logs []string, err error) {
+func (s *Service) classifySandbox(ctx context.Context, sandboxCtx sandboxContext) (decision *classificationResult, logs []string, err error) {
 	// Get the latest custom rules code
 	customRules := settings.GetCustomRulesJS()
 	if customRules == "" {
