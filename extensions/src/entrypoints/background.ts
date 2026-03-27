@@ -23,9 +23,54 @@ type ConnectionInfo = {
   applicationName: string;
 };
 
-let reconnectDelay = RECONNECT_BASE_DELAY_MS;
+type PageTitleChangedMessage = {
+  type: "page_title_changed";
+  payload: {
+    tabId: number;
+    title: string;
+    windowId: number;
+    url?: string;
+    timestamp: string;
+  };
+};
 
-void startBridge();
+type PageTitleClassifiedMessage = {
+  type: "page_title_classified";
+  payload: {
+    tabId: number;
+    title: string;
+    usage: UsageSnapshot;
+  };
+};
+
+type PageTitleErrorMessage = {
+  type: "page_title_error";
+  payload: {
+    tabId: number;
+    error: string;
+  };
+};
+
+type IncomingWSMessage = PageTitleClassifiedMessage | PageTitleErrorMessage;
+type UsageSnapshot = Record<string, unknown> & {
+  enforcement_action?: string | null;
+  classification_reasoning?: string | null;
+  tags?: unknown;
+};
+type TabBlockPayload = {
+  title: string;
+  classificationReasoning: string;
+  tags: string[];
+};
+type TabControlMessage = { type: "focusd:block"; payload: TabBlockPayload } | { type: "focusd:unblock" };
+
+let reconnectDelay = RECONNECT_BASE_DELAY_MS;
+const latestUsageByTabId = new Map<number, UsageSnapshot>();
+const blockedTabIds = new Set<number>();
+
+export default defineBackground(() => {
+  void startBridge();
+});
 
 async function startBridge() {
   while (true) {
@@ -107,12 +152,48 @@ function connectWebSocket(info: ConnectionInfo): Promise<void> {
     wsURL.searchParams.set("application_name", info.applicationName);
 
     const ws = new WebSocket(wsURL.toString());
+    let stopTabTitleListener: (() => void) | null = null;
 
     ws.onopen = () => {
       reconnectDelay = RECONNECT_BASE_DELAY_MS;
+      stopTabTitleListener = startTabTitleListener(ws);
+    };
+
+    ws.onmessage = (event) => {
+      if (typeof event.data !== "string") {
+        return;
+      }
+
+      let message: IncomingWSMessage;
+      try {
+        message = JSON.parse(event.data) as IncomingWSMessage;
+      } catch {
+        return;
+      }
+
+      if (message.type === "page_title_classified") {
+        latestUsageByTabId.set(message.payload.tabId, message.payload.usage);
+        void setTabBlockedState(
+          message.payload.tabId,
+          isBlockEnforcementAction(message.payload.usage),
+          {
+            title: message.payload.title,
+            classificationReasoning: extractClassificationReasoning(message.payload.usage),
+            tags: extractUsageTags(message.payload.usage)
+          }
+        );
+        return;
+      }
+
+      if (message.type === "page_title_error") {
+        console.warn("focusd page title classification error", message.payload);
+      }
     };
 
     ws.onclose = () => {
+      stopTabTitleListener?.();
+      stopTabTitleListener = null;
+      void unblockAllTabs();
       resolve();
     };
 
@@ -120,6 +201,134 @@ function connectWebSocket(info: ConnectionInfo): Promise<void> {
       ws.close();
     };
   });
+}
+
+function startTabTitleListener(ws: WebSocket) {
+  const onTabUpdated: Parameters<typeof browser.tabs.onUpdated.addListener>[0] = (
+    tabId,
+    changeInfo,
+    tab
+  ) => {
+    if (changeInfo.status === "complete" && blockedTabIds.has(tabId)) {
+      const usage = latestUsageByTabId.get(tabId);
+      void sendTabControlMessage(tabId, {
+        type: "focusd:block",
+        payload: {
+          title: tab.title || changeInfo.title || "Blocked page",
+          classificationReasoning: usage ? extractClassificationReasoning(usage) : "",
+          tags: usage ? extractUsageTags(usage) : []
+        }
+      });
+    }
+
+    if (!changeInfo.title || ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    const message: PageTitleChangedMessage = {
+      type: "page_title_changed",
+      payload: {
+        tabId,
+        title: changeInfo.title,
+        windowId: tab.windowId,
+        url: tab.url,
+        timestamp: new Date().toISOString()
+      }
+    };
+
+    try {
+      ws.send(JSON.stringify(message));
+    } catch {
+      ws.close();
+    }
+  };
+
+  const onTabRemoved: Parameters<typeof browser.tabs.onRemoved.addListener>[0] = (tabId) => {
+    latestUsageByTabId.delete(tabId);
+    blockedTabIds.delete(tabId);
+  };
+
+  browser.tabs.onUpdated.addListener(onTabUpdated);
+  browser.tabs.onRemoved.addListener(onTabRemoved);
+
+  return () => {
+    browser.tabs.onUpdated.removeListener(onTabUpdated);
+    browser.tabs.onRemoved.removeListener(onTabRemoved);
+  };
+}
+
+function isBlockEnforcementAction(usage: UsageSnapshot) {
+  return usage.enforcement_action === "block";
+}
+
+function extractClassificationReasoning(usage: UsageSnapshot) {
+  return typeof usage.classification_reasoning === "string" ? usage.classification_reasoning : "";
+}
+
+function extractUsageTags(usage: UsageSnapshot) {
+  if (!Array.isArray(usage.tags)) {
+    return [];
+  }
+
+  const tags: string[] = [];
+  for (const tagValue of usage.tags) {
+    if (typeof tagValue === "string") {
+      tags.push(tagValue);
+      continue;
+    }
+
+    if (
+      tagValue &&
+      typeof tagValue === "object" &&
+      "tag" in tagValue &&
+      typeof (tagValue as { tag?: unknown }).tag === "string"
+    ) {
+      tags.push((tagValue as { tag: string }).tag);
+    }
+  }
+
+  return tags;
+}
+
+async function setTabBlockedState(tabId: number, blocked: boolean, details: TabBlockPayload) {
+  if (blocked) {
+    blockedTabIds.add(tabId);
+    await sendTabControlMessage(tabId, { type: "focusd:block", payload: details });
+    return;
+  }
+
+  if (!blockedTabIds.has(tabId)) {
+    return;
+  }
+
+  blockedTabIds.delete(tabId);
+  await sendTabControlMessage(tabId, { type: "focusd:unblock" });
+}
+
+async function unblockAllTabs() {
+  const tabIds = Array.from(blockedTabIds);
+  blockedTabIds.clear();
+  await Promise.all(tabIds.map((tabId) => sendTabControlMessage(tabId, { type: "focusd:unblock" })));
+}
+
+async function sendTabControlMessage(tabId: number, message: TabControlMessage) {
+  try {
+    await browser.tabs.sendMessage(tabId, message);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.message.includes("Could not establish connection") ||
+        error.message.includes("Receiving end does not exist"))
+    ) {
+      return;
+    }
+
+    console.debug("focusd tab control message failed", {
+      tabId,
+      messageType: message.type,
+      error
+    });
+  }
 }
 
 function detectApplicationName() {
