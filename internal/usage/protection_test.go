@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -287,6 +288,7 @@ func TestProtection_RemoveWhitelist_NonExistentID(t *testing.T) {
 
 func setUpServiceWithSettings(t *testing.T, customRules string) (*usage.Service, *gorm.DB) {
 	t.Helper()
+	setTestAccountTier(t, apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS)
 
 	db, _ := gorm.Open(sqlite.Open(memoryDSN(t)), &gorm.Config{})
 
@@ -301,14 +303,15 @@ func setUpServiceWithSettings(t *testing.T, customRules string) (*usage.Service,
 
 func TestProtection_CalculateEnforcementDecision_CustomRules(t *testing.T) {
 
-	t.Run("ctx.appName is accessible", func(t *testing.T) {
+	t.Run("ctx.app is accessible", func(t *testing.T) {
 		customRules := `
-export function enforcementDecision(ctx) {
-	if (ctx.appName == "Slack") {
-		return {
-			enforcementAction: EnforcementAction.Block,
-			enforcementReason: "Slack is blocked by custom rule",
-		}
+import { block, runtime } from "@focusd/runtime";
+
+export function enforcement() {
+	const { app } = runtime.usage;
+
+	if (app == "Slack") {
+		return block("Slack is blocked by custom rule");
 	}
 	return undefined;
 }
@@ -322,17 +325,18 @@ export function enforcementDecision(ctx) {
 		require.NoError(t, err)
 		require.Equal(t, usage.EnforcementActionBlock, decision.Action)
 		require.Equal(t, usage.EnforcementSourceCustomRules, decision.Source)
-		require.Equal(t, "Slack is blocked by custom rule", decision.Reason)
+		require.Equal(t, usage.EnforcementReason("Slack is blocked by custom rule"), decision.Reason)
 	})
 
 	t.Run("ctx.classification is accessible", func(t *testing.T) {
 		customRules := `
-export function enforcementDecision(ctx) {
-	if (ctx.classification == "distracting") {
-		return {
-			enforcementAction: EnforcementAction.Block,
-			enforcementReason: "distracting classification detected",
-		}
+import { block, runtime } from "@focusd/runtime";
+
+export function enforcement() {
+	const { classification } = runtime.usage;
+
+	if (classification == "distracting") {
+		return block("distracting classification detected");
 	}
 	return undefined;
 }
@@ -346,19 +350,18 @@ export function enforcementDecision(ctx) {
 		require.NoError(t, err)
 		require.Equal(t, usage.EnforcementActionBlock, decision.Action)
 		require.Equal(t, usage.EnforcementSourceCustomRules, decision.Source)
-		require.Equal(t, "distracting classification detected", decision.Reason)
+		require.Equal(t, usage.EnforcementReason("distracting classification detected"), decision.Reason)
 	})
 
-	t.Run("ctx.hostname and ctx.domain are accessible", func(t *testing.T) {
-		// Note: parseURL strips "www." prefix, so "docs.google.com" stays as-is
-		// while domain is extracted via publicsuffix as "google.com"
+	t.Run("ctx.host and ctx.domain are accessible", func(t *testing.T) {
 		customRules := `
-export function enforcementDecision(ctx) {
-	if (ctx.hostname == "docs.google.com" && ctx.domain == "google.com") {
-		return {
-			enforcementAction: EnforcementAction.Block,
-			enforcementReason: "Google Docs blocked via hostname/domain",
-		}
+import { block, runtime } from "@focusd/runtime";
+
+export function enforcement() {
+	const { host, domain } = runtime.usage;
+
+	if (host == "docs.google.com" && domain == "google.com") {
+		return block("Google Docs blocked via hostname/domain");
 	}
 	return undefined;
 }
@@ -374,17 +377,18 @@ export function enforcementDecision(ctx) {
 		require.NoError(t, err)
 		require.Equal(t, usage.EnforcementActionBlock, decision.Action)
 		require.Equal(t, usage.EnforcementSourceCustomRules, decision.Source)
-		require.Equal(t, "Google Docs blocked via hostname/domain", decision.Reason)
+		require.Equal(t, usage.EnforcementReason("Google Docs blocked via hostname/domain"), decision.Reason)
 	})
 
 	t.Run("ctx.url and ctx.path are accessible", func(t *testing.T) {
 		customRules := `
-export function enforcementDecision(ctx) {
-	if (ctx.url == "https://github.com/pulls" && ctx.path == "/pulls") {
-		return {
-			enforcementAction: EnforcementAction.Allow,
-			enforcementReason: "PR reviews are allowed",
-		}
+import { allow, runtime } from "@focusd/runtime";
+
+export function enforcement() {
+	const { url, path } = runtime.usage;
+
+	if (url == "https://github.com/pulls" && path == "/pulls") {
+		return allow("PR reviews are allowed");
 	}
 	return undefined;
 }
@@ -400,12 +404,12 @@ export function enforcementDecision(ctx) {
 		require.NoError(t, err)
 		require.Equal(t, usage.EnforcementActionAllow, decision.Action)
 		require.Equal(t, usage.EnforcementSourceCustomRules, decision.Source)
-		require.Equal(t, "PR reviews are allowed", decision.Reason)
+		require.Equal(t, usage.EnforcementReason("PR reviews are allowed"), decision.Reason)
 	})
 
 	t.Run("returns undefined falls through to default", func(t *testing.T) {
 		customRules := `
-export function enforcementDecision(ctx) {
+export function enforcement() {
 	return undefined;
 }
 `
@@ -420,20 +424,21 @@ export function enforcementDecision(ctx) {
 		// Non-distracting classification results in Allow from the application source.
 		require.Equal(t, usage.EnforcementActionAllow, decision.Action)
 		require.Equal(t, usage.EnforcementSourceApplication, decision.Source)
-		require.Equal(t, "non distracting usage", decision.Reason)
+		require.Equal(t, usage.EnforcementReason("non distracting usage"), decision.Reason)
 	})
 }
 
 func TestProtection_CalculateEnforcementDecision_CustomRules_ExecutionLogs(t *testing.T) {
 	t.Run("stores enforcement response and console logs", func(t *testing.T) {
 		customRules := `
-export function enforcementDecision(ctx) {
-	console.log("enforcement executed", ctx.appName)
-	if (ctx.appName == "Slack") {
-		return {
-			enforcementAction: EnforcementAction.Block,
-			enforcementReason: "Slack is blocked by custom rule",
-		}
+import { block, runtime } from "@focusd/runtime";
+
+export function enforcement() {
+	const { app } = runtime.usage;
+
+	console.log("enforcement executed", app)
+	if (app == "Slack") {
+		return block("Slack is blocked by custom rule");
 	}
 	return undefined;
 }
@@ -475,8 +480,12 @@ export function enforcementDecision(ctx) {
 
 	t.Run("stores no response when decision is undefined", func(t *testing.T) {
 		customRules := `
-export function enforcementDecision(ctx) {
-	console.log("undefined decision for", ctx.appName)
+import { runtime } from "@focusd/runtime";
+
+export function enforcement() {
+	const { app } = runtime.usage;
+
+	console.log("undefined decision for", app)
 	return undefined;
 }
 `
@@ -507,8 +516,12 @@ export function enforcementDecision(ctx) {
 
 	t.Run("stores errors for failed enforcement execution", func(t *testing.T) {
 		customRules := `
-export function enforcementDecision(ctx) {
-	console.log("about to fail", ctx.appName)
+import { runtime } from "@focusd/runtime";
+
+export function enforcement() {
+	const { app } = runtime.usage;
+
+	console.log("about to fail", app)
 	throw new Error("enforcement fail");
 }
 `
@@ -521,7 +534,7 @@ export function enforcementDecision(ctx) {
 
 		_, err := service.CalculateEnforcementDecision(context.Background(), appUsage)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to execute enforcementDecision")
+		require.Contains(t, err.Error(), "failed to execute enforcement")
 		require.NotNil(t, appUsage.EnforcementSandboxContext)
 		require.NotNil(t, appUsage.EnforcementSandboxResponse)
 		require.NotNil(t, appUsage.EnforcementSandboxLogs)
@@ -557,7 +570,7 @@ func TestProtection_CalculateEnforcementDecision_ProtectionPaused(t *testing.T) 
 	require.NoError(t, err)
 	require.Equal(t, usage.EnforcementActionAllow, decision.Action)
 	require.Equal(t, usage.EnforcementSourcePaused, decision.Source)
-	require.Equal(t, "focus protection has been paused by the user", decision.Reason)
+	require.Equal(t, usage.EnforcementReason("focus protection has been paused by the user"), decision.Reason)
 }
 
 func TestProtection_AllowedByWhitelist(t *testing.T) {
@@ -574,7 +587,7 @@ func TestProtection_AllowedByWhitelist(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, usage.EnforcementActionAllow, decision.Action)
 		require.Equal(t, usage.EnforcementSourceWhitelist, decision.Source)
-		require.Equal(t, "temporarily allowed usage by user", decision.Reason)
+		require.Equal(t, usage.EnforcementReason("temporarily allowed usage by user"), decision.Reason)
 	})
 
 	t.Run("whitelisted by executable path and hostname", func(t *testing.T) {
@@ -591,7 +604,7 @@ func TestProtection_AllowedByWhitelist(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, usage.EnforcementActionAllow, decision.Action)
 		require.Equal(t, usage.EnforcementSourceWhitelist, decision.Source)
-		require.Equal(t, "temporarily allowed usage by user", decision.Reason)
+		require.Equal(t, usage.EnforcementReason("temporarily allowed usage by user"), decision.Reason)
 	})
 
 	t.Run("does not allow other hostnames in same browser", func(t *testing.T) {

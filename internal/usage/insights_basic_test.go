@@ -536,6 +536,7 @@ func TestGetUsageList_EnforcementActionFilter(t *testing.T) {
 		usage.EnforcementActionNone,
 		usage.EnforcementActionBlock,
 		usage.EnforcementActionAllow,
+		usage.EnforcementActionNone,
 	}
 	dur := 1800
 	for i := range starts {

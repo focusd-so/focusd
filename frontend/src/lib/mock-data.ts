@@ -4,7 +4,7 @@ export interface DailyStats {
   date: number; // unix timestamp (start of day)
   productiveMinutes: number;
   neutralMinutes: number;
-  distractiveMinutes: number;
+  distractingMinutes: number;
   focusScore: number;
   deepWorkSessions: number;
   longestSessionMinutes: number;
@@ -15,7 +15,7 @@ export interface DailyStats {
 export interface HourlyStats {
   hour: number; // 0-23
   productiveMinutes: number;
-  distractiveMinutes: number;
+  distractingMinutes: number;
   neutralMinutes: number;
 }
 
@@ -127,7 +127,7 @@ function generateHourlyBreakdown(seed: number): HourlyStats[] {
     // Work hours (9-18) have more activity
     const isWorkHour = hour >= 9 && hour <= 18;
     const baseProductive = isWorkHour ? 30 + (seed % 25) : seed % 5;
-    const baseDistractive = isWorkHour ? 2 + (seed % 8) : seed % 3;
+    const baseDistracting = isWorkHour ? 2 + (seed % 8) : seed % 3;
     const baseNeutral = isWorkHour ? 5 + (seed % 10) : seed % 2;
 
     // Add some variation based on hour
@@ -137,7 +137,7 @@ function generateHourlyBreakdown(seed: number): HourlyStats[] {
     hours.push({
       hour,
       productiveMinutes: Math.max(0, baseProductive + peakBonus + lunchDip + ((seed * hour) % 10)),
-      distractiveMinutes: Math.max(0, baseDistractive + ((seed * hour) % 5)),
+      distractingMinutes: Math.max(0, baseDistracting + ((seed * hour) % 5)),
       neutralMinutes: Math.max(0, baseNeutral + ((seed * hour) % 5)),
     });
   }
@@ -245,10 +245,10 @@ function generateAISummary(
   );
   const peakWindow = `${peakHour.hour}:00 - ${peakHour.hour + 1}:00`;
 
-  // Find danger zone (hour with most distractive minutes during work hours)
+  // Find danger zone (hour with most distracting minutes during work hours)
   const workHours = hourlyBreakdown.filter((h) => h.hour >= 9 && h.hour <= 18);
   const dangerHour = workHours.reduce((worst, h) =>
-    h.distractiveMinutes > worst.distractiveMinutes ? h : worst
+    h.distractingMinutes > worst.distractingMinutes ? h : worst
   );
   const dangerZone = `${dangerHour.hour}:00 - ${dangerHour.hour + 1}:00`;
 
@@ -267,7 +267,7 @@ function generateAISummary(
     stats.focusScore >= 75
       ? `Great focus day! You maintained ${stats.focusScore}% productivity and blocked ${totalBlocked} distractions.`
       : stats.focusScore >= 50
-        ? `Decent focus with room for improvement. ${stats.focusScore}% productive, with ${stats.distractiveMinutes}m lost to distractions.`
+        ? `Decent focus with room for improvement. ${stats.focusScore}% productive, with ${stats.distractingMinutes}m lost to distractions.`
         : `Challenging focus day at ${stats.focusScore}%. Tomorrow, try protecting your peak hours from interruptions.`;
 
   const fullMarkdown = `## Daily Focus Report
@@ -346,9 +346,9 @@ function generateDayData(date: Date, dayOffset: number): DayData {
   const hourly = generateHourlyBreakdown(seed);
 
   const productiveMinutes = hourly.reduce((sum, h) => sum + h.productiveMinutes, 0);
-  const distractiveMinutes = hourly.reduce((sum, h) => sum + h.distractiveMinutes, 0);
+  const distractingMinutes = hourly.reduce((sum, h) => sum + h.distractingMinutes, 0);
   const neutralMinutes = hourly.reduce((sum, h) => sum + h.neutralMinutes, 0);
-  const totalActive = productiveMinutes + distractiveMinutes;
+  const totalActive = productiveMinutes + distractingMinutes;
 
   const projects = generateProjects(seed, dayOffset);
   const deepWorkSessions = generateDeepWorkSessions(seed, dayOffset, projects);
@@ -360,7 +360,7 @@ function generateDayData(date: Date, dayOffset: number): DayData {
     date: getStartOfDay(date),
     productiveMinutes,
     neutralMinutes,
-    distractiveMinutes,
+    distractingMinutes,
     focusScore: totalActive > 0 ? Math.round((productiveMinutes / totalActive) * 100) : 0,
     deepWorkSessions: deepWorkSessions.length,
     longestSessionMinutes: Math.max(...deepWorkSessions.map((s) => s.durationMinutes), 0),

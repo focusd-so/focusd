@@ -67,9 +67,9 @@ func (s *Service) GetDayInsights(date time.Time) (DayInsights, error) {
 		}
 	}
 
-	score.ProductivityScore = calculateProductivityScore(score.ProductiveSeconds, score.DistractiveSeconds)
+	score.ProductivityScore = calculateProductivityScore(score.ProductiveSeconds, score.DistractingSeconds)
 	for hour, s := range hourly {
-		s.ProductivityScore = calculateProductivityScore(s.ProductiveSeconds, s.DistractiveSeconds)
+		s.ProductivityScore = calculateProductivityScore(s.ProductiveSeconds, s.DistractingSeconds)
 		hourly[hour] = s
 	}
 
@@ -115,8 +115,8 @@ func splitSecondsPerHour(startUnix, endUnix int64) map[int]int {
 	return result
 }
 
-func calculateProductivityScore(productiveSeconds, distractiveSeconds int) int {
-	totalSeconds := productiveSeconds + distractiveSeconds
+func calculateProductivityScore(productiveSeconds, distractingSeconds int) int {
+	totalSeconds := productiveSeconds + distractingSeconds
 
 	if totalSeconds == 0 {
 		return 0

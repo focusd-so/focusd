@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"reflect"
 	"strings"
@@ -15,6 +16,10 @@ import (
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
+	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
+	"github.com/focusd-so/focusd/gen/api/v1/apiv1connect"
+	"github.com/focusd-so/focusd/internal/identity"
 	"github.com/focusd-so/focusd/internal/settings"
 	"github.com/focusd-so/focusd/internal/usage"
 	"github.com/spf13/viper"
@@ -38,6 +43,7 @@ type usageHarnessConfig struct {
 	customRulesJS  string
 	llmResponse    usage.ClassificationResponse
 	llmResponseRaw *string
+	accountTier    *apiv1.DeviceHandshakeResponse_AccountTier
 }
 
 type usageHarnessOption func(*usageHarnessConfig)
@@ -60,15 +66,22 @@ func withDummyLLMResponseRaw(resp string) usageHarnessOption {
 	}
 }
 
+func withAccountTier(tier apiv1.DeviceHandshakeResponse_AccountTier) usageHarnessOption {
+	return func(cfg *usageHarnessConfig) {
+		cfg.accountTier = &tier
+	}
+}
+
 func newUsageHarness(t *testing.T, opts ...usageHarnessOption) *usageHarness {
 	t.Helper()
 
 	cfg := usageHarnessConfig{
 		llmResponse: usage.ClassificationResponse{
-			Classification:  usage.ClassificationNone,
-			Reasoning:       "dummy integration classification",
-			ConfidenceScore: 1,
-			Tags:            []string{"other"},
+			Classification:       usage.ClassificationNone,
+			ClassificationSource: usage.ClassificationSourceCloudLLMOpenAI,
+			Reasoning:            "dummy integration classification",
+			ConfidenceScore:      1,
+			Tags:                 []string{"other"},
 		},
 	}
 
@@ -78,6 +91,9 @@ func newUsageHarness(t *testing.T, opts ...usageHarnessOption) *usageHarness {
 
 	overrideTestConfig(t, cfg)
 	stubFaviconFetcher(t)
+	if cfg.accountTier != nil {
+		setTestAccountTier(t, *cfg.accountTier)
+	}
 
 	db, err := gorm.Open(sqlite.Open(memoryDSNForHarness(t)), &gorm.Config{})
 	require.NoError(t, err)
@@ -109,6 +125,47 @@ func newUsageHarness(t *testing.T, opts ...usageHarnessOption) *usageHarness {
 	})
 
 	return h
+}
+
+type testAPIService struct {
+	apiv1connect.UnimplementedApiServiceHandler
+	tier apiv1.DeviceHandshakeResponse_AccountTier
+}
+
+func (m testAPIService) DeviceHandshake(_ context.Context, _ *connect.Request[apiv1.DeviceHandshakeRequest]) (*connect.Response[apiv1.DeviceHandshakeResponse], error) {
+	return connect.NewResponse(&apiv1.DeviceHandshakeResponse{
+		UserId:       1,
+		SessionToken: "test-session-token",
+		AccountTier:  m.tier,
+	}), nil
+}
+
+func setTestAccountTier(t *testing.T, tier apiv1.DeviceHandshakeResponse_AccountTier) {
+	t.Helper()
+
+	prevTier := identity.GetAccountTier()
+
+	mux := http.NewServeMux()
+	_, handler := apiv1connect.NewApiServiceHandler(testAPIService{tier: tier})
+	mux.Handle("/", handler)
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	client := apiv1connect.NewApiServiceClient(server.Client(), server.URL)
+	require.NoError(t, identity.PerformHandshake(context.Background(), client))
+
+	t.Cleanup(func() {
+		mux := http.NewServeMux()
+		_, handler := apiv1connect.NewApiServiceHandler(testAPIService{tier: prevTier})
+		mux.Handle("/", handler)
+
+		server := httptest.NewServer(mux)
+		defer server.Close()
+
+		client := apiv1connect.NewApiServiceClient(server.Client(), server.URL)
+		require.NoError(t, identity.PerformHandshake(context.Background(), client))
+	})
 }
 
 func memoryDSNForHarness(t *testing.T) string {
@@ -348,6 +405,52 @@ func assertUsageClassification(t *testing.T, classification usage.Classification
 
 	return func(u *usage.ApplicationUsage) {
 		require.Equal(t, classification, u.Classification)
+	}
+}
+
+func assertUsageClassificationSource(t *testing.T, source usage.ClassificationSource) func(*usage.ApplicationUsage) {
+	t.Helper()
+
+	return func(u *usage.ApplicationUsage) {
+		require.Equal(t, source, fromPtr(u.ClassificationSource))
+	}
+}
+
+func assertUsageClassificationReasoning(t *testing.T, reasoning string) func(*usage.ApplicationUsage) {
+	t.Helper()
+
+	return func(u *usage.ApplicationUsage) {
+		require.Equal(t, reasoning, fromPtr(u.ClassificationReasoning))
+	}
+}
+
+func assertUsageClassificationConfidence(t *testing.T, confidence float32) func(*usage.ApplicationUsage) {
+	t.Helper()
+
+	return func(u *usage.ApplicationUsage) {
+		require.Equal(t, confidence, fromPtr(u.ClassificationConfidence))
+	}
+}
+
+func assertUsageTags(t *testing.T, tags ...string) func(*usage.ApplicationUsage) {
+	t.Helper()
+
+	return func(u *usage.ApplicationUsage) {
+		actualTags := make([]string, len(u.Tags))
+		for i, tag := range u.Tags {
+			actualTags[i] = tag.Tag
+		}
+		require.ElementsMatch(t, tags, actualTags)
+	}
+}
+
+func assertClassificationSandboxRecorded(t *testing.T) func(*usage.ApplicationUsage) {
+	t.Helper()
+
+	return func(u *usage.ApplicationUsage) {
+		require.NotNil(t, u.ClassificationSandboxContext)
+		require.NotNil(t, u.ClassificationSandboxResponse)
+		require.NotNil(t, u.ClassificationSandboxLogs)
 	}
 }
 

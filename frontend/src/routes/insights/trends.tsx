@@ -44,7 +44,7 @@ function TrendsPage() {
   );
 
   const maxProductive = Math.max(...weeklyStats.map((d) => d.productiveMinutes));
-  const maxDistractive = Math.max(...weeklyStats.map((d) => d.distractiveMinutes));
+  const maxDistracting = Math.max(...weeklyStats.map((d) => d.distractingMinutes));
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">
@@ -161,10 +161,10 @@ function TrendsPage() {
         </CardContent>
       </Card>
 
-      {/* Productive vs Distractive Chart */}
+      {/* Productive vs Distracting Chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Productive vs Distractive Time</CardTitle>
+          <CardTitle className="text-base">Productive vs Distracting Time</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -172,7 +172,7 @@ function TrendsPage() {
               const date = new Date(day.date * 1000);
               const dayOfWeek = dayLabels[date.getDay()];
               const productivePct = (day.productiveMinutes / maxProductive) * 100;
-              const distractivePct = (day.distractiveMinutes / maxDistractive) * 100;
+              const distractingPct = (day.distractingMinutes / maxDistracting) * 100;
 
               return (
                 <div key={i} className="grid grid-cols-[60px_1fr] gap-4 items-center">
@@ -192,10 +192,10 @@ function TrendsPage() {
                     <div className="flex items-center gap-2">
                       <div
                         className="h-3 bg-rose-500/60 rounded"
-                        style={{ width: `${distractivePct}%` }}
+                        style={{ width: `${distractingPct}%` }}
                       />
                       <span className="text-xs text-muted-foreground min-w-[50px]">
-                        {formatMinutes(day.distractiveMinutes)}
+                        {formatMinutes(day.distractingMinutes)}
                       </span>
                     </div>
                   </div>
@@ -208,7 +208,7 @@ function TrendsPage() {
               <span className="w-3 h-3 bg-emerald-500 rounded" /> Productive
             </span>
             <span className="flex items-center gap-1">
-              <span className="w-3 h-3 bg-rose-500 rounded" /> Distractive
+              <span className="w-3 h-3 bg-rose-500 rounded" /> Distracting
             </span>
           </div>
         </CardContent>

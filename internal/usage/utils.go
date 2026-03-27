@@ -12,7 +12,6 @@ import (
 
 	readability "codeberg.org/readeck/go-readability"
 	"golang.org/x/net/html"
-	"golang.org/x/net/publicsuffix"
 )
 
 func parseURLNormalized(browserURL string) (*url.URL, error) {
@@ -115,22 +114,12 @@ func fetchMainContent(ctx context.Context, rawURL string) (string, error) {
 }
 
 func createSandboxContext(appName string, url *string) sandboxContext {
-	sandboxCtx := sandboxContext{
-		AppName: appName,
-	}
-
+	opts := []sandboxContextOption{WithAppNameContext(appName)}
 	if url != nil {
-		sandboxCtx.URL = *url
-
-		u, err := parseURLNormalized(*url)
-		if err == nil {
-			sandboxCtx.Hostname = u.Hostname()
-			sandboxCtx.Path = u.Path
-			sandboxCtx.Domain, _ = publicsuffix.EffectiveTLDPlusOne(u.Hostname())
-		}
+		opts = append(opts, WithBrowserURLContext(*url))
 	}
 
-	return sandboxCtx
+	return NewSandboxContext(opts...)
 }
 
 func withPtr[T any](v T) *T {
