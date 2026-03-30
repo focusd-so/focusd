@@ -8,8 +8,16 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/focusd-so/focusd/internal/sandbox"
 	"github.com/focusd-so/focusd/internal/settings"
 )
+
+// classificationResult is returned from the classify function.
+type classificationResult struct {
+	Classification          string   `json:"classification"`
+	ClassificationReasoning string   `json:"classificationReasoning"`
+	Tags                    []string `json:"tags"`
+}
 
 func (s *Service) ClassifyCustomRules(ctx context.Context, opts ...sandboxContextOption) (*ClassificationResponse, error) {
 	slog.Info("classifying application usage with custom rules")
@@ -95,11 +103,46 @@ func (s *Service) classifySandbox(ctx context.Context, sandboxCtx sandboxContext
 		return nil, nil, nil
 	}
 
-	// Create a new sandbox with the custom rules code
-	sb, err := newSandbox(customRules)
+	sb, err := sandbox.New()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to create sandbox: %w", err)
+	}
+	defer sb.Close()
+
+	result, err := sb.Execute(customRules, "__classify_wrapper", sandboxCtx)
+	if err != nil {
+		return nil, result.Logs, err
 	}
 
-	return sb.invokeClassify(sandboxCtx)
+	if result.Output == "" || result.Output == "null" || result.Output == "undefined" {
+		return nil, result.Logs, nil
+	}
+
+	var d classificationResult
+	if err := json.Unmarshal([]byte(result.Output), &d); err != nil {
+		return nil, result.Logs, fmt.Errorf("failed to parse classification decision: %w", err)
+	}
+
+	return &d, result.Logs, nil
+}
+
+// TestClassifyCustomRules is exposed to Wails specifically for the Test Rules UI.
+// It parses standard JSON arguments from the frontend and converts them into sandbox options.
+func (s *Service) TestClassifyCustomRules(appName string, url *string, simulatedTimeISO *string) (*ClassificationResponse, error) {
+	opts := []sandboxContextOption{
+		WithAppNameContext(appName),
+	}
+
+	if url != nil && *url != "" {
+		opts = append(opts, WithBrowserURLContext(*url))
+	}
+
+	if simulatedTimeISO != nil && *simulatedTimeISO != "" {
+		t, err := time.Parse(time.RFC3339, *simulatedTimeISO)
+		if err == nil {
+			opts = append(opts, WithNowContext(t))
+		}
+	}
+
+	return s.ClassifyCustomRules(context.Background(), opts...)
 }

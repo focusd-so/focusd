@@ -57,8 +57,7 @@ type sandboxContext struct {
 	Usage sandboxUsageContext `json:"usage"`
 
 	// Helper functions
-	Now                 func(loc *time.Location) time.Time                                   `json:"-"`
-	MinutesUsedInPeriod func(appName, hostname string, durationMinutes int64) (int64, error) `json:"-"`
+	Now func(loc *time.Location) time.Time `json:"-"`
 }
 
 type sandboxContextOption func(*sandboxContext)
@@ -93,12 +92,6 @@ func WithNowContext(now time.Time) sandboxContextOption {
 		ctx.Now = func(loc *time.Location) time.Time {
 			return now.In(loc)
 		}
-	}
-}
-
-func WithMinutesUsedInPeriodContext(minutesUsedInPeriod func(appName, hostname string, durationMinutes int64) (int64, error)) sandboxContextOption {
-	return func(ctx *sandboxContext) {
-		ctx.MinutesUsedInPeriod = minutesUsedInPeriod
 	}
 }
 

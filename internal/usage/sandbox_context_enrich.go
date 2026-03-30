@@ -15,10 +15,6 @@ func (s *Service) enrichSandboxContext(ctx *sandboxContext) {
 		}
 	}
 
-	if ctx.MinutesUsedInPeriod == nil {
-		ctx.MinutesUsedInPeriod = s.minutesUsedInPeriod
-	}
-
 	if err := s.populateInsightsContext(ctx); err != nil {
 		slog.Debug("failed to populate sandbox insights context", "error", err)
 	}

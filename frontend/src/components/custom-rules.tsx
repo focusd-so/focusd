@@ -15,7 +15,7 @@ import { ExecutionLogsSheet } from "@/components/execution-logs";
 import { TestRulesSheet } from "@/components/test-rules-sheet";
 import { RulesReferenceSheet } from "@/components/rules-reference-sheet";
 import { STARTER_RULES_TS } from "@/lib/rules/starter-template";
-import { RUNTIME_TYPES_FILE_PATH, RUNTIME_TYPES_SOURCE } from "@/lib/rules/runtime-types";
+import { RUNTIME_TYPES_FILE_PATH, fetchRuntimeTypes } from "@/lib/rules/runtime-types";
 
 const SETTINGS_KEY = "custom_rules";
 const DRAFT_STORAGE_KEY = "focusd_custom_rules_draft";
@@ -122,12 +122,13 @@ export function CustomRules() {
     });
   }, []);
 
-  const handleEditorWillMount = useCallback((monaco: Monaco) => {
-    monaco.languages.typescript.typescriptDefaults.addExtraLib(RUNTIME_TYPES_SOURCE, RUNTIME_TYPES_FILE_PATH);
+  const handleEditorWillMount = useCallback(async (monaco: Monaco) => {
+    const typesSource = await fetchRuntimeTypes();
+    monaco.languages.typescript.typescriptDefaults.addExtraLib(typesSource, RUNTIME_TYPES_FILE_PATH);
 
     const typesUri = monaco.Uri.parse(RUNTIME_TYPES_FILE_PATH);
     if (!monaco.editor.getModel(typesUri)) {
-      monaco.editor.createModel(RUNTIME_TYPES_SOURCE, "typescript", typesUri);
+      monaco.editor.createModel(typesSource, "typescript", typesUri);
     }
   }, []);
 

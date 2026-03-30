@@ -27,7 +27,7 @@ import {
   IconTerminal,
   IconTag,
 } from "@tabler/icons-react";
-import { ClassifyCustomRules, GetSandboxExecutionLogs } from "../../bindings/github.com/focusd-so/focusd/internal/usage/service";
+import { TestClassifyCustomRules, GetSandboxExecutionLogs } from "../../bindings/github.com/focusd-so/focusd/internal/usage/service";
 import type { ClassificationResponse, SandboxExecutionLog } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
 
 const TIMEZONES = [
@@ -181,7 +181,7 @@ export function TestRulesSheet({
       const urlParam = url.trim() || null;
       const nowTime = buildISOInTimezone(datetime, timezone);
 
-      const response = await ClassifyCustomRules(
+      const response = await TestClassifyCustomRules(
         appName.trim(),
         urlParam,
         nowTime

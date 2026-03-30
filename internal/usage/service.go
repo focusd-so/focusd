@@ -29,6 +29,7 @@ type Service struct {
 }
 
 func NewService(ctx context.Context, db *gorm.DB, options ...Option) (*Service, error) {
+	
 	if err := migrateEnforcementColumns(db); err != nil {
 		return nil, fmt.Errorf("failed to migrate enforcement columns: %w", err)
 	}
