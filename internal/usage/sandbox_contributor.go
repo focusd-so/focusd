@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	v8 "rogchap.com/v8go"
 	"github.com/focusd-so/focusd/internal/sandbox"
+	v8 "rogchap.com/v8go"
 )
 
 type usageContributor struct {
@@ -25,7 +25,8 @@ func (c *usageContributor) Name() string {
 // TypesDefinition implements sandbox.Contributor
 func (c *usageContributor) TypesDefinition() string {
 	return `declare module "@focusd/runtime" {
-  export { WeekdayType, Timezone, Weekday } from "@focusd/core";
+  import { WeekdayType, Timezone, Weekday } from "@focusd/core";
+  export { WeekdayType, Timezone, Weekday };
 
   export type ClassificationType = "unknown" | "productive" | "distracting" | "neutral" | "system";
   export type EnforcementActionType = "none" | "block" | "paused" | "allow";

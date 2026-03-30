@@ -5,6 +5,12 @@ declare module "@focusd/core" {
 }
 
 declare module "@focusd/runtime" {
-  export { WeekdayType, Timezone, Weekday } from "@focusd/core";
-  export const foo = 1;
+  import { WeekdayType, Timezone, Weekday } from "@focusd/core";
+  export { WeekdayType, Timezone, Weekday };
+
+  export interface Runtime {
+    time: {
+      day(): WeekdayType;
+    };
+  }
 }
