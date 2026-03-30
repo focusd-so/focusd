@@ -15,7 +15,7 @@ func (s *Service) Name() string {
 // TypesDefinition implements sandbox.Contributor
 func (s *Service) TypesDefinition() string {
 	return `declare module "@focusd/runtime" {
-  import { WeekdayType, Timezone } from "@focusd/core";
+  export { WeekdayType, Timezone, Weekday } from "@focusd/core";
 
   export type ClassificationType = "unknown" | "productive" | "distracting" | "neutral" | "system";
   export type EnforcementActionType = "none" | "block" | "paused" | "allow";
