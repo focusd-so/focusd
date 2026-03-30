@@ -125,3 +125,24 @@ func (s *Service) classifySandbox(ctx context.Context, sandboxCtx sandboxContext
 
 	return &d, result.Logs, nil
 }
+
+// TestClassifyCustomRules is exposed to Wails specifically for the Test Rules UI.
+// It parses standard JSON arguments from the frontend and converts them into sandbox options.
+func (s *Service) TestClassifyCustomRules(appName string, url *string, simulatedTimeISO *string) (*ClassificationResponse, error) {
+	opts := []sandboxContextOption{
+		WithAppNameContext(appName),
+	}
+
+	if url != nil && *url != "" {
+		opts = append(opts, WithBrowserURLContext(*url))
+	}
+
+	if simulatedTimeISO != nil && *simulatedTimeISO != "" {
+		t, err := time.Parse(time.RFC3339, *simulatedTimeISO)
+		if err == nil {
+			opts = append(opts, WithNowContext(t))
+		}
+	}
+
+	return s.ClassifyCustomRules(context.Background(), opts...)
+}
