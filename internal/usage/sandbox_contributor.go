@@ -1,16 +1,19 @@
 package usage
 
-type UsageContributor struct{}
+import (
+	"fmt"
+	"log/slog"
 
-func NewUsageContributor() *UsageContributor {
-	return &UsageContributor{}
-}
+	v8 "rogchap.com/v8go"
+)
 
-func (c *UsageContributor) Name() string {
+// Name implements sandbox.Contributor
+func (s *Service) Name() string {
 	return "usage"
 }
 
-func (c *UsageContributor) TypesDefinition() string {
+// TypesDefinition implements sandbox.Contributor
+func (s *Service) TypesDefinition() string {
 	return `declare module "@focusd/runtime" {
   import { WeekdayType, Timezone } from "@focusd/core";
 
@@ -90,7 +93,8 @@ func (c *UsageContributor) TypesDefinition() string {
 }`
 }
 
-func (c *UsageContributor) PolyfillSource() string {
+// PolyfillSource implements sandbox.Contributor
+func (s *Service) PolyfillSource() string {
 	return `
 var Classification = Object.freeze({
 	Unknown: "unknown",
@@ -228,4 +232,35 @@ function __hydrateContext(rawCtx) {
 	};
 }
 `
+}
+
+// RegisterGlobals implements sandbox.Contributor and statically provides Usage DB methods
+func (s *Service) RegisterGlobals(iso *v8.Isolate, global *v8.ObjectTemplate) error {
+	usageCb := v8.NewFunctionTemplate(iso, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		if len(args) < 3 {
+			val, _ := v8.NewValue(iso, int32(0))
+			return val
+		}
+
+		appName := args[0].String()
+		hostname := args[1].String()
+		minutes := int64(args[2].Integer())
+
+		result, err := s.minutesUsedInPeriod(appName, hostname, minutes)
+		if err != nil {
+			slog.Debug("failed to query minutes used", "error", err)
+			val, _ := v8.NewValue(iso, int32(0))
+			return val
+		}
+
+		val, _ := v8.NewValue(iso, int32(result))
+		return val
+	})
+
+	if err := global.Set("__minutesUsedInPeriod", usageCb); err != nil {
+		return fmt.Errorf("failed to set __minutesUsedInPeriod function: %w", err)
+	}
+
+	return nil
 }

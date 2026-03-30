@@ -10,7 +10,6 @@ import (
 
 	"github.com/focusd-so/focusd/internal/sandbox"
 	"github.com/focusd-so/focusd/internal/settings"
-	v8 "rogchap.com/v8go"
 )
 
 // classificationResult is returned from the classify function.
@@ -109,33 +108,6 @@ func (s *Service) classifySandbox(ctx context.Context, sandboxCtx sandboxContext
 		return nil, nil, fmt.Errorf("failed to create sandbox: %w", err)
 	}
 	defer sb.Close()
-
-	if sandboxCtx.MinutesUsedInPeriod != nil {
-		err = sb.RegisterGlobal("__minutesUsedInPeriod", func(info *v8.FunctionCallbackInfo) *v8.Value {
-			args := info.Args()
-			if len(args) < 3 {
-				val, _ := v8.NewValue(info.Context().Isolate(), int32(0))
-				return val
-			}
-
-			appName := args[0].String()
-			hostname := args[1].String()
-			minutes := int64(args[2].Integer())
-
-			result, err := sandboxCtx.MinutesUsedInPeriod(appName, hostname, minutes)
-			if err != nil {
-				slog.Debug("failed to query minutes used", "error", err)
-				val, _ := v8.NewValue(info.Context().Isolate(), int32(0))
-				return val
-			}
-
-			val, _ := v8.NewValue(info.Context().Isolate(), int32(result))
-			return val
-		})
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to register minutes query func: %w", err)
-		}
-	}
 
 	result, err := sb.Execute(customRules, "__classify_wrapper", sandboxCtx)
 	if err != nil {

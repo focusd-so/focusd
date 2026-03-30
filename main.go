@@ -134,6 +134,8 @@ func main() {
 		log.Fatal("failed to create usage service: %w", err)
 	}
 
+	sandbox.Register(usageService)
+
 	// Generate sandbox types after contributors are registered
 	if err := sandbox.GenerateTypes(filepath.Join(configDir, "types.d.ts")); err != nil {
 		slog.Error("failed to generate sandbox types", "error", err)

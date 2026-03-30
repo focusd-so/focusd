@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -14,7 +13,6 @@ import (
 	"github.com/focusd-so/focusd/internal/identity"
 	"github.com/focusd-so/focusd/internal/sandbox"
 	"github.com/focusd-so/focusd/internal/settings"
-	v8 "rogchap.com/v8go"
 )
 
 // enforcement is returned from the enforcement function.
@@ -404,33 +402,6 @@ func (s *Service) calculateEnforcementDecisionWithCustomRules(_ context.Context,
 		return EnforcementDecision{}, err
 	}
 	defer sb.Close()
-
-	if sandboxCtx.MinutesUsedInPeriod != nil {
-		err = sb.RegisterGlobal("__minutesUsedInPeriod", func(info *v8.FunctionCallbackInfo) *v8.Value {
-			args := info.Args()
-			if len(args) < 3 {
-				val, _ := v8.NewValue(info.Context().Isolate(), int32(0))
-				return val
-			}
-
-			appName := args[0].String()
-			hostname := args[1].String()
-			minutes := int64(args[2].Integer())
-
-			result, err := sandboxCtx.MinutesUsedInPeriod(appName, hostname, minutes)
-			if err != nil {
-				slog.Debug("failed to query minutes used", "error", err)
-				val, _ := v8.NewValue(info.Context().Isolate(), int32(0))
-				return val
-			}
-
-			val, _ := v8.NewValue(info.Context().Isolate(), int32(result))
-			return val
-		})
-		if err != nil {
-			return EnforcementDecision{}, fmt.Errorf("failed to register minutes query func: %w", err)
-		}
-	}
 
 	execResult, err := sb.Execute(customRules, "__enforcement_wrapper", sandboxCtx)
 	if err != nil {
