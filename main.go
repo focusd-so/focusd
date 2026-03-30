@@ -29,6 +29,8 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/focusd-so/focusd/internal/api"
+	"github.com/focusd-so/focusd/internal/fs"
+	"github.com/focusd-so/focusd/internal/sandbox"
 	"github.com/focusd-so/focusd/internal/extension"
 	"github.com/focusd-so/focusd/internal/identity"
 	"github.com/focusd-so/focusd/internal/native"
@@ -125,9 +127,16 @@ func main() {
 
 	identityService := identity.NewService(apiAuthenticatedClient)
 
+	fsService := fs.NewService(configDir)
+
 	usageService, err := usage.NewService(ctx, db)
 	if err != nil {
 		log.Fatal("failed to create usage service: %w", err)
+	}
+
+	// Generate sandbox types after contributors are registered
+	if err := sandbox.GenerateTypes(filepath.Join(configDir, "types.d.ts")); err != nil {
+		slog.Error("failed to generate sandbox types", "error", err)
 	}
 
 	mux, _, err := setUpWebServer(ctx, extensionSessionAPIKey, usageService)
@@ -189,6 +198,7 @@ func main() {
 	services := []application.Service{
 		application.NewService(usageService),
 		application.NewService(settingsService),
+		application.NewService(fsService),
 		application.NewService(identityService),
 		application.NewService(nativeService),
 	}

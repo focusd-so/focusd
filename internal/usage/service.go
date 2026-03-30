@@ -1,6 +1,7 @@
 package usage
 
 import (
+	"github.com/focusd-so/focusd/internal/sandbox"
 	"context"
 	"fmt"
 	"log/slog"
@@ -29,6 +30,7 @@ type Service struct {
 }
 
 func NewService(ctx context.Context, db *gorm.DB, options ...Option) (*Service, error) {
+	sandbox.Register(NewUsageContributor())
 	if err := migrateEnforcementColumns(db); err != nil {
 		return nil, fmt.Errorf("failed to migrate enforcement columns: %w", err)
 	}

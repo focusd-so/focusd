@@ -5,14 +5,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"gorm.io/gorm"
 
 	"github.com/focusd-so/focusd/internal/identity"
+	"github.com/focusd-so/focusd/internal/sandbox"
 	"github.com/focusd-so/focusd/internal/settings"
+	v8 "rogchap.com/v8go"
 )
+
+// enforcement is returned from the enforcement function.
+type enforcement struct {
+	EnforcementAction string `json:"enforcementAction"`
+	EnforcementReason string `json:"enforcementReason"`
+}
 
 // PauseProtection temporarily disables focus protection for the specified duration.
 //
@@ -387,25 +396,67 @@ func (s *Service) calculateEnforcementDecisionWithCustomRules(_ context.Context,
 	}
 
 	// Create a new sandbox with the custom rules code
-	sb, err := newSandbox(customRules)
+	sb, err := sandbox.New()
 	if err != nil {
 		if logErr := finalizeExecutionLog(nil, nil, err); logErr != nil {
 			return EnforcementDecision{}, logErr
 		}
 		return EnforcementDecision{}, err
 	}
+	defer sb.Close()
 
-	decision, logs, err := sb.invokeEnforcement(sandboxCtx)
-	if logErr := finalizeExecutionLog(decision, logs, err); logErr != nil {
-		return EnforcementDecision{}, logErr
+	if sandboxCtx.MinutesUsedInPeriod != nil {
+		err = sb.RegisterGlobal("__minutesUsedInPeriod", func(info *v8.FunctionCallbackInfo) *v8.Value {
+			args := info.Args()
+			if len(args) < 3 {
+				val, _ := v8.NewValue(info.Context().Isolate(), int32(0))
+				return val
+			}
+
+			appName := args[0].String()
+			hostname := args[1].String()
+			minutes := int64(args[2].Integer())
+
+			result, err := sandboxCtx.MinutesUsedInPeriod(appName, hostname, minutes)
+			if err != nil {
+				slog.Debug("failed to query minutes used", "error", err)
+				val, _ := v8.NewValue(info.Context().Isolate(), int32(0))
+				return val
+			}
+
+			val, _ := v8.NewValue(info.Context().Isolate(), int32(result))
+			return val
+		})
+		if err != nil {
+			return EnforcementDecision{}, fmt.Errorf("failed to register minutes query func: %w", err)
+		}
 	}
 
+	execResult, err := sb.Execute(customRules, "__enforcement_wrapper", sandboxCtx)
 	if err != nil {
+		if logErr := finalizeExecutionLog(nil, execResult.Logs, err); logErr != nil {
+			return EnforcementDecision{}, logErr
+		}
 		return EnforcementDecision{}, err
 	}
 
-	if decision == nil {
+	if execResult.Output == "" || execResult.Output == "null" || execResult.Output == "undefined" {
+		if logErr := finalizeExecutionLog(nil, execResult.Logs, nil); logErr != nil {
+			return EnforcementDecision{}, logErr
+		}
 		return EnforcementDecision{Action: EnforcementActionNone}, nil
+	}
+
+	var decision enforcement
+	if err := json.Unmarshal([]byte(execResult.Output), &decision); err != nil {
+		if logErr := finalizeExecutionLog(nil, execResult.Logs, err); logErr != nil {
+			return EnforcementDecision{}, logErr
+		}
+		return EnforcementDecision{}, err
+	}
+
+	if logErr := finalizeExecutionLog(&decision, execResult.Logs, nil); logErr != nil {
+		return EnforcementDecision{}, logErr
 	}
 
 	return EnforcementDecision{
