@@ -49,12 +49,11 @@ func New() (*Sandbox, error) {
 		return nil, fmt.Errorf("failed to set __console_log function: %w", err)
 	}
 
-	// Register globals from static contributors
-	for _, c := range contributors {
-		if err := c.RegisterGlobals(isolate, global); err != nil {
-			s.Close()
-			return nil, fmt.Errorf("failed to register globals for contributor %s: %w", c.Name(), err)
-		}
+	// Internal core contributor registration
+	core := &coreContributor{}
+	if err := core.RegisterGlobals(isolate, global); err != nil {
+		s.Close()
+		return nil, fmt.Errorf("failed to register core globals: %w", err)
 	}
 
 	return s, nil
@@ -100,6 +99,7 @@ func (s *Sandbox) Execute(code string, fnName string, args ...any) (*Result, err
 	sb.WriteString(`
 var exports = {};
 var module = { exports: exports };
+globalThis.__modules = globalThis.__modules || {};
 `)
 
 	// Inject all contributor polyfills BEFORE the user code
@@ -107,6 +107,18 @@ var module = { exports: exports };
 		sb.WriteString(fmt.Sprintf("\n// --- Polyfill %s ---\n", c.Name()))
 		sb.WriteString(c.PolyfillSource())
 	}
+
+	// Simple polyfill for require() if not already defined by a contributor
+	sb.WriteString(`
+if (typeof globalThis.require === 'undefined') {
+	globalThis.require = function(specifier) {
+		if (globalThis.__modules && globalThis.__modules[specifier]) {
+			return globalThis.__modules[specifier];
+		}
+		throw new Error("Unsupported import: " + specifier + ". Only mapped modules are available.");
+	};
+}
+`)
 
 	sb.WriteString("\n// --- User Code ---\n")
 	sb.WriteString(transpiledCode)
@@ -203,4 +215,3 @@ var module = { exports: exports };
 		Logs:   s.logs,
 	}, nil
 }
-

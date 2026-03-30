@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-
-	v8 "rogchap.com/v8go"
 )
 
 // Contributor defines a package that extends the JS sandbox environment
@@ -13,10 +11,10 @@ type Contributor interface {
 	Name() string
 	PolyfillSource() string         // JS code prepended to every execution
 	TypesDefinition() string        // TS types combined into types.d.ts
-	RegisterGlobals(iso *v8.Isolate, global *v8.ObjectTemplate) error
 }
 
-var contributors []Contributor
+// Global registry, automatically includes core contributor
+var contributors = []Contributor{&coreContributor{}}
 
 // Register adds a new sandbox contributor
 func Register(c Contributor) {
