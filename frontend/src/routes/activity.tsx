@@ -352,9 +352,15 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
   }, [isAllowed, expiresAt, whitelistId, removeFromWhitelist]);
 
   const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
+    
+    // Always pad minutes and seconds. Include hours if >= 1
+    if (hours > 0) {
+      return `${hours}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+    }
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
   const handleAllowWithDuration = async (durationMinutes: number) => {
@@ -433,11 +439,6 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
           <span className={`text-[9px] font-bold ${statusColor} uppercase tracking-wider opacity-90 shrink-0`}>
             {isAllowed ? "ALLOWED" : "BLOCKED"}
           </span>
-          {isAllowed && timeLeft !== null && (
-            <span className="text-[9px] text-yellow-500/70 font-mono shrink-0">
-              {formatTime(timeLeft)} left
-            </span>
-          )}
         </div>
 
         {/* Row 2: Window title / rule source */}
@@ -598,7 +599,7 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 px-3 text-[10px] font-bold bg-transparent border-yellow-500/20 text-yellow-500/70 hover:text-yellow-400 hover:bg-yellow-500/10 hover:border-yellow-500/40 transition-all gap-1.5 rounded-lg"
+                className="h-7 px-3 text-[10px] font-bold bg-transparent border-yellow-500/20 text-yellow-500/70 hover:text-yellow-400 hover:bg-yellow-500/10 hover:border-yellow-500/40 transition-all gap-1.5 rounded-lg tabular-nums"
               >
                 <IconShield className="w-3 h-3" />
                 {timeLeft !== null ? `${formatTime(timeLeft)} left` : "Allowed"}
