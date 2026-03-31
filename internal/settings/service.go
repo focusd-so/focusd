@@ -19,6 +19,7 @@ func NewService(configDir string) (*Service, error) {
 	viper.SetDefault("history_retention_days", 30)
 	viper.SetDefault("distraction_allowance_minutes", 60)
 	viper.SetDefault("custom_rules_js", []string{})
+	viper.SetDefault("app_version", "dev")
 
 	// Config file settings
 	viper.SetConfigName("config")
