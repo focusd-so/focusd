@@ -352,7 +352,10 @@ func fetchFavicon(ctx context.Context, rawURL string) (string, error) {
 		return "", fmt.Errorf("failed to parse URL: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, googleFaviconURL+parsedURL.Host, nil)
+	reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, googleFaviconURL+parsedURL.Host, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}

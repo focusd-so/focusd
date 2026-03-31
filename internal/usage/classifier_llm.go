@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
 	"github.com/focusd-so/focusd/internal/api"
@@ -170,7 +171,10 @@ func classifyWithGrok(ctx context.Context, instructions, input string) (*Classif
 }
 
 func classifyWithLLM(ctx context.Context, model llms.Model, instructions, input string) (*ClassificationResponse, error) {
-	resp, err := model.GenerateContent(ctx, []llms.MessageContent{
+	reqCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	resp, err := model.GenerateContent(reqCtx, []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeSystem, instructions),
 		llms.TextParts(llms.ChatMessageTypeHuman, input),
 	})
