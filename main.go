@@ -21,6 +21,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/gorilla/websocket"
+	"github.com/spf13/viper"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -29,12 +30,12 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/focusd-so/focusd/internal/api"
-	"github.com/focusd-so/focusd/internal/fs"
-	"github.com/focusd-so/focusd/internal/sandbox"
 	"github.com/focusd-so/focusd/internal/extension"
+	"github.com/focusd-so/focusd/internal/fs"
 	"github.com/focusd-so/focusd/internal/identity"
 	"github.com/focusd-so/focusd/internal/native"
 	"github.com/focusd-so/focusd/internal/nativemessaging"
+	"github.com/focusd-so/focusd/internal/sandbox"
 	"github.com/focusd-so/focusd/internal/settings"
 	"github.com/focusd-so/focusd/internal/updater"
 	"github.com/focusd-so/focusd/internal/usage"
@@ -96,6 +97,8 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	viper.Set("app_version", Version)
 
 	extensionSessionAPIKey, err := generateSessionAPIKey()
 	if err != nil {

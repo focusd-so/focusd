@@ -62,3 +62,15 @@ type LLMProxyUsage struct {
 func (l *LLMProxyUsage) TableName() string {
 	return "llm_proxy_usage"
 }
+
+type AppVersionLog struct {
+	ID                int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID            int64  `gorm:"not null;uniqueIndex:idx_user_device_version" json:"user_id"`
+	DeviceFingerprint string `gorm:"not null;uniqueIndex:idx_user_device_version" json:"device_fingerprint"`
+	Version           string `gorm:"not null;uniqueIndex:idx_user_device_version" json:"version"`
+	Timestamp         int64  `gorm:"not null" json:"timestamp"`
+}
+
+func (a *AppVersionLog) TableName() string {
+	return "app_version_log"
+}

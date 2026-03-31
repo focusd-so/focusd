@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/spf13/viper"
 	"github.com/zalando/go-keyring"
 
 	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
@@ -44,6 +45,7 @@ func PerformHandshake(ctx context.Context, client apiv1connect.ApiServiceClient)
 
 	req := connect.NewRequest(&apiv1.DeviceHandshakeRequest{
 		DeviceFingerprint: deviceFingerPrint,
+		AppVersion:        viper.GetString("app_version"),
 	})
 
 	req.Header().Set("X-Timestamp", timestamp)

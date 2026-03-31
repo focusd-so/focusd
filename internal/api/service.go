@@ -14,6 +14,7 @@ import (
 
 	"connectrpc.com/connect"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
 	"github.com/focusd-so/focusd/gen/api/v1/apiv1connect"
@@ -26,7 +27,7 @@ type ServiceImpl struct {
 }
 
 func NewServiceImpl(gormDB *gorm.DB, productIDs map[apiv1.CheckoutProduct]string) (*ServiceImpl, error) {
-	if err := gormDB.AutoMigrate(&User{}, &UserDevice{}, &HandshakeNonce{}, &LLMProxyUsage{}); err != nil {
+	if err := gormDB.AutoMigrate(&User{}, &UserDevice{}, &HandshakeNonce{}, &LLMProxyUsage{}, &AppVersionLog{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
@@ -55,6 +56,19 @@ func (s *ServiceImpl) DeviceHandshake(ctx context.Context, req *connect.Request[
 	user, err := s.upsertShadowUser(ctx, req.Msg.DeviceFingerprint)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("db error: %w", err))
+	}
+
+	if req.Msg.AppVersion != "" {
+		now := time.Now().Unix()
+		s.gormDB.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "user_id"}, {Name: "device_fingerprint"}, {Name: "version"}},
+			DoUpdates: clause.AssignmentColumns([]string{"timestamp"}),
+		}).Create(&AppVersionLog{
+			UserID:            user.ID,
+			DeviceFingerprint: req.Msg.DeviceFingerprint,
+			Version:           req.Msg.AppVersion,
+			Timestamp:         now,
+		})
 	}
 
 	sessionToken, err := MintToken(user, user.Role)
