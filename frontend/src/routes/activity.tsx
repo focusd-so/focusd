@@ -8,6 +8,7 @@ import {
   IconChevronDown,
   IconClock,
   IconSearch,
+  IconCalendar,
 } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ import {
   formatClassificationSource,
   formatEnforcementSource,
 } from "@/components/usage-item";
+import { AllowCustomDialog } from "@/components/allow-custom-dialog";
 import type { ApplicationUsage } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
 
 // Extended blocked item for UI display with allowed status
@@ -225,7 +227,7 @@ function ActivityPage() {
       const name = usage.application?.name?.toLowerCase() || "";
       const host = usage.application?.hostname?.toLowerCase() || "";
       const title = usage.window_title?.toLowerCase() || "";
-      const tags = usage.tags?.map((t) => t.tag.toLowerCase()).join(" ") || "";
+      const tags = usage.tags?.map((t: any) => t.tag.toLowerCase()).join(" ") || "";
       return name.includes(q) || host.includes(q) || title.includes(q) || tags.includes(q);
     });
   }, [blockedUsagesDisplay, searchQuery]);
@@ -312,6 +314,7 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
   const { usage, count, isAllowed, expiresAt, whitelistId } = item;
   const isWeb = !!usage.application?.hostname;
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [isCustomDialogOpen, setIsCustomDialogOpen] = useState(false);
   const addToWhitelist = useUsageStore((state) => state.addToWhitelist);
   const removeFromWhitelist = useUsageStore((state) => state.removeFromWhitelist);
 
@@ -349,15 +352,30 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
   }, [isAllowed, expiresAt, whitelistId, removeFromWhitelist]);
 
   const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
+    
+    // Always pad minutes and seconds. Include hours if >= 1
+    if (hours > 0) {
+      return `${hours}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+    }
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
   const handleAllowWithDuration = async (durationMinutes: number) => {
     const appname = usage.application?.name || "";
     const hostname = usage.application?.hostname || "";
     await addToWhitelist(appname, hostname, durationMinutes);
+  };
+
+  const handleExtendDuration = async (addedMinutes: number) => {
+    if (!expiresAt) return;
+    const now = Math.floor(Date.now() / 1000);
+    // If it already expired, just add from now
+    const currentRemaining = Math.max(0, expiresAt - now);
+    const totalMinutes = Math.floor(currentRemaining / 60) + addedMinutes;
+    await handleAllowWithDuration(totalMinutes);
   };
 
   const handleUnallow = async () => {
@@ -421,11 +439,6 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
           <span className={`text-[9px] font-bold ${statusColor} uppercase tracking-wider opacity-90 shrink-0`}>
             {isAllowed ? "ALLOWED" : "BLOCKED"}
           </span>
-          {isAllowed && timeLeft !== null && (
-            <span className="text-[9px] text-yellow-500/70 font-mono shrink-0">
-              {formatTime(timeLeft)} left
-            </span>
-          )}
         </div>
 
         {/* Row 2: Window title / rule source */}
@@ -489,7 +502,7 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
           {formatSmartDate(usage.started_at)}
         </span>
 
-        {usage.tags?.map((usageTag) => (
+        {usage.tags?.map((usageTag: any) => (
           <Badge
             key={usageTag.tag}
             variant="outline"
@@ -568,22 +581,88 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
                 <IconClock className="w-3.5 h-3.5 opacity-60" />
                 1 hour
               </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-white/8" />
+              <DropdownMenuItem
+                onClick={() => setIsCustomDialogOpen(true)}
+                className="text-sm text-white/80 hover:text-white focus:text-white focus:bg-white/8 cursor-pointer gap-2 justify-start"
+              >
+                <IconCalendar className="w-3.5 h-3.5 opacity-60" />
+                Custom time...
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
 
         {isAllowed && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleUnallow}
-            className="h-7 px-3 text-[10px] font-bold bg-transparent border-yellow-500/20 text-yellow-500/70 hover:text-yellow-400 hover:bg-yellow-500/10 hover:border-yellow-500/40 transition-all gap-1.5 rounded-lg"
-          >
-            <IconShield className="w-3 h-3" />
-            Block now
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-3 text-[10px] font-bold bg-transparent border-yellow-500/20 text-yellow-500/70 hover:text-yellow-400 hover:bg-yellow-500/10 hover:border-yellow-500/40 transition-all gap-1.5 rounded-lg tabular-nums"
+              >
+                <IconShield className="w-3 h-3" />
+                {timeLeft !== null ? `${formatTime(timeLeft)} left` : "Allowed"}
+                <IconChevronDown className="w-2.5 h-2.5 opacity-60 ml-0.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-36 bg-neutral-950 border-white/10 text-white"
+            >
+              <DropdownMenuLabel className="text-[9px] font-semibold text-white/30 uppercase tracking-widest px-2 py-1">
+                Extend by…
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-white/8" />
+              <DropdownMenuItem
+                onClick={() => handleExtendDuration(15)}
+                className="text-sm text-white/80 hover:text-white focus:text-white focus:bg-white/8 cursor-pointer gap-2 justify-start"
+              >
+                <IconClock className="w-3.5 h-3.5 opacity-60" />
+                +15 minutes
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleExtendDuration(30)}
+                className="text-sm text-white/80 hover:text-white focus:text-white focus:bg-white/8 cursor-pointer gap-2 justify-start"
+              >
+                <IconClock className="w-3.5 h-3.5 opacity-60" />
+                +30 minutes
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleExtendDuration(60)}
+                className="text-sm text-white/80 hover:text-white focus:text-white focus:bg-white/8 cursor-pointer gap-2 justify-start"
+              >
+                <IconClock className="w-3.5 h-3.5 opacity-60" />
+                +1 hour
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-white/8" />
+              <DropdownMenuItem
+                onClick={() => setIsCustomDialogOpen(true)}
+                className="text-sm text-white/80 hover:text-white focus:text-white focus:bg-white/8 cursor-pointer gap-2 justify-start"
+              >
+                <IconCalendar className="w-3.5 h-3.5 opacity-60" />
+                Custom time...
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-white/8" />
+              <DropdownMenuItem
+                onClick={handleUnallow}
+                className="text-sm text-red-500 hover:text-red-400 focus:text-red-400 focus:bg-red-500/10 cursor-pointer gap-2 justify-start font-medium"
+              >
+                <IconShield className="w-3.5 h-3.5 opacity-80" />
+                Block now
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
+
+      <AllowCustomDialog
+        open={isCustomDialogOpen}
+        onOpenChange={setIsCustomDialogOpen}
+        onConfirm={handleAllowWithDuration}
+        appName={usage.application?.hostname || usage.application?.name || "App"}
+        defaultDate={expiresAt ? new Date(expiresAt * 1000) : undefined}
+      />
     </div>
   );
 }
