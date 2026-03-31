@@ -48,13 +48,17 @@ function SheetContent({
   className,
   children,
   side = "right",
+  modal = true,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left"
+  modal?: boolean
 }) {
+  const ContentWrapper = modal ? SheetPortal : React.Fragment;
+  
   return (
-    <SheetPortal>
-      <SheetOverlay />
+    <ContentWrapper>
+      {modal && <SheetOverlay />}
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(
@@ -69,6 +73,8 @@ function SheetContent({
             "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom inset-x-0 bottom-0 h-auto border-t",
           className
         )}
+        onPointerDownOutside={modal ? undefined : (e) => e.preventDefault()}
+        onInteractOutside={modal ? undefined : (e) => e.preventDefault()}
         {...props}
       >
         {children}
@@ -77,7 +83,7 @@ function SheetContent({
           <span className="sr-only">Close</span>
         </SheetPrimitive.Close>
       </SheetPrimitive.Content>
-    </SheetPortal>
+    </ContentWrapper>
   )
 }
 
