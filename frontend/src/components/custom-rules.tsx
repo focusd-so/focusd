@@ -14,7 +14,6 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 import { ExecutionLogsSheet } from "@/components/execution-logs";
 import { TestRulesSheet } from "@/components/test-rules-sheet";
 import { RulesReferenceSheet } from "@/components/rules-reference-sheet";
-import { STARTER_RULES_TS } from "@/lib/rules/starter-template";
 import { RUNTIME_TYPES_FILE_PATH, fetchRuntimeTypes } from "@/lib/rules/runtime-types";
 
 const SETTINGS_KEY = "custom_rules";
@@ -36,7 +35,7 @@ export function CustomRules() {
   const [showDraftBanner, setShowDraftBanner] = useState(false);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 
-  const displayedRules = draft ?? (customRules || STARTER_RULES_TS);
+  const displayedRules = draft ?? customRules;
   const hasUnsavedChanges = draft !== null && draft !== customRules;
 
   useEffect(() => {
@@ -45,7 +44,7 @@ export function CustomRules() {
       return;
     }
 
-    const savedValue = customRules || STARTER_RULES_TS;
+    const savedValue = customRules;
     if (savedDraft !== savedValue) {
       setShowDraftBanner(true);
       return;
@@ -59,7 +58,7 @@ export function CustomRules() {
       return;
     }
 
-    const savedValue = customRules || STARTER_RULES_TS;
+    const savedValue = customRules;
     if (draft !== savedValue) {
       localStorage.setItem(DRAFT_STORAGE_KEY, draft);
       return;
@@ -120,6 +119,12 @@ export function CustomRules() {
         saveRef.current();
       },
     });
+
+    instance.onMouseDown(() => {
+      setReferenceOpen(false);
+      setTestOpen(false);
+      setLogsOpen(false);
+    });
   }, []);
 
   const handleEditorWillMount = useCallback(async (monaco: Monaco) => {
@@ -133,9 +138,9 @@ export function CustomRules() {
   }, []);
 
   return (
-    <div className="flex flex-col h-full w-full pb-2">
+    <div className="flex flex-col h-full w-full pb-2 relative">
       <div className="flex-1 flex flex-col min-h-0 border rounded-lg bg-card overflow-hidden">
-        <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b border-border/50">
+        <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b border-border/50 z-10">
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-background/50 border border-border/50 shadow-sm">
               <IconFileText className="w-4 h-4 text-muted-foreground" />
@@ -197,7 +202,12 @@ export function CustomRules() {
 
             <button
               onClick={() => setReferenceOpen(true)}
-              className="inline-flex items-center gap-1.5 h-8 px-2 text-xs font-medium text-muted-foreground/60 hover:text-foreground hover:underline underline-offset-4 transition-colors"
+              className={cn(
+                "inline-flex items-center gap-1.5 h-8 px-2 text-xs font-medium transition-colors",
+                referenceOpen 
+                  ? "text-primary bg-primary/10 rounded" 
+                  : "text-muted-foreground/60 hover:text-foreground hover:underline underline-offset-4"
+              )}
             >
               <IconBook className="w-3.5 h-3.5" />
               <span className="sr-only sm:not-sr-only">Examples</span>
@@ -283,7 +293,11 @@ export function CustomRules() {
 
         <ExecutionLogsSheet open={logsOpen} onOpenChange={setLogsOpen} />
         <TestRulesSheet open={testOpen} onOpenChange={setTestOpen} />
-        <RulesReferenceSheet open={referenceOpen} onOpenChange={setReferenceOpen} />
+        
+        <RulesReferenceSheet 
+          open={referenceOpen} 
+          onOpenChange={setReferenceOpen} 
+        />
       </div>
     </div>
   );
