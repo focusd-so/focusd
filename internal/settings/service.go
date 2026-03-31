@@ -15,10 +15,11 @@ type Service struct{}
 
 func NewService(configDir string) (*Service, error) {
 	// Set defaults
-	viper.SetDefault("idle_threshold_seconds", 120)
-	viper.SetDefault("history_retention_days", 30)
-	viper.SetDefault("distraction_allowance_minutes", 60)
-	viper.SetDefault("custom_rules_js", []string{})
+	defaultConfig := DefaultConfig()
+	viper.SetDefault("idle_threshold_seconds", defaultConfig.IdleThresholdSeconds)
+	viper.SetDefault("history_retention_days", defaultConfig.HistoryRetentionDays)
+	viper.SetDefault("distraction_allowance_minutes", defaultConfig.DistractionAllowanceMinutes)
+	viper.SetDefault("custom_rules_js", defaultConfig.CustomRulesJS)
 
 	// Config file settings
 	viper.SetConfigName("config")

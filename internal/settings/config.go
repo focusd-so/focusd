@@ -1,5 +1,9 @@
 package settings
 
+import (
+	"encoding/base64"
+)
+
 type LLMProvider string
 
 const (
@@ -9,6 +13,67 @@ const (
 	LLMProviderAnthropic LLMProvider = "anthropic"
 	LLMProviderDummy     LLMProvider = "dummy"
 )
+
+// DefaultCustomRulesJS contains the starter template for custom rules.
+// This provides the fallback backend default when the user has not yet customized their rules.
+const DefaultCustomRulesJS = `import {
+  productive,
+  distracting,
+  block,
+  Timezone,
+  runtime,
+  type Classify,
+  type Enforce,
+} from "@focusd/runtime";
+
+/**
+ * Classify determines whether the current app or website is productive or distracting.
+ * It is called every time your usage changes.
+ */
+export function classify(): Classify | undefined {
+  const { domain, app, current } = runtime.usage;
+  
+  // --- EXAMPLES ---
+  //
+  // 1. Mark specific domains as productive
+  // if (domain === "github.com") return productive("Working on code");
+  // 
+  // 2. Mark distracting based on today's stats & current usage
+  // if (domain === "twitter.com" && current.usedToday > 30) {
+  //   return distracting("Daily limit reached");
+  // }
+  //
+  // 3. Use current hour stats to mark distraction
+  // if (runtime.hour.distractingMinutes > 20 && current.last(60) > 15) {
+  //   return distracting("Too much distraction this hour");
+  // }
+
+  return undefined;
+}
+
+/**
+ * Enforcement determines whether or not to block the current app or website.
+ * It is called when the current usage has been classified as distracting.
+ */
+export function enforcement(): Enforce | undefined {
+  const { domain } = runtime.usage;
+
+  // --- EXAMPLES ---
+  //
+  // 1. Block if daily distraction limit is reached
+  // if (runtime.today.distractingMinutes > 60) {
+  //   return block("Daily distraction limit reached");
+  // }
+  //
+  // 2. Block after a specific time (e.g., 10 PM in London)
+  // const hour = runtime.time.now(Timezone.Europe_London).getHours();
+  // if (domain === "youtube.com" && hour >= 22) {
+  //   return block("Late night blocking");
+  // }
+
+  return undefined;
+}
+`
 
 // AppConfig represents all configurable options for the application
 type AppConfig struct {
@@ -25,7 +90,7 @@ func DefaultConfig() AppConfig {
 		IdleThresholdSeconds:        120, // 2 minutes
 		HistoryRetentionDays:        30,  // 30 days
 		DistractionAllowanceMinutes: 60,  // 1 hour
-		CustomRulesJS:               []string{},
+		CustomRulesJS:               []string{base64.StdEncoding.EncodeToString([]byte(DefaultCustomRulesJS))},
 		ClassificationLLMProvider:   LLMProviderGoogle,
 	}
 }
