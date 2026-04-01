@@ -34,7 +34,6 @@ import (
 	"github.com/focusd-so/focusd/internal/fs"
 	"github.com/focusd-so/focusd/internal/identity"
 	"github.com/focusd-so/focusd/internal/native"
-	"github.com/focusd-so/focusd/internal/nativemessaging"
 	"github.com/focusd-so/focusd/internal/sandbox"
 	"github.com/focusd-so/focusd/internal/settings"
 	"github.com/focusd-so/focusd/internal/updater"
@@ -71,7 +70,7 @@ func init() {
 // logs any error that might occur.
 func main() {
 	if isNativeMessagingHostMode() {
-		if err := nativemessaging.ServeHost(); err != nil {
+		if err := native.ServeHost(); err != nil {
 			log.Fatalf("failed to serve native messaging host: %v", err)
 		}
 		return
@@ -105,7 +104,7 @@ func main() {
 		log.Fatalf("failed to generate extension session API key: %v", err)
 	}
 
-	if err := nativemessaging.EnsureHostManifests(); err != nil {
+	if err := native.EnsureHostManifests(); err != nil {
 		slog.Error("failed to ensure native messaging manifests", "error", err)
 	}
 
