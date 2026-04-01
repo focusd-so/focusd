@@ -1,4 +1,4 @@
-package nativemessaging
+package native
 
 import (
 	"encoding/json"
