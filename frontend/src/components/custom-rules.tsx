@@ -7,7 +7,7 @@ import { useAccountStore } from "@/stores/account-store";
 import { DeviceHandshakeResponse_AccountTier } from "../../bindings/github.com/focusd-so/focusd/gen/api/v1/models";
 import { Browser } from "@wailsio/runtime";
 import { Button } from "@/components/ui/button";
-import { IconBook, IconCrown, IconDeviceFloppy, IconFileText, IconTerminal, IconTestPipe } from "@tabler/icons-react";
+import { IconBook, IconCrown, IconFileText, IconTerminal, IconTestPipe } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
@@ -75,7 +75,7 @@ export function CustomRules() {
 
     setDraft(savedDraft);
     setShowDraftBanner(false);
-    toast.info("Draft restored. Click Save to apply changes.");
+    toast.info("Draft restored. Press Cmd/Ctrl+S to apply changes.");
   }, []);
 
   const handleDiscardDraft = useCallback(() => {
@@ -107,6 +107,20 @@ export function CustomRules() {
 
   const saveRef = useRef(handleSave);
   saveRef.current = handleSave;
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        saveRef.current();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   const handleEditorMount = useCallback((instance: editor.IStandaloneCodeEditor, monaco: Monaco) => {
     editorRef.current = instance;
@@ -213,20 +227,6 @@ export function CustomRules() {
               <span className="sr-only sm:not-sr-only">Examples</span>
             </button>
 
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={!hasUnsavedChanges}
-              className={cn(
-                "h-8 px-3 transition-all duration-200",
-                hasUnsavedChanges
-                  ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-500"
-                  : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
-              )}
-            >
-              <IconDeviceFloppy className="w-4 h-4 sm:mr-1.5" />
-              <span className="text-xs font-bold sm:inline hidden">Save Rules</span>
-            </Button>
           </div>
         </div>
 

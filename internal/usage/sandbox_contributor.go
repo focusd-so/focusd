@@ -28,77 +28,197 @@ func (c *usageContributor) TypesDefinition() string {
   import { WeekdayType, Timezone, Weekday } from "@focusd/core";
   export { WeekdayType, Timezone, Weekday };
 
+  /**
+   * High-level category for the current activity.
+   */
   export type ClassificationType = "unknown" | "productive" | "distracting" | "neutral" | "system";
+
+  /**
+   * Action the runtime should take for the current activity.
+   */
   export type EnforcementActionType = "none" | "block" | "paused" | "allow";
+
+  /**
+   * Duration measured in whole minutes.
+   */
   export type Minutes = number;
 
+  /**
+   * Named constants for available classification values.
+   */
   export const Classification: {
+    /** Activity could not be confidently categorized. */
     readonly Unknown: "unknown";
+    /** Activity is considered helpful for focus or work. */
     readonly Productive: "productive";
+    /** Activity is considered distracting. */
     readonly Distracting: "distracting";
+    /** Activity is neither clearly productive nor distracting. */
     readonly Neutral: "neutral";
+    /** Activity is system-generated and should not affect scoring. */
     readonly System: "system";
   };
 
+  /**
+   * Named constants for available enforcement actions.
+   */
   export const EnforcementAction: {
+    /** No enforcement action is applied. */
     readonly None: "none";
+    /** Access is blocked. */
     readonly Block: "block";
+    /** Access is temporarily paused. */
     readonly Paused: "paused";
+    /** Access is explicitly allowed. */
     readonly Allow: "allow";
   };
 
+  /**
+   * Result returned by classification helpers.
+   */
   export interface Classify {
+    /** Classification category for the active usage. */
     classification: ClassificationType;
+    /** Human-readable reason describing why this classification was chosen. */
     classificationReasoning: string;
+    /** Optional labels to support filtering, analysis, or reporting. */
     tags?: string[];
   }
 
+  /**
+   * Result returned by enforcement helpers.
+   */
   export interface Enforce {
+    /** Enforcement action that should be taken. */
     enforcementAction: EnforcementActionType;
+    /** Human-readable reason describing why this action was chosen. */
     enforcementReason: string;
   }
 
+  /**
+   * Marks current activity as productive.
+   * @param reason Why the activity is productive.
+   * @param tags Optional tags to attach to this decision.
+   */
   export function productive(reason: string, tags?: string[]): Classify;
+
+  /**
+   * Marks current activity as distracting.
+   * @param reason Why the activity is distracting.
+   * @param tags Optional tags to attach to this decision.
+   */
   export function distracting(reason: string, tags?: string[]): Classify;
+
+  /**
+   * Marks current activity as neutral.
+   * @param reason Why the activity is neutral.
+   * @param tags Optional tags to attach to this decision.
+   */
   export function neutral(reason: string, tags?: string[]): Classify;
+
+  /**
+   * Blocks access to the current activity.
+   * @param reason Why access should be blocked.
+   */
   export function block(reason: string): Enforce;
+
+  /**
+   * Explicitly allows access to the current activity.
+   * @param reason Why access should be allowed.
+   */
   export function allow(reason: string): Enforce;
+
+  /**
+   * Temporarily pauses access to the current activity.
+   * @param reason Why access should be paused.
+   */
   export function pause(reason: string): Enforce;
 
+  /**
+   * Aggregated focus metrics for a period.
+   */
   export interface TimeSummary {
+    /** Focus score for the period on a 0-100 scale. */
     readonly focusScore: number;
+    /** Minutes classified as productive in the period. */
     readonly productiveMinutes: Minutes;
+    /** Minutes classified as distracting in the period. */
     readonly distractingMinutes: Minutes;
   }
 
+  /**
+   * Activity totals for the currently active app/site.
+   */
   export interface CurrentUsage {
+    /** Minutes spent on this app/site today. */
     readonly usedToday: Minutes;
+    /** Number of block events for this app/site today. */
     readonly blocks: number;
+    /** Minutes elapsed since the most recent block event, if any. */
     readonly sinceBlock: Minutes | null;
+    /** Minutes used since the most recent block event, if any. */
     readonly usedSinceBlock: Minutes | null;
+
+    /**
+     * Returns minutes of usage during the last N minutes for this app/site.
+     * @param minutes Size of lookback window in minutes.
+     */
     last(minutes: number): number;
   }
 
+  /**
+   * Runtime context available to classify/enforcement scripts.
+   */
   export interface Runtime {
+    /** Focus metrics aggregated for today. */
     readonly today: TimeSummary;
+    /** Focus metrics aggregated for the last hour. */
     readonly hour: TimeSummary;
+    /** Metadata for the currently active app/page. */
     readonly usage: Usage;
+
+    /**
+     * Time helpers used by scripts.
+     */
     readonly time: {
+      /**
+       * Current date/time in local time or in the provided IANA timezone.
+       * @param timezone Optional IANA timezone like "America/New_York".
+       */
       now(timezone?: string): Date;
+
+      /**
+       * Current weekday in local time or in the provided IANA timezone.
+       * @param timezone Optional IANA timezone like "America/New_York".
+       */
       day(timezone?: string): WeekdayType;
     };
   }
 
+  /**
+   * Runtime context object injected by focusd during script execution.
+   */
   export const runtime: Runtime;
 
+  /**
+   * Metadata about the currently active app/window/page.
+   */
   export interface Usage {
+    /** Name of the active application (for example, "Google Chrome"). */
     readonly app: string;
+    /** Window or tab title reported by the active application. */
     readonly title: string;
+    /** Domain name for browser activity, when available. */
     readonly domain: string;
+    /** Host for browser activity, when available. */
     readonly host: string;
+    /** URL path for browser activity, when available. */
     readonly path: string;
+    /** Full URL for browser activity, when available. */
     readonly url: string;
+    /** Existing classification assigned to this activity before script output. */
     readonly classification: string;
+    /** Usage metrics scoped to this exact app/site. */
     readonly current: CurrentUsage;
   }
 }`
