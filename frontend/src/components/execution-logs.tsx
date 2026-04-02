@@ -59,11 +59,33 @@ function formatSandboxLogs(logsStr: string | null | undefined): string {
 
 function extractAppInfo(contextStr: string): string {
   try {
-    const ctx = JSON.parse(contextStr);
+    const ctx = JSON.parse(contextStr) as unknown;
+    const getString = (obj: Record<string, unknown>, key: string): string => {
+      const value = obj[key];
+      return typeof value === "string" ? value : "";
+    };
+
+    const root = typeof ctx === "object" && ctx !== null ? (ctx as Record<string, unknown>) : {};
+    const usage =
+      typeof root.usage === "object" && root.usage !== null
+        ? (root.usage as Record<string, unknown>)
+        : null;
+    const meta =
+      usage && typeof usage.meta === "object" && usage.meta !== null
+        ? (usage.meta as Record<string, unknown>)
+        : root;
+
+    const appName = getString(meta, "appName");
+    const host = getString(meta, "host") || getString(meta, "hostname");
+    const domain = getString(meta, "domain");
+    const title = getString(meta, "title");
+
     const parts: string[] = [];
-    if (ctx.appName) parts.push(ctx.appName);
-    if (ctx.hostname) parts.push(ctx.hostname);
-    else if (ctx.domain) parts.push(ctx.domain);
+    if (appName) parts.push(appName);
+    if (host) parts.push(host);
+    else if (domain) parts.push(domain);
+    else if (title) parts.push(title);
+
     return parts.join(" · ") || "unknown";
   } catch {
     return contextStr.slice(0, 60);

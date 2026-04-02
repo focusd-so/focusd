@@ -544,39 +544,26 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
               </TruncatedLabel>
             </div>
             {isIgnoredRule && (
-              <div className="self-start text-[9px] text-purple-400/80 bg-purple-500/5 px-1.5 py-0.5 rounded border border-purple-500/10 mt-1 flex items-center gap-1 animate-in fade-in slide-in-from-left-1 duration-500">
-                <IconTerminal className="w-2.5 h-2.5 shrink-0" />
+              <div className="self-start text-[9px] text-amber-200/90 bg-amber-500/10 px-2 py-1 rounded border border-amber-400/20 mt-1 flex items-center gap-1.5 animate-in fade-in slide-in-from-left-1 duration-500">
+                <IconTerminal className="w-2.5 h-2.5 shrink-0 text-amber-300/80" />
                 <span className="truncate">
-                  Script would have{" "}
-                  <span className="font-semibold uppercase text-purple-400">
+                  Custom rules would have{" "}
+                  <span className="font-semibold uppercase text-amber-200">
                     {scriptDidBlock ? "blocked" : "allowed"}
                   </span>{" "}
-                  this on paid tiers.
+                  this action. <span className="text-amber-200/70">Upgrade to Plus to enforce custom rules.</span>
                 </span>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {checkoutLink && (
-                    <>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          Browser.OpenURL(checkoutLink);
-                        }}
-                        className="underline hover:text-purple-300 font-medium whitespace-nowrap"
-                      >
-                        Get Plus
-                      </button>
-                      <span className="text-purple-500/40">·</span>
-                    </>
-                  )}
-                  <Link
-                    to="/settings"
-                    search={{ tab: "rules" }}
-                    className="underline hover:text-purple-300 font-medium whitespace-nowrap"
-                    onClick={(e) => e.stopPropagation()}
+                {checkoutLink && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      Browser.OpenURL(checkoutLink);
+                    }}
+                    className="underline hover:text-amber-100 font-semibold whitespace-nowrap"
                   >
-                    Activate custom rules
-                  </Link>
-                </div>
+                    Upgrade to Plus
+                  </button>
+                )}
               </div>
             )}
           </div>

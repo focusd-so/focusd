@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { Browser } from "@wailsio/runtime";
 import {
   IconWorld,
   IconAppWindow,
@@ -27,6 +29,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useUsageStore } from "@/stores/usage-store";
+import { useSettingsStore } from "@/stores/settings-store";
+import { useAccountStore } from "@/stores/account-store";
 import { SmartBlockingStatus } from "@/components/smart-blocking-status";
 import {
   UsageItem,
@@ -36,7 +40,9 @@ import {
   formatEnforcementSource,
 } from "@/components/usage-item";
 import { AllowCustomDialog } from "@/components/allow-custom-dialog";
+import { hasNonDefaultCustomRules } from "@/lib/rules/default-rules";
 import type { ApplicationUsage } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
+import { DeviceHandshakeResponse_AccountTier } from "../../bindings/github.com/focusd-so/focusd/gen/api/v1/models";
 import { usePageSearch } from "@/hooks/use-page-search";
 
 // Extended blocked item for UI display with allowed status
@@ -125,6 +131,17 @@ function ActivityPage() {
   const getBlockedItemsList = useUsageStore((state) => state.getBlockedItemsList);
   const allowedItems = useUsageStore((state) => state.allowedItems);
   const blockedItems = useUsageStore((state) => state.blockedItems); // Subscribe to blocked items map
+  const customRules = useSettingsStore((state) => state.customRules);
+  const { checkoutLink, fetchAccountTier } = useAccountStore();
+  const { data: accountTier } = useQuery({
+    queryKey: ["accountTier"],
+    queryFn: () => fetchAccountTier(),
+  });
+  const isFreeTier =
+    accountTier ===
+    DeviceHandshakeResponse_AccountTier.DeviceHandshakeResponse_ACCOUNT_TIER_FREE;
+  const showNonEnforcedCustomRulesNote =
+    isFreeTier && hasNonDefaultCustomRules(customRules);
   const { query: searchQuery } = usePageSearch({
     enabled: true,
     placeholder: "Search blocked + recent...",
@@ -291,6 +308,19 @@ function ActivityPage() {
           <p className="text-xs font-medium text-white/40 uppercase tracking-wider">
             Recent Activity
           </p>
+          {showNonEnforcedCustomRulesNote && (
+            <div className="flex items-center gap-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-200/90">
+              <span className="truncate">Custom rules are preview-only on Free.</span>
+              {checkoutLink && (
+                <button
+                  onClick={() => Browser.OpenURL(checkoutLink)}
+                  className="whitespace-nowrap font-semibold underline hover:text-amber-100"
+                >
+                  Upgrade
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <ScrollArea className="flex-1 min-h-0 [&_[data-radix-scroll-area-scrollbar]]:hidden">
