@@ -485,9 +485,9 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
 
   return (
     <div
-      className={`flex flex-col p-1.5 rounded-lg border transition-all ${theme.container}`}
+      className={`flex flex-col p-2.5 rounded-lg border transition-all ${theme.container}`}
     >
-      <div className="flex items-start justify-between w-full gap-2 min-w-0">
+      <div className="flex items-center justify-between w-full gap-2 min-w-0">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {/* Icon Container */}
           <div
@@ -511,10 +511,18 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
           </div>
 
           {/* Text Content */}
-          <div className="flex min-w-0 flex-1 flex-col truncate">
-            <TruncatedLabel className="text-xs font-semibold text-foreground truncate leading-tight">
-              {usage.application?.hostname || usage.application?.name || "Unknown"}
-            </TruncatedLabel>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex items-center gap-2 min-w-0">
+              <TruncatedLabel className="text-xs font-semibold text-foreground truncate leading-tight">
+                {usage.application?.hostname || usage.application?.name || "Unknown"}
+              </TruncatedLabel>
+              <span className="text-[10px] text-muted-foreground/50 tabular-nums leading-none shrink-0">
+                at {formatSmartDate(usage.started_at)}
+                {durationSeconds != null && durationSeconds >= 60 && (
+                  <span className="opacity-70 font-medium"> · {formatDuration(durationSeconds)}</span>
+                )}
+              </span>
+            </div>
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className="text-[10px] font-medium uppercase tracking-widest opacity-70">
                 {usage.classification ||
@@ -575,24 +583,15 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
         </div>
 
         {/* Right Side Group */}
-        <div className="flex min-w-0 items-start gap-2 pl-1">
+        <div className="flex min-w-0 items-center gap-2 pl-1">
           <div className="flex min-w-0 flex-col items-end gap-1">
             <div className="flex flex-wrap items-center justify-end gap-1">
-              {durationSeconds != null && durationSeconds >= 0 && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-semibold text-foreground/90 tabular-nums">
-                    {formatDuration(durationSeconds)}
-                  </span>
-                </div>
-              )}
-
               <Badge
                 variant="outline"
                 className={`px-1.5 py-0 text-[9px] font-bold rounded-full ${theme.badge}`}
               >
                 {isWeb ? "web" : "app"}
               </Badge>
-
               {usage.tags?.map((usageTag) => (
                 <Badge
                   key={usageTag.tag}
@@ -603,10 +602,6 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
                 </Badge>
               ))}
             </div>
-
-            <span className="text-[10px] text-muted-foreground/50 tabular-nums leading-none">
-              at {formatSmartDate(usage.started_at)}
-            </span>
 
             <ClassificationReasoningLabel
               usage={usage}
