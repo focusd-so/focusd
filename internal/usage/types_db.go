@@ -21,19 +21,16 @@ const (
 	ExecutionLogTypeEnforcementAction ExecutionLogType = "enforcement_action"
 )
 
-// Application represents a unique application that has been used by the user
-// Application is unique by name and hostname that is
-//   - if the application is not a browser it is unique by name
-//   - if the application is a browser it is unique by name and domain
-//     eg. Chrome + google.com != Chrome + youtube.com, each of them will have its own application
+// Application represents an application that has been used by the user.
+// It tracks both native applications and browser-based applications (websites).
 type Application struct {
 	// mandatory fields
 	ID   int64  `json:"id" gorm:"primaryKey;autoIncrement;not null"`
-	Name string `json:"name" gorm:"uniqueIndex:idx_name_hostname_id;not null"`
+	Name string `json:"name" gorm:"index:idx_application_name;not null"`
 
 	// optional fields
 	Icon           *string `json:"icon"` // either app icon or favicon if host is present
-	Hostname       *string `json:"hostname" gorm:"uniqueIndex:idx_name_hostname_id"`
+	Hostname       *string `json:"hostname" gorm:"index:idx_application_hostname"`
 	Domain         *string `json:"domain"`
 	ExecutablePath string  `json:"executable_path"`
 
@@ -69,13 +66,13 @@ type ApplicationUsage struct {
 	// mandatory fields
 	ID                int64             `json:"id" gorm:"primaryKey;autoIncrement;not null"`
 	WindowTitle       string            `json:"window_title" gorm:"not null"`
-	StartedAt         int64             `json:"started_at" gorm:"not null"`
+	StartedAt         int64             `json:"started_at" gorm:"not null;index:idx_application_usage_started_at"`
 	Classification    Classification    `json:"classification" gorm:"index:idx_classification"`
 	EnforcementAction EnforcementAction `json:"enforcement_action" gorm:"not null"`
 
 	// optional fields
 	BrowserURL      *string `json:"browser_url" gorm:"type:text"`
-	EndedAt         *int64  `json:"ended_at"`
+	EndedAt         *int64  `json:"ended_at" gorm:"index:idx_application_usage_ended_at"`
 	DurationSeconds *int    `json:"duration_seconds"`
 
 	ClassificationError      *string               `gorm:"index:idx_classification_error" json:"classification_error"`

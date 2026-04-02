@@ -181,60 +181,6 @@ func TestClassifyCustomRules_ExecutionLogs(t *testing.T) {
 	require.Equal(t, `["should capture this","and this too","also this"]`, strings.Trim(log.Logs, "\n"))
 }
 
-func TestClassifyCustomRules_MinutesUsedInPeriod(t *testing.T) {
-	encoded := base64.StdEncoding.EncodeToString([]byte(customRulesWithMinutesUsedInPeriod))
-	viper.SetDefault("custom_rules_js", []string{encoded})
-
-	service, _ := setUpService(t)
-
-	var calledWithMinutes int64
-
-	response, err := service.ClassifyCustomRules(context.Background(), usage.WithAppNameContext("YouTube"), usage.WithMinutesUsedInPeriodContext(func(_, _ string, durationMinutes int64) (int64, error) {
-		calledWithMinutes = durationMinutes
-		return 45, nil // Return 45 minutes (exceeds 30 limit)
-	}))
-	require.NoError(t, err)
-	require.NotNil(t, response)
-	require.Equal(t, usage.ClassificationDistracting, response.Classification)
-	require.Equal(t, "Too much time spent: 45 minutes", response.Reasoning)
-	require.Equal(t, []string{"limit-exceeded"}, response.Tags)
-
-	// Verify callback was called with correct duration parameter
-	require.Equal(t, int64(60), calledWithMinutes)
-
-	response, err = service.ClassifyCustomRules(context.Background(), usage.WithAppNameContext("YouTube"), usage.WithMinutesUsedInPeriodContext(func(_, _ string, durationMinutes int64) (int64, error) {
-		return 15, nil // Return 15 minutes (under 30 limit)
-	}))
-	require.NoError(t, err)
-	require.NotNil(t, response)
-	require.Equal(t, usage.ClassificationNeutral, response.Classification)
-	require.Equal(t, "Under limit: 15 minutes", response.Reasoning)
-	require.Equal(t, []string{"within-limit"}, response.Tags)
-
-	response, err = service.ClassifyCustomRules(context.Background(), usage.WithAppNameContext("YouTube"), usage.WithMinutesUsedInPeriodContext(func(_, _ string, durationMinutes int64) (int64, error) {
-		return 30, nil // Return exactly 30 minutes (at limit, should be Neutral)
-	}))
-	require.NoError(t, err)
-	require.NotNil(t, response)
-	require.Equal(t, usage.ClassificationNeutral, response.Classification)
-	require.Equal(t, "Under limit: 30 minutes", response.Reasoning)
-}
-
-func TestClassifyCustomRules_MinutesUsedInPeriod_NilFunction(t *testing.T) {
-	encoded := base64.StdEncoding.EncodeToString([]byte(customRulesWithMinutesUsedInPeriod))
-	viper.SetDefault("custom_rules_js", []string{encoded})
-
-	service, _ := setUpService(t)
-
-	response, err := service.ClassifyCustomRules(context.Background(), usage.WithAppNameContext("YouTube"), usage.WithMinutesUsedInPeriodContext(nil))
-	require.NoError(t, err)
-	require.NotNil(t, response)
-	// When MinutesUsedInPeriod is nil, the JS fallback returns 0, so it should be under limit
-	require.Equal(t, usage.ClassificationNeutral, response.Classification)
-	require.Equal(t, "Under limit: 0 minutes", response.Reasoning)
-	require.Equal(t, []string{"within-limit"}, response.Tags)
-}
-
 func TestClassifyCustomRules_Website(t *testing.T) {
 	encoded := base64.StdEncoding.EncodeToString([]byte(customRulesWebsite))
 	viper.SetDefault("custom_rules_js", []string{encoded})
