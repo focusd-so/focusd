@@ -7,7 +7,6 @@ import {
   IconShield,
   IconChevronDown,
   IconClock,
-  IconSearch,
   IconCalendar,
 } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +37,7 @@ import {
 } from "@/components/usage-item";
 import { AllowCustomDialog } from "@/components/allow-custom-dialog";
 import type { ApplicationUsage } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
+import { usePageSearch } from "@/hooks/use-page-search";
 
 // Extended blocked item for UI display with allowed status
 interface BlockedUsageDisplay {
@@ -125,8 +125,10 @@ function ActivityPage() {
   const getBlockedItemsList = useUsageStore((state) => state.getBlockedItemsList);
   const allowedItems = useUsageStore((state) => state.allowedItems);
   const blockedItems = useUsageStore((state) => state.blockedItems); // Subscribe to blocked items map
-
-  const [searchQuery, setSearchQuery] = useState("");
+  const { query: searchQuery } = usePageSearch({
+    enabled: true,
+    placeholder: "Search blocked + recent...",
+  });
 
   // Defer rendering of the full list to make navigation instant
   const [renderCount, setRenderCount] = useState(15);
@@ -232,6 +234,19 @@ function ActivityPage() {
     });
   }, [blockedUsagesDisplay, searchQuery]);
 
+  const filteredActiveUsages = useMemo(() => {
+    if (!searchQuery) return activeUsages;
+    const q = searchQuery.toLowerCase();
+
+    return activeUsages.filter((usage) => {
+      const name = usage.application?.name?.toLowerCase() || "";
+      const host = usage.application?.hostname?.toLowerCase() || "";
+      const title = usage.window_title?.toLowerCase() || "";
+      const tags = usage.tags?.map((t: any) => t.tag.toLowerCase()).join(" ") || "";
+      return name.includes(q) || host.includes(q) || title.includes(q) || tags.includes(q);
+    });
+  }, [activeUsages, searchQuery]);
+
   return (
     <div className="flex flex-col gap-6 p-4 flex-1 min-h-0 overflow-hidden">
       <div className="flex flex-col gap-4 shrink-0">
@@ -246,16 +261,6 @@ function ActivityPage() {
               Blocked Distractions Today
             </p>
             <div className="flex items-center gap-3">
-              <div className="relative group flex items-center">
-                <IconSearch className="w-3.5 h-3.5 absolute left-0 text-white/20 group-focus-within:text-red-500/50 transition-colors pointer-events-none" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search..."
-                  className="h-6 w-20 focus:w-40 bg-transparent text-xs text-white/70 pl-5 pr-0 outline-none placeholder:text-white/20 transition-all focus:placeholder:opacity-0 cursor-pointer focus:cursor-text"
-                />
-              </div>
               <Badge
                 variant="outline"
                 className="border-red-500/20 text-red-500/60 text-[9px] px-1.5 h-4 shrink-0 transition-all"
@@ -295,9 +300,14 @@ function ActivityPage() {
                 <IconSparkles className="w-8 h-8 mb-2" />
                 <p>No activity recorded yet</p>
               </div>
+            ) : filteredActiveUsages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground border border-dashed rounded-xl opacity-50">
+                <IconSparkles className="w-8 h-8 mb-2" />
+                <p>No recent activity matches your search</p>
+              </div>
             ) : (
               <div className="space-y-1.5">
-                {activeUsages.slice(0, renderCount).map((usage) => (
+                {filteredActiveUsages.slice(0, renderCount).map((usage) => (
                   <UsageItem key={usage.id} usage={usage} />
                 ))}
               </div>
