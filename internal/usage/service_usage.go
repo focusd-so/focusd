@@ -141,12 +141,6 @@ func (s *Service) saveApplicationUsage(applicationUsage *ApplicationUsage) error
 		return fmt.Errorf("failed to save application usage: %w", err)
 	}
 
-	s.eventsMu.RLock()
-	for _, fn := range s.onUsageUpdated {
-		fn(applicationUsage)
-	}
-	s.eventsMu.RUnlock()
-
 	return nil
 }
 
@@ -329,12 +323,6 @@ func (s *Service) closeApplicationUsage(app *ApplicationUsage) error {
 	if err := s.db.Save(&app).Error; err != nil {
 		return fmt.Errorf("failed to update application usage: %w", err)
 	}
-
-	s.eventsMu.RLock()
-	for _, fn := range s.onUsageUpdated {
-		fn(app)
-	}
-	s.eventsMu.RUnlock()
 
 	return nil
 }

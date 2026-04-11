@@ -13,6 +13,7 @@ import (
 	"github.com/focusd-so/focusd/internal/identity"
 	"github.com/focusd-so/focusd/internal/sandbox"
 	"github.com/focusd-so/focusd/internal/settings"
+	"github.com/focusd-so/focusd/internal/timeline"
 )
 
 // enforcement is returned from the enforcement function.
@@ -21,164 +22,136 @@ type enforcement struct {
 	EnforcementReason string `json:"enforcementReason"`
 }
 
-// PauseProtection temporarily disables focus protection for the specified duration.
-//
-// The function starts a background goroutine that automatically resumes protection
-// after the duration expires. The pause state is persisted to the database, allowing
-// the application to recover pause state across restarts.
-//
-// Parameters:
-//   - duration: The duration to pause protection (must be > 0)
-//
-// Returns:
-//   - error: Returns an error if protection is already paused
-//
-// Side effects:
-//   - Creates a ProtectionPause record in the database
-//   - Emits a state update via the state channel
-//   - Spawns a goroutine that calls ResumeProtection after the duration
-func (s *Service) PauseProtection(durationSeconds int, reason string) (ProtectionPause, error) {
-	protectionPause, err := s.GetProtectionStatus()
-	if err != nil {
-		return ProtectionPause{}, err
-	}
-
-	if protectionPause.ID != 0 {
-		return protectionPause, nil
-	}
-
-	now := time.Now().Unix()
-	projectedResumedAt := now + int64(durationSeconds)
-
-	protectionPause = ProtectionPause{
-		RequestedDurationSeconds: durationSeconds,
-		ResumedAt:                projectedResumedAt,
-		CreatedAt:                now,
-		ActualDurationSeconds:    durationSeconds,
-		ResumedReason:            fmt.Sprintf("protection paused for %ds expired", durationSeconds),
-		Reason:                   reason,
-	}
-
-	if err := s.db.Create(&protectionPause).Error; err != nil {
-		return ProtectionPause{}, err
-	}
-
-	s.eventsMu.RLock()
-	for _, fn := range s.onProtectionPaused {
-		fn(protectionPause)
-	}
-	s.eventsMu.RUnlock()
-
-	return protectionPause, nil
+type PauseProtectionPayload struct {
+	ResumeReason string `json:"resume_reason"`
+	PauseReason  string `json:"pause_reason"`
 }
 
-// ResumeProtection re-enables focus protection and records the reason for resumption.
-//
-// This function is called either automatically when a pause duration expires,
-// or manually by the user to end a pause early. The reason is persisted to the
-// database for auditing and analytics purposes.
-//
-// Parameters:
-//   - reason: A human-readable explanation for why protection was resumed
-//     (e.g., "protection paused for 5m0s expired" or "user manually resumed")
-//
-// Returns:
-//   - error: Returns an error if protection is not currently paused
-//
-// Side effects:
-//   - Updates the ProtectionPause record in the database with ResumedAt timestamp
-//   - Clears the pause state and emits a state update via the state channel
-func (s *Service) ResumeProtection(reason string) (ProtectionPause, error) {
-	protectionPause, err := s.GetProtectionStatus()
-	if err != nil {
-		return ProtectionPause{}, err
-	}
-
-	if protectionPause.ID == 0 {
-		return ProtectionPause{}, fmt.Errorf("protection not paused")
-	}
-
-	now := time.Now().Unix()
-
-	// precalculate the resumed at timestamp
-	protectionPause.ResumedAt = now
-	protectionPause.ResumedReason = reason
-	protectionPause.ActualDurationSeconds = int(now - protectionPause.CreatedAt)
-
-	if err := s.db.Save(protectionPause).Error; err != nil {
-		return ProtectionPause{}, err
-	}
-
-	s.eventsMu.RLock()
-	for _, fn := range s.onProtectionResumed {
-		fn(protectionPause)
-	}
-	s.eventsMu.RUnlock()
-
-	return protectionPause, nil
+type AllowUsagePayload struct {
+	AppName  string `json:"app_name,omitempty"`
+	URL      string `json:"url,omitempty"`
+	Hostname string `json:"hostname,omitempty"`
 }
 
-// GetProtectionStatus retrieves the current protection pause status.
-//
-// It queries for an active ProtectionPause record where ResumedAt is greater than
-// the current time (indicating the pause is still active and hasn't been resumed yet).
-// When a pause is created, ResumedAt is set to a future timestamp representing when
-// the pause should automatically expire. When manually resumed, ResumedAt is updated
-// to the current time, making it no longer match this query.
-//
-// Returns:
-//   - ProtectionPause: The active pause record if protection is currently paused,
-//     or an empty ProtectionPause (ID == 0) if protection is active (not paused)
-//   - error: Database error if the query fails
-func (s *Service) GetProtectionStatus() (ProtectionPause, error) {
-	var protectionPause ProtectionPause
-	if err := s.db.Where("resumed_at > ?", time.Now().Unix()).Limit(1).First(&protectionPause).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return ProtectionPause{}, nil
+func (s *Service) ProtectionPause(durationSeconds int, reason string) error {
+	dur := time.Duration(durationSeconds) * time.Second
+	willEndAt := time.Now().Add(dur)
+
+	event, err := s.timelineService.GetActiveEventOfType(EventTypeProtectionPause)
+	if err != nil {
+		return err
+	}
+
+	if event != nil {
+		event.EndedAt = withPtr(willEndAt.Unix())
+
+		if err := s.timelineService.UpdateEvent(event); err != nil {
+			return fmt.Errorf("updating event: %w", err)
 		}
-		return ProtectionPause{}, err
+
+		return nil
 	}
 
-	return protectionPause, nil
-}
-
-// GetPauseHistory retrieves the history of protection pauses within the specified number of days.
-//
-// Parameters:
-//   - days: The number of days to look back (e.g., 7 for one week)
-//
-// Returns:
-//   - []ProtectionPause: A slice of pause records ordered by creation time (newest first)
-//   - error: Database error if the query fails
-func (s *Service) GetPauseHistory(days int) ([]ProtectionPause, error) {
-	var pauses []ProtectionPause
-
-	cutoff := time.Now().AddDate(0, 0, -days).Unix()
-
-	if err := s.db.Where("created_at >= ?", cutoff).Order("created_at DESC").Find(&pauses).Error; err != nil {
-		return nil, err
+	_, err = s.timelineService.CreateEvent(
+		EventTypeProtectionPause,
+		timeline.WithEndedAt(willEndAt),
+		timeline.WithPayload(PauseProtectionPayload{PauseReason: reason}),
+	)
+	if err != nil {
+		return err
 	}
 
-	return pauses, nil
+	return nil
 }
 
-// Whitelist temporarily allows a specific blocked usage (by bundle ID and hostname) for the specified duration.
-//
-// This function creates a ProtectionWhitelist entry that allows the specified application or website
-// to bypass focus protection for a limited time. This enables users to temporarily access blocked
-// content without pausing all protection. The whitelist entry is persisted to the database and can
-// be checked during termination decision evaluation.
-//
-// Parameters:
-//   - bundleID: The application bundle identifier (e.g., "com.example.app")
-//   - hostname: The website hostname (e.g., "example.com") - empty string for non-browser apps
-//   - duration: The duration to allow the usage (defaults to 1 hour if 0)
-//
-// Returns:
-//   - error: Database error if the whitelist entry creation fails
-//
-// Side effects:
-//   - Creates a ProtectionWhitelist record in the database with expiration timestamp
+func (s *Service) ProtectionResume(reason string) error {
+	event, err := s.timelineService.GetActiveEventOfType(EventTypeProtectionPause)
+	if err != nil {
+		return err
+	}
+
+	// no active protection pause to resume
+	if event == nil {
+		return nil
+	}
+
+	event.EndedAt = withPtr(time.Now().Unix())
+
+	if s.timelineService.UpdateEvent(event); err != nil {
+		return fmt.Errorf("updating event: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Service) ProtectionGetStatus() (*timeline.Event, error) {
+	return s.timelineService.GetActiveEventOfType(EventTypeProtectionPause)
+}
+
+func (s *Service) PauseGetHistory(days int) ([]*timeline.Event, error) {
+	return s.timelineService.ListEvents(
+		timeline.ByTypes(EventTypeProtectionPause),
+		timeline.ByAge(days),
+	)
+}
+
+func (s *Service) AllowApp(appname string, duration time.Duration) error {
+	return s.allowUsage(AllowUsagePayload{AppName: appname}, duration)
+}
+
+func (s *Service) AllowURL(rawURL string, duration time.Duration) error {
+	parsed, _ := parseURLNormalized(rawURL)
+	return s.allowUsage(AllowUsagePayload{URL: parsed.String()}, duration)
+}
+
+func (s *Service) AllowHostname(rawURL string, duration time.Duration) error {
+	parsed, _ := parseURLNormalized(rawURL)
+	return s.allowUsage(AllowUsagePayload{Hostname: parsed.Hostname()}, duration)
+}
+
+func (s *Service) allowUsage(req AllowUsagePayload, duration time.Duration) error {
+	allowed, err := s.timelineService.ListEvents(
+		timeline.ByTypes(EventTypeAllowUsage),
+		timeline.ActiveOnly(),
+	)
+
+	if err != nil {
+		return err
+	}
+
+	willEndAt := time.Now().Add(duration)
+
+	for _, event := range allowed {
+		payload := AllowUsagePayload{}
+		if err := json.Unmarshal([]byte(event.Payload), &payload); err != nil {
+			return err
+		}
+
+		if payload.AppName == req.AppName && payload.URL == req.URL && payload.Hostname == req.Hostname {
+			event.EndedAt = withPtr(willEndAt.Unix())
+			if err := s.timelineService.UpdateEvent(event); err != nil {
+				return fmt.Errorf("updating event: %w", err)
+			}
+			return nil
+		}
+	}
+
+	_, err = s.timelineService.CreateEvent(
+		EventTypeAllowUsage,
+		timeline.WithEndedAt(willEndAt),
+		timeline.WithPayload(req),
+	)
+
+	return err
+}
+
+func (s *Service) AllowGetAll() ([]*timeline.Event, error) {
+	return s.timelineService.ListEvents(
+		timeline.ByTypes(EventTypeAllowUsage),
+		timeline.ActiveOnly(),
+	)
+}
+
 func (s *Service) Whitelist(appname string, url string, duration time.Duration) error {
 	if duration <= 0 {
 		return nil
@@ -282,7 +255,7 @@ func (s *Service) CalculateEnforcementDecision(ctx context.Context, appUsage *Ap
 		}, nil
 	}
 
-	protectionPause, err := s.GetProtectionStatus()
+	protectionPause, err := s.ProtectionGetStatus()
 	if err != nil {
 		return EnforcementDecision{}, err
 	}

@@ -8,27 +8,23 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+
+	"github.com/focusd-so/focusd/internal/timeline"
 )
 
 type Service struct {
 	// external services and dependencies
-	db *gorm.DB
+	db              *gorm.DB
+	timelineService *timeline.Service
 
 	appBlocker func(appName, title, reason string, tags []string, browserURL *string)
-
-	// events
-	eventsMu               sync.RWMutex
-	onProtectionPaused     []func(pause ProtectionPause)
-	onProtectionResumed    []func(pause ProtectionPause)
-	onLLMDailySummaryReady []func(summary LLMDailySummary)
-	onUsageUpdated         []func(usage *ApplicationUsage)
 
 	// mu serializes title change processing to prevent race conditions
 	// when multiple events fire concurrently
 	mu sync.Mutex
 }
 
-func NewService(ctx context.Context, db *gorm.DB, options ...Option) (*Service, error) {
+func NewService(ctx context.Context, timelineService *timeline.Service, db *gorm.DB, options ...Option) (*Service, error) {
 	if err := db.AutoMigrate(
 		&Application{},
 		&ApplicationUsage{},
@@ -41,7 +37,7 @@ func NewService(ctx context.Context, db *gorm.DB, options ...Option) (*Service, 
 		return nil, fmt.Errorf("failed to migrate usage tables: %w", err)
 	}
 
-	service := &Service{db: db}
+	service := &Service{db: db, timelineService: timelineService}
 
 	for _, option := range options {
 		option(service)

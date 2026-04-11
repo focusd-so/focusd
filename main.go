@@ -36,6 +36,7 @@ import (
 	"github.com/focusd-so/focusd/internal/native"
 	"github.com/focusd-so/focusd/internal/sandbox"
 	"github.com/focusd-so/focusd/internal/settings"
+	"github.com/focusd-so/focusd/internal/timeline"
 	"github.com/focusd-so/focusd/internal/updater"
 	"github.com/focusd-so/focusd/internal/usage"
 )
@@ -130,8 +131,9 @@ func main() {
 	identityService := identity.NewService(apiAuthenticatedClient)
 
 	fsService := fs.NewService(configDir)
+	timelineService := timeline.NewService(db)
 
-	usageService, err := usage.NewService(ctx, db)
+	usageService, err := usage.NewService(ctx, timelineService, db)
 	if err != nil {
 		log.Fatal("failed to create usage service: %w", err)
 	}
