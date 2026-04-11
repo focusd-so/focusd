@@ -1,0 +1,68 @@
+package timeline
+
+import (
+	"time"
+)
+
+type Event struct {
+	ID        int64  `json:"id" gorm:"primaryKey;autoIncrement;not null"`
+	StartedAt int64  `json:"started_at" gorm:"index:idx_timeline_event_started_at,not null"`
+	Type      string `json:"type" gorm:"index:idx_timeline_event_type,not null"`
+	Payload   string `json:"payload" gorm:"not null,default:'{}'"`
+
+	// some events may not have ended_at, like one time action from the user
+	EndedAt *int64 `json:"ended_at" gorm:"index:idx_timeline_event_ended_at"`
+	Tags    []Tag  `json:"tags,omitempty" gorm:"many2many:timeline_event_tag;"`
+}
+
+func NewEvent(eventType string, opts ...EventOption) Event {
+	event := Event{
+		StartedAt: time.Now().UTC().Unix(),
+		Type:      eventType,
+	}
+
+	for _, opt := range opts {
+		opt(&event)
+	}
+
+	return event
+}
+
+func (e Event) Table() string {
+	return "timeline_event"
+}
+
+func (e Event) TagsSlice() []string {
+	tags := make([]string, 0)
+
+	for _, tag := range e.Tags {
+		tags = append(tags, tag.Name)
+	}
+
+	return tags
+}
+
+type Tag struct {
+	ID   int64  `json:"id" gorm:"primaryKey;autoIncrement;not null"`
+	Name string `json:"name" gorm:"not null;uniqueIndex:idx_timeline_tag_name_type,priority:1"`
+	Type string `json:"type" gorm:"not null;index:idx_timeline_tag_type;uniqueIndex:idx_timeline_tag_name_type,priority:2"`
+
+	Events []Event `json:"events,omitempty" gorm:"many2many:timeline_event_tag;"`
+}
+
+func NewTag(name, tagType string) Tag {
+	return Tag{Name: name, Type: tagType}
+}
+
+func (e Tag) Table() string {
+	return "timeline_tag"
+}
+
+type EventTag struct {
+	EventID int64 `json:"event_id" gorm:"primaryKey;not null"`
+	TagID   int64 `json:"tag_id" gorm:"primaryKey;not null"`
+}
+
+func (e EventTag) Table() string {
+	return "timeline_event_tag"
+}
