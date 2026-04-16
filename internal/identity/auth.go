@@ -65,6 +65,17 @@ func GetTrialEndsAt() int64 {
 	return trialEndsAt
 }
 
+func HasPremiumFeatures() bool {
+	switch GetAccountTier() {
+	case apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_TRIAL,
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PLUS,
+		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_PRO:
+		return true
+	default:
+		return false
+	}
+}
+
 func PerformHandshake(ctx context.Context, client apiv1connect.ApiServiceClient) error {
 	deviceFingerPrint, err := native.GetIdentity()
 	if err != nil {

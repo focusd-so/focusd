@@ -12,8 +12,8 @@ import (
 )
 
 type PauseRequets struct {
-	DurationSeconds int    `json:"duration_seconds"`
-	Reason          string `json:"reason"`
+	Duration time.Duration `json:"duration_seconds"`
+	Reason   string        `json:"reason"`
 }
 
 type UnpauseRequest struct {
@@ -50,17 +50,16 @@ func (s *Service) RegisterHTTPHandlers(r *chi.Mux) {
 				return
 			}
 
-			if pauseRequest.DurationSeconds <= 0 {
-				pauseRequest.DurationSeconds = 60 * 60 // 1 hour
+			if pauseRequest.Duration <= 0 {
+				pauseRequest.Duration = 60 * 60 * time.Second // 1 hour
 			}
 
-			protectionPause, err := s.PauseProtection(pauseRequest.DurationSeconds, pauseRequest.Reason)
+			err := s.ProtectionPause(int(pauseRequest.Duration.Seconds()), pauseRequest.Reason)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 
-			json.NewEncoder(w).Encode(protectionPause)
 			w.WriteHeader(http.StatusOK)
 		})
 
@@ -72,12 +71,11 @@ func (s *Service) RegisterHTTPHandlers(r *chi.Mux) {
 				return
 			}
 
-			protectionPause, err := s.ResumeProtection(unpauseRequest.Reason)
+			err := s.ProtectionResume(unpauseRequest.Reason)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			json.NewEncoder(w).Encode(protectionPause)
 			w.WriteHeader(http.StatusOK)
 		})
 
@@ -93,7 +91,7 @@ func (s *Service) RegisterHTTPHandlers(r *chi.Mux) {
 				req.DurationSeconds = 60 * 60 // 1 hour
 			}
 
-			if err := s.Whitelist(req.AppName, req.Hostname, time.Duration(req.DurationSeconds)*time.Second); err != nil {
+			if err := s.AllowApp(req.AppName, time.Duration(req.DurationSeconds)*time.Second); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -109,7 +107,7 @@ func (s *Service) RegisterHTTPHandlers(r *chi.Mux) {
 				return
 			}
 
-			if err := s.RemoveWhitelist(req.ID); err != nil {
+			if err := s.AllowRemove(req.ID); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}

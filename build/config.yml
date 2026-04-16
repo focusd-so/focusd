@@ -16,8 +16,8 @@ info:
 # iOS build configuration (uncomment to customise iOS project generation)
 # Note: Keys under `ios` OVERRIDE values under `info` when set.
 # ios:
-#   # The iOS bundle identifier used in the generated Xcode project (CFBundleIdentifier)
-#   bundleID: "com.mycompany.myproduct"
+#   # The iOS application id used in the generated Xcode project
+#   appID: "com.mycompany.myproduct"
 #   # The display name shown under the app icon (CFBundleDisplayName/CFBundleName)
 #   displayName: "My Product"
 #   # The app version to embed in Info.plist (CFBundleShortVersionString/CFBundleVersion)

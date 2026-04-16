@@ -14,20 +14,22 @@ import (
 
 type timelineHarness struct {
 	t       *testing.T
-	service Service
+	service *Service
 	db      *gorm.DB
 }
 
-func newTimelineHarness(t *testing.T) *timelineHarness {
+func NewHarness(t *testing.T) *timelineHarness {
 	t.Helper()
 
 	db, err := gorm.Open(sqlite.Open(memoryDSNForTimelineHarness(t)), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&Event{}, &Tag{}, &EventTag{}))
+
+	service, err := NewService(db)
+	require.NoError(t, err)
 
 	return &timelineHarness{
 		t:       t,
-		service: *NewService(db),
+		service: service,
 		db:      db,
 	}
 }
@@ -59,7 +61,7 @@ func (h *timelineHarness) LastEvent(opts ...EventFilterOption) *Event {
 
 	queryOpts := make([]EventFilterOption, 0, len(opts)+2)
 	queryOpts = append(queryOpts, opts...)
-	queryOpts = append(queryOpts, OrderByStartedAtDesc(), Limit(1))
+	queryOpts = append(queryOpts, OrderByOccurredAtDesc(), Limit(1))
 
 	events := h.ListEvents(queryOpts...)
 	if len(events) == 0 {
@@ -109,7 +111,7 @@ func (h *timelineHarness) retryLocked(fn func() error) {
 	}
 }
 
-func assertEventType(t *testing.T, expected string) func(*Event) {
+func AssertEventType(t *testing.T, expected string) func(*Event) {
 	t.Helper()
 
 	return func(e *Event) {
@@ -118,7 +120,7 @@ func assertEventType(t *testing.T, expected string) func(*Event) {
 	}
 }
 
-func assertEventTags(t *testing.T, expected ...string) func(*Event) {
+func AssertEventTags(t *testing.T, expected ...string) func(*Event) {
 	t.Helper()
 
 	return func(e *Event) {
@@ -127,18 +129,18 @@ func assertEventTags(t *testing.T, expected ...string) func(*Event) {
 	}
 }
 
-func assertEventStartedBetween(t *testing.T, from, to time.Time) func(*Event) {
+func AssertEventOccurredBetween(t *testing.T, from, to time.Time) func(*Event) {
 	t.Helper()
 
 	return func(e *Event) {
 		require.NotNil(t, e)
-		startedAt := time.Unix(e.StartedAt, 0).UTC()
-		require.False(t, startedAt.Before(from.UTC()))
-		require.False(t, startedAt.After(to.UTC()))
+		occurredAt := time.Unix(e.OccurredAt, 0).UTC()
+		require.False(t, occurredAt.Before(from.UTC()))
+		require.False(t, occurredAt.After(to.UTC()))
 	}
 }
 
-func assertNoEvent(t *testing.T) func(*Event) {
+func AssertNoEvent(t *testing.T) func(*Event) {
 	t.Helper()
 
 	return func(e *Event) {

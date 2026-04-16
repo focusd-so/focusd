@@ -24,12 +24,12 @@ func (s *Service) ReadConfigFileSync(filename string) (string, error) {
 	if strings.Contains(cleanName, "..") {
 		return "", os.ErrNotExist
 	}
-	
+
 	fullPath := filepath.Join(s.configDir, cleanName)
 	bytes, err := os.ReadFile(fullPath)
 	if err != nil {
 		return "", err
 	}
-	
+
 	return string(bytes), nil
 }

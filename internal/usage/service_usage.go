@@ -14,265 +14,180 @@ import (
 	"golang.org/x/net/publicsuffix"
 	"gorm.io/gorm"
 
-	"github.com/focusd-so/focusd/internal/identity"
+	"github.com/focusd-so/focusd/internal/timeline"
 )
 
-// IdleChanged is called when the idle state of the user changes (e.g. user starts or stops using the computer)
-// When idle changes one of the following can happen:
-//   - if user has been idle and idle triggers again, keep the current idle usage open to ensure idempotency
-//   - if user has not been idle and idle triggers, close the current application usage and open a new idle usage
-//   - if user has been idle and idle stops, no direct usage change is performed here; the next TitleChanged event closes idle
-func (s *Service) IdleChanged(ctx context.Context, isIdle bool) (*ApplicationUsage, error) {
+type ApplicationUsagePayload struct {
+	BasicClassificationResult
+
+	ApplicationID int64 `json:"application_id" gorm:"not null"`
+
+	WindowTitle string `json:"window_title" gorm:"not null"`
+	BrowserURL  string `json:"browser_url,omitempty"`
+
+	ClassificationSource ClassificationSource  `json:"classification_source" gorm:"index:idx_classification_source"`
+	ClassificationResult *ClassificationResult `json:"classification_result,omitempty"`
+
+	EnforcementResult EnforcementResult `json:"enforcement_result,omitempty"`
+}
+
+func (s *Service) IdleChanged(ctx context.Context, isIdle bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if isIdle {
-		application, err := s.getOrCreateApplication(ctx, IdleApplicationName, "", nil, nil, nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get or create application: %w", err)
-		}
-
-		return s.usageChanged(ctx, application.NewUsage("", nil))
+	// Get the current active usage or idle event
+	event, err := s.timelineService.GetActiveEventOfTypes([]string{EventTypeUsageChanged, EventTypeUserIdle})
+	if err != nil {
+		return err
 	}
 
-	return nil, nil
+	// If no active event exists, we can't determine current state; normally there should be an active UsageChanged event.
+	if event == nil {
+		return nil
+	}
+
+	if isIdle {
+		// If we are already in idle state, do nothing (idempotency)
+		if event.Type == EventTypeUserIdle {
+			return nil
+		}
+		// Transition from active usage to idle: finish current usage and start idle
+		if err := s.timelineService.EventFinished(event); err != nil {
+			return err
+		}
+		_, err = s.timelineService.CreateEvent(EventTypeUserIdle)
+		return err
+	}
+
+	// User is now active (!isIdle)
+	// If we were already active (UsageChanged), do nothing
+	if event.Type == EventTypeUsageChanged {
+		return nil
+	}
+
+	// Transition from idle back to active: just finish the idle event
+	// Note: The next window activity will naturally start a new UsageChanged event
+	return s.timelineService.EventFinished(event)
 }
 
 // TitleChanged is called when the title of the current application changes,
 // whether it's a new application or the same application title has changed
-func (s *Service) TitleChanged(ctx context.Context, executablePath, windowTitle, appName, icon string, bundleID, browserURL, appCategory *string) (*ApplicationUsage, error) {
+func (s *Service) TitleChanged(ctx context.Context, appName, windowTitle, icon string, browserURL, appCategory *string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	var normalizedBrowserURL *string
-	if browserURL != nil {
-		parsed, _ := parseURLNormalized(fromPtr(browserURL))
-		normalizedBrowserURL = withPtr(parsed.String())
-	}
+	normalizedURL, _, _ := parseURLNormalized(browserURL)
 
-	application, err := s.getOrCreateApplication(ctx, appName, icon, bundleID, normalizedBrowserURL, appCategory)
+	application, err := s.getOrCreateApplication(ctx, appName, icon, normalizedURL, appCategory)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get or create application: %w", err)
+		return fmt.Errorf("failed to get or create application: %w", err)
 	}
 
-	usage, err := s.usageChanged(ctx, application.NewUsage(windowTitle, normalizedBrowserURL))
+	usageKey := fmt.Sprintf("app:%s,window:%s,url:%s", application.Name, windowTitle, fromPtr(browserURL))
 
-	return usage, err
-}
+	base64UsageKey := base64.StdEncoding.EncodeToString([]byte(usageKey))
 
-func (s *Service) usageChanged(ctx context.Context, usage ApplicationUsage) (*ApplicationUsage, error) {
-	currentApplicationUsage, err := s.getCurrentApplicationUsage()
-	if err != nil {
-		return nil, fmt.Errorf("failed to find current application usage: %w", err)
+	payload := ApplicationUsagePayload{WindowTitle: windowTitle, ApplicationID: application.ID}
+	if normalizedURL != nil {
+		payload.BrowserURL = normalizedURL.String()
 	}
 
-	// if the current application and new application usage are the same,
-	// no additional action, let the current application usage continue
-	if currentApplicationUsage.Same(usage) {
-		usage = currentApplicationUsage
-	} else {
-		// if new application usage is detected close the current application usage before creating a new one
-		if err := s.closeApplicationUsage(&currentApplicationUsage); err != nil {
-			return nil, fmt.Errorf("failed to close current application usage: %w", err)
-		}
-
-		if err := s.saveApplicationUsage(&usage); err != nil {
-			return nil, fmt.Errorf("failed to save application usage: %w", err)
-		}
-	}
-
-	if usage.Application.Name == IdleApplicationName {
-		return &usage, nil
-	}
-
-	classification, err := s.classifyApplicationUsage(ctx, &usage)
-	if err != nil {
-		errMsg := err.Error()
-		usage.ClassificationError = &errMsg
-		usage.Classification = ClassificationNone
-	} else if classification != nil {
-		usage.Classification = classification.Classification
-		usage.ClassificationSource = &classification.ClassificationSource
-		usage.ClassificationReasoning = &classification.Reasoning
-		usage.ClassificationConfidence = &classification.ConfidenceScore
-
-		classification.DetectedProject = fromPtr(usage.DetectedProject)
-		classification.DetectedCommunicationChannel = fromPtr(usage.DetectedCommunicationChannel)
-
-		usage.Tags = make([]ApplicationUsageTags, len(classification.Tags))
-		for i, tag := range classification.Tags {
-			usage.Tags[i] = ApplicationUsageTags{
-				Tag: tag,
-			}
-		}
-
-		usage.ClassificationSandboxContext = withPtr(classification.SandboxContext)
-		usage.ClassificationSandboxResponse = classification.SandboxResponse
-		usage.ClassificationSandboxLogs = withPtr(classification.SandboxLogs)
-	}
-
-	// calculate termination mode.
-	enforcementAction, err := s.CalculateEnforcementDecision(ctx, &usage)
-	if err != nil {
-		termErr := err.Error()
-		usage.EnforcementAction = EnforcementActionNone
-		usage.EnforcementError = &termErr
-	}
-
-	usage.EnforcementAction = enforcementAction.Action
-	usage.EnforcementReason = withPtr(enforcementAction.Reason)
-	usage.EnforcementSource = withPtr(enforcementAction.Source)
-
-	if err := s.db.Save(&usage).Error; err != nil {
-		return nil, fmt.Errorf("failed to save application usage: %w", err)
-	}
-
-	if usage.EnforcementAction == EnforcementActionBlock {
-		if err := s.closeApplicationUsage(&usage); err != nil {
-			return nil, fmt.Errorf("failed to close application usage: %w", err)
-		}
-	}
-
-	return &usage, s.saveApplicationUsage(&usage)
-}
-
-func (s *Service) saveApplicationUsage(applicationUsage *ApplicationUsage) error {
-	if err := s.db.Save(applicationUsage).Error; err != nil {
-		return fmt.Errorf("failed to save application usage: %w", err)
-	}
-
-	return nil
-}
-
-func (s *Service) classifyApplicationUsage(ctx context.Context, applicationUsage *ApplicationUsage) (*ClassificationResponse, error) {
-	// Do sandbox classification first, eg user defined custom rules
-	customRulesResp, err := s.ClassifyCustomRules(
-		ctx,
-		WithAppNameContext(applicationUsage.Application.Name),
-		WithWindowTitleContext(applicationUsage.WindowTitle),
-		WithBrowserURLContext(fromPtr(applicationUsage.BrowserURL)),
-		WithClassificationContext(applicationUsage.Classification),
+	event, err := s.timelineService.CreateEvent(
+		EventTypeUsageChanged,
+		timeline.WithKey(base64UsageKey),
+		timeline.WithPayload(payload),
 	)
+	if err != nil {
+		return fmt.Errorf("creating usage event: %w", err)
+	}
+
+	classificationResult, err := s.classifyApplicationUsage(ctx, appName, windowTitle, normalizedURL, appCategory)
+	if err != nil {
+		return err
+	}
+
+	payload.ClassificationResult = classificationResult
+	payload.Classification = classificationResult.Classification()
+	payload.ClassificationSource = classificationResult.ClassificationSource()
+	payload.ClassificationReason = classificationResult.ClassificationReason()
+
+	if err := s.timelineService.UpdateEvent(&event, timeline.WithPayload(payload)); err != nil {
+		return err
+	}
+
+	enforcementResult, err := s.CalculateEnforcement(ctx, appName, windowTitle, normalizedURL, classificationResult.Classification())
+	if err != nil {
+		return err
+	}
+
+	payload.EnforcementResult = enforcementResult
+	if err := s.timelineService.UpdateEvent(&event, timeline.WithPayload(payload)); err != nil {
+		return err
+	}
+
+	return err
+}
+
+func (s *Service) classifyApplicationUsage(ctx context.Context, name, windowTitle string, browserURL *url.URL, appCategory *string) (*ClassificationResult, error) {
+	// Do sandbox classification first, eg user defined custom rules
+	customRulesClassificationResult, err := s.ClassifyCustomRules(ctx, WithAppNameContext(name), WithWindowTitleContext(windowTitle), WithBrowserURLContext(browserURL))
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify application usage with custom rules: %w", err)
 	}
 
-	tier := identity.GetAccountTier()
-	isPaid := hasCustomRulesExecutionAccess(tier)
-
-	if customRulesResp != nil && isPaid {
-		return customRulesResp, nil
-	}
-
 	// Do obviously classification next, eg social media, news, shopping, etc.
-	classification, err := s.classifyObviously(ctx, applicationUsage.Application.Name, applicationUsage.BrowserURL)
+	obviClassificationResult, err := s.classifyObviously(ctx, name, browserURL)
 	if err != nil {
-		if customRulesResp == nil {
-			return nil, fmt.Errorf("failed to classify application usage with obviously: %w", err)
-		}
-
-		slog.Warn("failed to classify with obvious rules after custom rules; continuing to LLM fallback", "error", err)
+		slog.Warn("failed to classify with obviously rules after custom rules; continuing to LLM fallback", "error", err)
 	}
 
-	if classification != nil {
-		if customRulesResp != nil {
-			classification.SandboxContext = customRulesResp.SandboxContext
-			classification.SandboxResponse = customRulesResp.SandboxResponse
-			classification.SandboxLogs = customRulesResp.SandboxLogs
-		}
-		return classification, nil
+	if obviClassificationResult != nil {
+		return &ClassificationResult{
+			CustomRulesClassificationResult: customRulesClassificationResult,
+			ObviouslyClassificationResult:   obviClassificationResult,
+		}, nil
 	}
 
-	slog.Info("classifying application usage with LLM")
-	resp, err := s.ClassifyWithLLM(ctx, applicationUsage.Application.Name, applicationUsage.WindowTitle, applicationUsage.BrowserURL, applicationUsage.Application.BundleID, applicationUsage.Application.AppCategory)
+	llmClassificationResult, err := s.ClassifyWithLLM(ctx, name, windowTitle, browserURL, appCategory)
 	if err != nil {
-		if customRulesResp != nil {
-			fallbackResp := &ClassificationResponse{
-				Classification:       ClassificationNone,
-				ClassificationSource: ClassificationSourceObviously,
-				Reasoning:            "Custom rules matched but fallback classification is unavailable",
-				ConfidenceScore:      0,
-				Tags:                 []string{"other"},
-				SandboxContext:       customRulesResp.SandboxContext,
-				SandboxResponse:      customRulesResp.SandboxResponse,
-				SandboxLogs:          customRulesResp.SandboxLogs,
-			}
-
-			slog.Warn("failed to classify with LLM after custom rules; returning sandbox-backed fallback", "error", err)
-
-			return fallbackResp, nil
-		}
-
-		return nil, fmt.Errorf("failed to classify application usage with LLM: %w", err)
+		return nil, err
 	}
 
-	if customRulesResp != nil {
-		resp.SandboxContext = customRulesResp.SandboxContext
-		resp.SandboxResponse = customRulesResp.SandboxResponse
-		resp.SandboxLogs = customRulesResp.SandboxLogs
-	}
-
-	slog.Info("classified application usage with LLM", "response", resp)
-
-	return resp, nil
+	return &ClassificationResult{
+		CustomRulesClassificationResult: customRulesClassificationResult,
+		ObviouslyClassificationResult:   obviClassificationResult,
+		LLMClassificationResult:         llmClassificationResult,
+	}, nil
 }
 
-// getOrCreateApplication retrieves an existing application from the database or creates a new one.
-//
-// The lookup identity is unified for both web and native applications:
-//   - name + normalized hostname when rawURL resolves to a hostname
-//   - name + hostname IS NULL for native applications
-//
-// For web applications, hostname and effective domain (TLD+1) are stored and a favicon
-// is fetched when no icon is currently stored. For native applications, no hostname is set.
-//
-// Icon resolution order:
-//   - keep existing stored icon when present
-//   - for web apps, fallback to fetched favicon
-//   - otherwise use provided icon
-func (s *Service) getOrCreateApplication(ctx context.Context, name, icon string, bundleID, rawURL, appCategory *string) (Application, error) {
+func (s *Service) getOrCreateApplication(ctx context.Context, name, icon string, browserURL *url.URL, appCategory *string) (Application, error) {
 	var application Application
-	var hostname *string
 
-	if rawURL != nil {
-		u, _ := parseURLNormalized(*rawURL)
-
-		hostname = withPtr(u.Hostname())
+	if browserURL != nil {
+		name = browserURL.Hostname()
 	}
 
-	query := s.db.Where("name = ?", name)
-	if hostname != nil {
-		query = query.Where("hostname = ?", *hostname)
-	} else {
-		query = query.Where("hostname IS NULL")
-	}
-
-	if err := query.First(&application).Error; err != nil {
-		slog.Warn("failed to find application by identity", "error", err)
+	if err := s.db.Where("name = ?", name).First(&application).Error; err != nil {
+		if err != gorm.ErrRecordNotFound {
+			return Application{}, fmt.Errorf("failed to find application by identity: %w", err)
+		}
 	}
 
 	if application.ID == 0 {
-		application = Application{Name: name, BundleID: bundleID}
+		application = Application{Name: name}
 	}
 
-	if hostname != nil {
-		application.Hostname = hostname
+	if browserURL != nil {
+		domain, _ := publicsuffix.EffectiveTLDPlusOne(browserURL.Hostname())
+		application.Domain = &domain
 
-		// This normalizes subdomains: "mail.google.com" and "docs.google.com" both become "google.com".
-		domain, _ := publicsuffix.EffectiveTLDPlusOne(*hostname)
-		if domain != "" {
-			application.Domain = &domain
-		}
-
-		if application.Icon == nil {
-			appIcon, err := fetchFavicon(ctx, fmt.Sprintf("https://%s", *hostname))
+		if fromPtr(application.Icon) == "" {
+			appIcon, err := fetchFavicon(ctx, fmt.Sprintf("https://%s", name))
 			if err != nil {
 				slog.Warn("failed to fetch app icon", "error", err)
 			}
 
-			if appIcon != "" {
-				application.Icon = &appIcon
-			}
+			application.Icon = &appIcon
 		}
 	}
 
@@ -287,44 +202,6 @@ func (s *Service) getOrCreateApplication(ctx context.Context, name, icon string,
 	}
 
 	return application, nil
-}
-
-func (s *Service) getCurrentApplicationUsage() (ApplicationUsage, error) {
-	var application ApplicationUsage
-
-	if err := s.db.Preload("Application").Preload("Tags").Where("ended_at IS NULL").Limit(1).Order("started_at DESC").First(&application).Error; err != nil {
-		if err != gorm.ErrRecordNotFound {
-			return ApplicationUsage{}, fmt.Errorf("failed to find current application usage: %w", err)
-		}
-	}
-
-	if application.ID == 0 {
-		return ApplicationUsage{}, nil
-	}
-
-	return application, nil
-}
-
-func (s *Service) closeApplicationUsage(app *ApplicationUsage) error {
-	if app.ID == 0 {
-		return nil
-	}
-
-	if app.EndedAt != nil {
-		return nil
-	}
-
-	endedAt := time.Now().Unix()
-	durationSeconds := int(endedAt - app.StartedAt)
-
-	app.EndedAt = &endedAt
-	app.DurationSeconds = &durationSeconds
-
-	if err := s.db.Save(&app).Error; err != nil {
-		return fmt.Errorf("failed to update application usage: %w", err)
-	}
-
-	return nil
 }
 
 func fetchFavicon(ctx context.Context, rawURL string) (string, error) {

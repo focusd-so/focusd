@@ -24,7 +24,7 @@ type NativeEvent struct {
 	PID            int
 	ExecutablePath string
 	AppName        string
-	BundleID       string
+	AppID          string
 	Icon           string
 	Title          string
 	AppIcon        string // base64 encoded PNG
@@ -50,8 +50,8 @@ func (e *NativeEvent) BrowserHostname() string {
 }
 
 type InstalledBrowser struct {
-	BundleID string `json:"bundleID"`
-	Name     string `json:"name"`
+	AppID string `json:"appID"`
+	Name  string `json:"name"`
 }
 
 func (e *NativeEvent) Domain() string {

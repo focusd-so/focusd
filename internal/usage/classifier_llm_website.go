@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -12,42 +13,41 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func (s *Service) classifyWebsite(ctx context.Context, url, title string) (*ClassificationResponse, error) {
-	u, err := parseURLNormalized(url)
-	if err != nil {
-		return nil, err
+func (s *Service) classifyWebsite(ctx context.Context, url *url.URL, title string) (*LLMClassificationResult, error) {
+	if url == nil {
+		return nil, fmt.Errorf("url is nil")
 	}
 
-	hostname := u.Hostname()
+	hostname := url.Hostname()
 	domain, _ := publicsuffix.EffectiveTLDPlusOne(hostname)
 
 	switch domain {
 	case "youtube.com", "youtu.be", "yt.be":
-		return classifyYoutube(ctx, url, title)
+		return classifyYoutube(ctx, url.String(), title)
 	case "reddit.com":
-		return classifyReddit(ctx, url, title)
+		return classifyReddit(ctx, url.String(), title)
 	case "linkedin.com":
-		return classifyLinkedin(ctx, url, title)
+		return classifyLinkedin(ctx, url.String(), title)
 	case "medium.com":
-		return classifyMedium(ctx, url, title)
+		return classifyMedium(ctx, url.String(), title)
 	case "x.com", "twitter.com":
-		return classifyTwitter(ctx, url, title)
+		return classifyTwitter(ctx, url.String(), title)
 	case "ycombinator.com":
-		return classifyHackerNews(ctx, url, title)
+		return classifyHackerNews(ctx, url.String(), title)
 	case "substack.com":
-		return classifySubstack(ctx, url, title)
+		return classifySubstack(ctx, url.String(), title)
 	case "slack.com":
-		return classifySlack(ctx, url, title)
+		return classifySlack(ctx, url.String(), title)
 	}
 
 	return classifyGeneric(ctx, url, title)
 }
 
-func classifyGeneric(ctx context.Context, url, title string) (*ClassificationResponse, error) {
+func classifyGeneric(ctx context.Context, url *url.URL, title string) (*LLMClassificationResult, error) {
 	// Attempt to fetch main content for better context, but proceed even if it fails
 	// or if the site blocks scrapers.
 	var mainContent string
-	if content, err := fetchMainContent(ctx, url); err == nil {
+	if content, err := fetchMainContent(ctx, url.String()); err == nil {
 		// Truncate content to avoid excessive token usage while keeping enough context
 		if len(content) > 5000 {
 			mainContent = content[:5000] + "..."
@@ -60,12 +60,13 @@ func classifyGeneric(ctx context.Context, url, title string) (*ClassificationRes
 	}
 
 	if isDeterministicCriticalNoBlockURL(url) {
-		return &ClassificationResponse{
-			Classification:       ClassificationNeutral,
-			ClassificationSource: ClassificationSourceObviously,
-			Reasoning:            "Payment/booking flow detected - safety override to avoid interruption",
-			ConfidenceScore:      1.0,
-			Tags:                 []string{"other"},
+		return &LLMClassificationResult{
+			BasicClassificationResult: BasicClassificationResult{
+				Classification:       ClassificationNeutral,
+				ClassificationReason: "Payment/booking flow detected - safety override to avoid interruption",
+				Tags:                 []string{"other"},
+			},
+			ConfidenceScore: 1.0,
 		}, nil
 	}
 
@@ -87,12 +88,13 @@ Main Content (truncated): %s
 	response, err := classify(ctx, instructions, input)
 	if err != nil {
 		if suspiciousCriticalContext {
-			return &ClassificationResponse{
-				Classification:       ClassificationNeutral,
-				ClassificationSource: ClassificationSourceObviously,
-				Reasoning:            "Potential payment/booking flow with uncertain model result - safety override to avoid interruption",
-				ConfidenceScore:      1.0,
-				Tags:                 []string{"other"},
+			return &LLMClassificationResult{
+				BasicClassificationResult: BasicClassificationResult{
+					Classification:       ClassificationNeutral,
+					ClassificationReason: "Potential payment/booking flow with uncertain model result - safety override to avoid interruption",
+					Tags:                 []string{"other"},
+				},
+				ConfidenceScore: 1.0,
 			}, nil
 		}
 
@@ -100,19 +102,20 @@ Main Content (truncated): %s
 	}
 
 	if suspiciousCriticalContext && response.ConfidenceScore < 0.75 {
-		return &ClassificationResponse{
-			Classification:       ClassificationNeutral,
-			ClassificationSource: ClassificationSourceObviously,
-			Reasoning:            "Potential payment/booking flow with low-confidence classification - safety override to avoid interruption",
-			ConfidenceScore:      1.0,
-			Tags:                 []string{"other"},
+		return &LLMClassificationResult{
+			BasicClassificationResult: BasicClassificationResult{
+				Classification:       ClassificationNeutral,
+				ClassificationReason: "Potential payment/booking flow with low-confidence classification - safety override to avoid interruption",
+				Tags:                 []string{"other"},
+			},
+			ConfidenceScore: 1.0,
 		}, nil
 	}
 
 	return response, nil
 }
 
-func classifyYoutube(ctx context.Context, url, title string) (*ClassificationResponse, error) {
+func classifyYoutube(ctx context.Context, url, title string) (*LLMClassificationResult, error) {
 	httpClient := &http.Client{Timeout: 3000 * time.Millisecond}
 
 	metaData, err := extractOpenGraph(httpClient, url)
@@ -151,7 +154,7 @@ func classifyYoutube(ctx context.Context, url, title string) (*ClassificationRes
 	return response, nil
 }
 
-func classifyReddit(ctx context.Context, url, title string) (*ClassificationResponse, error) {
+func classifyReddit(ctx context.Context, url, title string) (*LLMClassificationResult, error) {
 	mainContent, err := fetchMainContent(ctx, url)
 	if err != nil {
 		slog.Error("failed to fetch main content", "error", err)
@@ -177,7 +180,7 @@ Main Content (if available): %s
 	return response, nil
 }
 
-func classifyLinkedin(ctx context.Context, url, title string) (*ClassificationResponse, error) {
+func classifyLinkedin(ctx context.Context, url, title string) (*LLMClassificationResult, error) {
 
 	var (
 		ogTitle       = title
@@ -244,7 +247,7 @@ Main Content (if available): %s
 // classifyMedium classifies Medium articles using only the URL and browser tab title.
 // Medium is behind Cloudflare managed challenges so server-side content fetching is not possible.
 // The URL slug and title are usually descriptive enough for accurate classification.
-func classifyMedium(ctx context.Context, url, title string) (*ClassificationResponse, error) {
+func classifyMedium(ctx context.Context, url, title string) (*LLMClassificationResult, error) {
 	var (
 		instructions = instructionMediumWebsiteClassification
 		inputTmpl    = `
@@ -269,7 +272,7 @@ Title: %s
 // X/Twitter is behind auth walls for server-side fetching, so OpenGraph and content extraction
 // are not reliable. The browser tab title contains the tweet text for status pages, which is
 // a strong signal for classification.
-func classifyTwitter(ctx context.Context, url, title string) (*ClassificationResponse, error) {
+func classifyTwitter(ctx context.Context, url, title string) (*LLMClassificationResult, error) {
 	var (
 		instructions = instructionTwitterWebsiteClassification
 		inputTmpl    = `
@@ -290,7 +293,7 @@ Title: %s
 	return response, nil
 }
 
-func classifyHackerNews(ctx context.Context, url, title string) (*ClassificationResponse, error) {
+func classifyHackerNews(ctx context.Context, url, title string) (*LLMClassificationResult, error) {
 	mainContent, err := fetchMainContent(ctx, url)
 	if err != nil {
 		slog.Error("failed to fetch main content", "error", err)
@@ -318,7 +321,7 @@ Main Content (if available): %s
 
 // classifySubstack classifies Substack newsletter articles using OpenGraph metadata and content extraction.
 // Substack pages are generally scrapable without heavy Cloudflare challenges.
-func classifySubstack(ctx context.Context, url, title string) (*ClassificationResponse, error) {
+func classifySubstack(ctx context.Context, url, title string) (*LLMClassificationResult, error) {
 	httpClient := &http.Client{Timeout: 3000 * time.Millisecond}
 
 	var (
@@ -383,7 +386,7 @@ Main Content (if available): %s
 // classifySlack classifies Slack activity using the browser tab title (or window title for desktop).
 // No HTTP fetching is needed — the title contains the channel/DM name which is the primary signal.
 // Titles typically look like: "#engineering - Acme Corp Slack" or "Slack | #random | My Workspace"
-func classifySlack(ctx context.Context, url, title string) (*ClassificationResponse, error) {
+func classifySlack(ctx context.Context, url, title string) (*LLMClassificationResult, error) {
 	input := fmt.Sprintf("Slack web title: %s\nURL: %s", title, url)
 
 	return classifySlackActivity(ctx, input)

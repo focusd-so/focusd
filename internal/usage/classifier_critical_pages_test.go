@@ -2,6 +2,7 @@ package usage
 
 import (
 	"context"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -46,7 +47,11 @@ func TestIsDeterministicCriticalNoBlockURL(t *testing.T) {
 		tc := tt
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			actual := isDeterministicCriticalNoBlockURL(tc.rawURL)
+
+			u, err := url.Parse(tc.rawURL)
+			require.NoError(t, err)
+
+			actual := isDeterministicCriticalNoBlockURL(u)
 			require.Equal(t, tc.expected, actual)
 		})
 	}
@@ -92,7 +97,11 @@ func TestIsSuspiciousCriticalContext(t *testing.T) {
 		tc := tt
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			actual := isSuspiciousCriticalContext(tc.rawURL, tc.title, tc.mainContent)
+
+			u, err := url.Parse(tc.rawURL)
+			require.NoError(t, err)
+
+			actual := isSuspiciousCriticalContext(u, tc.title, tc.mainContent)
 			require.Equal(t, tc.expected, actual)
 		})
 	}
@@ -101,21 +110,24 @@ func TestIsSuspiciousCriticalContext(t *testing.T) {
 func TestClassifyObviouslyWebsite_CriticalNoBlockOverride(t *testing.T) {
 	t.Parallel()
 
-	svc := &Service{}
-	resp, err := svc.classifyObviouslyWebsite(context.Background(), "https://amazon.com/checkout?payment=true")
+	u, err := url.Parse("https://amazon.com/checkout?payment=true")
 	require.NoError(t, err)
-	require.NotNil(t, resp)
+
+	svc := &Service{}
+	resp, err := svc.classifyObviouslyWebsite(context.Background(), u)
+	require.NoError(t, err)
 	require.Equal(t, ClassificationNeutral, resp.Classification)
-	require.Equal(t, ClassificationSourceObviously, resp.ClassificationSource)
 }
 
 func TestClassifyObviouslyWebsite_StillBlocksNonCriticalShoppingPages(t *testing.T) {
 	t.Parallel()
 
+	u, err := url.Parse("https://amazon.com/deals")
+	require.NoError(t, err)
+
 	svc := &Service{}
-	resp, err := svc.classifyObviouslyWebsite(context.Background(), "https://amazon.com/deals")
+	resp, err := svc.classifyObviouslyWebsite(context.Background(), u)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	require.Equal(t, ClassificationDistracting, resp.Classification)
-	require.Equal(t, ClassificationSourceObviously, resp.ClassificationSource)
 }

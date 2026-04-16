@@ -29,7 +29,7 @@ interface PermissionCard {
 }
 
 interface BrowserEntry {
-  bundleID: string;
+  appID: string;
   name: string;
   status: PermissionStatus;
 }
@@ -66,9 +66,9 @@ export function Step2({ onAllGranted, entered }: Step2Props) {
     GetInstalledBrowsers().then(async (installed) => {
       const entries: BrowserEntry[] = await Promise.all(
         installed.map(async (b) => {
-          const granted = await CheckAutomation(b.bundleID);
+          const granted = await CheckAutomation(b.appID);
           return {
-            bundleID: b.bundleID,
+            appID: b.appID,
             name: b.name,
             status: granted ? ("granted" as const) : ("pending" as const),
           };
@@ -81,7 +81,7 @@ export function Step2({ onAllGranted, entered }: Step2Props) {
   }, []);
 
   const mandatoryBrowsersGranted = browsers
-    .filter((b) => MANDATORY_BROWSERS.has(b.bundleID))
+    .filter((b) => MANDATORY_BROWSERS.has(b.appID))
     .every((b) => b.status === "granted");
 
   useEffect(() => {
@@ -107,11 +107,11 @@ export function Step2({ onAllGranted, entered }: Step2Props) {
     }
   }, []);
 
-  const handleBrowserGrant = useCallback(async (bundleID: string) => {
-    const granted = await RequestAutomation(bundleID);
+  const handleBrowserGrant = useCallback(async (appID: string) => {
+    const granted = await RequestAutomation(appID);
     setBrowsers((prev) =>
       prev.map((b) =>
-        b.bundleID === bundleID
+        b.appID === appID
           ? { ...b, status: granted ? "granted" : "denied" }
           : b,
       ),
@@ -121,10 +121,10 @@ export function Step2({ onAllGranted, entered }: Step2Props) {
   const handleAllowAll = useCallback(async () => {
     for (const browser of browsers) {
       if (browser.status === "granted") continue;
-      const granted = await RequestAutomation(browser.bundleID);
+      const granted = await RequestAutomation(browser.appID);
       setBrowsers((prev) =>
         prev.map((b) =>
-          b.bundleID === browser.bundleID
+          b.appID === browser.appID
             ? { ...b, status: granted ? "granted" : "denied" }
             : b,
         ),
@@ -266,10 +266,10 @@ export function Step2({ onAllGranted, entered }: Step2Props) {
                 }}
               >
                 {browsers.map((browser, i) => {
-                  const isMandatory = MANDATORY_BROWSERS.has(browser.bundleID);
+                  const isMandatory = MANDATORY_BROWSERS.has(browser.appID);
                   return (
                     <div
-                      key={browser.bundleID}
+                      key={browser.appID}
                       className={`flex items-center justify-between py-2.5 px-4 ${i > 0 ? "border-t border-white/5" : ""}`}
                     >
                       <div className="flex items-center gap-2.5">
@@ -302,14 +302,14 @@ export function Step2({ onAllGranted, entered }: Step2Props) {
                       ) : isMandatory ? (
                         <button
                           className="px-3 py-1 rounded-lg bg-white hover:bg-zinc-200 active:scale-95 text-black text-xs font-bold shadow-lg shadow-white/5 transition-all duration-300"
-                          onClick={() => handleBrowserGrant(browser.bundleID)}
+                          onClick={() => handleBrowserGrant(browser.appID)}
                         >
                           Allow
                         </button>
                       ) : (
                         <button
                           className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/15 active:scale-95 text-zinc-200 text-xs font-medium transition-all duration-300"
-                          onClick={() => handleBrowserGrant(browser.bundleID)}
+                          onClick={() => handleBrowserGrant(browser.appID)}
                         >
                           Allow
                         </button>

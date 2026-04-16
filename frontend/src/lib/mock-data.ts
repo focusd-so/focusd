@@ -51,7 +51,7 @@ export interface BlockedAttempt {
 export interface AppUsageStats {
   id: string;
   name: string;
-  bundleId: string;
+  appId: string;
   hostname?: string;
   icon?: string;
   totalMinutes: number;
@@ -419,7 +419,7 @@ export const mockAppUsage: AppUsageStats[] = [
   {
     id: "1",
     name: "Visual Studio Code",
-    bundleId: "com.microsoft.VSCode",
+    appId: "com.microsoft.VSCode",
     totalMinutes: 245,
     sessionsCount: 12,
     classification: "productive",
@@ -427,7 +427,7 @@ export const mockAppUsage: AppUsageStats[] = [
   {
     id: "2",
     name: "Google Chrome",
-    bundleId: "com.google.Chrome",
+    appId: "com.google.Chrome",
     hostname: "github.com",
     totalMinutes: 89,
     sessionsCount: 25,
@@ -436,7 +436,7 @@ export const mockAppUsage: AppUsageStats[] = [
   {
     id: "3",
     name: "Slack",
-    bundleId: "com.tinyspeck.slackmacgap",
+    appId: "com.tinyspeck.slackmacgap",
     totalMinutes: 67,
     sessionsCount: 45,
     classification: "neutral",
@@ -444,7 +444,7 @@ export const mockAppUsage: AppUsageStats[] = [
   {
     id: "4",
     name: "Terminal",
-    bundleId: "com.apple.Terminal",
+    appId: "com.apple.Terminal",
     totalMinutes: 43,
     sessionsCount: 18,
     classification: "productive",
@@ -452,7 +452,7 @@ export const mockAppUsage: AppUsageStats[] = [
   {
     id: "5",
     name: "Google Chrome",
-    bundleId: "com.google.Chrome",
+    appId: "com.google.Chrome",
     hostname: "stackoverflow.com",
     totalMinutes: 28,
     sessionsCount: 8,

@@ -1,11 +1,9 @@
 package usage
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/focusd-so/focusd/internal/sandbox"
@@ -19,122 +17,69 @@ type classificationResult struct {
 	Tags                    []string `json:"tags"`
 }
 
-func (s *Service) ClassifyCustomRules(ctx context.Context, opts ...sandboxContextOption) (*ClassificationResponse, error) {
-	slog.Info("classifying application usage with custom rules")
+func (s *Service) ClassifyCustomRules(ctx context.Context, opts ...sandboxContextOption) (*CustomRulesClassificationResult, error) {
+	sandboxCtx := s.createSandboxContext(opts...)
 
-	return s.classifyCustomRulesWithSandbox(ctx, NewSandboxContext(opts...))
-}
-
-func (s *Service) classifyCustomRulesWithSandbox(ctx context.Context, sandboxCtx sandboxContext) (*ClassificationResponse, error) {
-	s.enrichSandboxContext(&sandboxCtx)
-
-	// Serialize the context to JSON
 	contextJSON, err := json.Marshal(sandboxCtx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to marshal sandbox context: %w", err)
 	}
 
-	// Create a new execution log
-	executionLog := SandboxExecutionLog{
-		Context:   string(contextJSON),
-		CreatedAt: time.Now().Unix(),
-		Type:      string(ExecutionLogTypeClassification),
-	}
-
-	if err := s.db.Create(&executionLog).Error; err != nil {
-		return nil, err
-	}
-
-	resp, logs, err := s.classifySandbox(ctx, sandboxCtx)
-
+	result, err := s.executeClassificationCustomRules(ctx, sandboxCtx)
 	if err != nil {
-		errMsg := fmt.Errorf("failed to classify sandbox: %w", err).Error()
-		executionLog.Error = &errMsg
+		return nil, fmt.Errorf("failed to classify sandbox: %w", err)
 	}
 
-	if resp != nil {
-		respJSON, err := json.Marshal(resp)
-		if err != nil {
-			errMsg := fmt.Errorf("failed to marshal response: %w", err).Error()
-			executionLog.Error = &errMsg
-		} else {
-			respJSONStr := string(respJSON)
-			executionLog.Response = &respJSONStr
-		}
-	} else {
-		txt := "no response"
-		executionLog.Response = &txt
-	}
-
-	finishedAt := time.Now().Unix()
-	executionLog.FinishedAt = &finishedAt
-
-	b := new(bytes.Buffer)
-	if err := json.NewEncoder(b).Encode(logs); err != nil {
-		return nil, err
-	}
-	executionLog.Logs = b.String()
-
-	if err := s.db.Save(&executionLog).Error; err != nil {
-		return nil, err
-	}
-
-	if resp == nil {
+	if result == nil || result.Output == "" || result.Output == "null" || result.Output == "undefined" {
 		return nil, nil
 	}
 
-	return &ClassificationResponse{
-		Classification:       Classification(resp.Classification),
-		ClassificationSource: ClassificationSourceCustomRules,
-		Reasoning:            resp.ClassificationReasoning,
-		ConfidenceScore:      1.0,
-		Tags:                 resp.Tags,
+	var decision classificationResult
+	if err := json.Unmarshal([]byte(result.Output), &decision); err != nil {
+		return nil, fmt.Errorf("failed to parse classification decision: %w", err)
+	}
 
-		SandboxContext:  executionLog.Context,
-		SandboxResponse: executionLog.Response,
-		SandboxLogs:     executionLog.Logs,
-	}, nil
+	resp := CustomRulesClassificationResult{
+		BasicClassificationResult: BasicClassificationResult{
+			Classification:       Classification(decision.Classification),
+			ClassificationReason: decision.ClassificationReasoning,
+			Tags:                 decision.Tags,
+		},
+		SandboLogs:     result.Logs,
+		SanboxOutput:   &result.Output,
+		SandboxContext: string(contextJSON),
+	}
+
+	return &resp, nil
 }
 
-func (s *Service) classifySandbox(ctx context.Context, sandboxCtx sandboxContext) (decision *classificationResult, logs []string, err error) {
+func (s *Service) executeClassificationCustomRules(ctx context.Context, sandboxCtx sandboxContext) (*sandbox.Result, error) {
 	// Get the latest custom rules code
 	customRules := settings.GetCustomRulesJS()
 	if customRules == "" {
-		return nil, nil, nil
+		return nil, nil
 	}
 
 	sb, err := sandbox.New()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create sandbox: %w", err)
+		return nil, fmt.Errorf("failed to create sandbox: %w", err)
 	}
 	defer sb.Close()
 
-	result, err := sb.Execute(customRules, "__classify_wrapper", sandboxCtx)
-	if err != nil {
-		return nil, result.Logs, err
-	}
-
-	if result.Output == "" || result.Output == "null" || result.Output == "undefined" {
-		return nil, result.Logs, nil
-	}
-
-	var d classificationResult
-	if err := json.Unmarshal([]byte(result.Output), &d); err != nil {
-		return nil, result.Logs, fmt.Errorf("failed to parse classification decision: %w", err)
-	}
-
-	return &d, result.Logs, nil
+	return sb.Execute(customRules, "__classify_wrapper", sandboxCtx)
 }
 
 // TestClassifyCustomRules is exposed to Wails specifically for the Test Rules UI.
 // It parses standard JSON arguments from the frontend and converts them into sandbox options.
-func (s *Service) TestClassifyCustomRules(appName string, url *string, simulatedTimeISO *string) (*ClassificationResponse, error) {
+func (s *Service) TestClassifyCustomRules(appName string, url *string, simulatedTimeISO *string) (*CustomRulesClassificationResult, error) {
 	opts := []sandboxContextOption{
 		WithAppNameContext(appName),
 	}
 
-	if url != nil && *url != "" {
-		opts = append(opts, WithBrowserURLContext(*url))
+	u, _, _ := parseURLNormalized(url)
+
+	if u != nil {
+		opts = append(opts, WithBrowserURLContext(u))
 	}
 
 	if simulatedTimeISO != nil && *simulatedTimeISO != "" {

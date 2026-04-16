@@ -6,21 +6,21 @@ import (
 	"strings"
 )
 
-type AppClassifier func(ctx context.Context, appName, title string, bundleID, appCategory *string) (*ClassificationResponse, error)
+type AppClassifier func(ctx context.Context, appName, title string, appCategory *string) (*LLMClassificationResult, error)
 
 var classifiers = map[string]AppClassifier{
 	"slack": classifySlackApp,
 }
 
-func (s *Service) classifyApplication(ctx context.Context, appName, title string, bundleID, appCategory *string) (*ClassificationResponse, error) {
+func (s *Service) classifyApplication(ctx context.Context, appName, title string, appCategory *string) (*LLMClassificationResult, error) {
 	if classifier, ok := classifiers[strings.ToLower(appName)]; ok {
-		return classifier(ctx, appName, title, bundleID, appCategory)
+		return classifier(ctx, appName, title, appCategory)
 	}
 
-	return classifyGenericApplication(ctx, appName, title, bundleID, appCategory)
+	return classifyGenericApplication(ctx, appName, title, appCategory)
 }
 
-func classifyGenericApplication(ctx context.Context, appName, title string, bundleID, appCategory *string) (*ClassificationResponse, error) {
+func classifyGenericApplication(ctx context.Context, appName, title string, appCategory *string) (*LLMClassificationResult, error) {
 	instructions := instructionGenericApplicationClassification
 
 	var (
@@ -29,15 +29,13 @@ The user is currently using an application. Classify the activity based on the f
 
 Application Name: %s
 Window Title: %s
-Bundle ID: %s
 App Store Category: %s
 `
 	)
 
-	bundleIDValue := fromPtr(bundleID)
 	appCategoryValue := fromPtr(appCategory)
 
-	input := fmt.Sprintf(inputTmpl, appName, title, bundleIDValue, appCategoryValue)
+	input := fmt.Sprintf(inputTmpl, appName, title, appCategoryValue)
 
 	response, err := classify(ctx, instructions, input)
 	if err != nil {
@@ -49,7 +47,6 @@ App Store Category: %s
 
 // classifySlackApp classifies Slack desktop application activity using the window title.
 // Titles typically look like: "Slack | #engineering | Acme Corp" or "Slack - #random - Workspace"
-func classifySlackApp(ctx context.Context, appName, title string, _, _ *string) (*ClassificationResponse, error) {
-
+func classifySlackApp(ctx context.Context, appName, title string, _ *string) (*LLMClassificationResult, error) {
 	return classifySlackActivity(ctx, "Analyse Slack desktop activity from the following title: "+title)
 }

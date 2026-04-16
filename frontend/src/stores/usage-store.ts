@@ -123,7 +123,7 @@ export const useUsageStore = create<UsageState>()((set, get) => ({
       if (usage.enforcement_action === EnforcementAction.EnforcementActionBlock) {
         const key =
           usage.application?.hostname ||
-          usage.application?.bundle_id ||
+          usage.application?.name ||
           String(usage.id);
         const existing = blocked.get(key);
         let newCount = existing ? existing.count : 1;
@@ -186,7 +186,7 @@ export const useUsageStore = create<UsageState>()((set, get) => ({
       ]);
       const blockedItemsMap = new Map<string, { usage: ApplicationUsage; count: number }>();
       blockedItems.forEach((usage: ApplicationUsage) => {
-        const key = usage.application?.hostname || usage.application?.bundle_id || String(usage.id);
+        const key = usage.application?.hostname || usage.application?.name || String(usage.id);
         const existing = blockedItemsMap.get(key);
         const existingStarted = existing?.usage.started_at ?? 0;
         const keepExisting = existing && existingStarted > (usage.started_at ?? 0);

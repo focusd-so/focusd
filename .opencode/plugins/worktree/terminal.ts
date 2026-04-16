@@ -217,7 +217,7 @@ const macTerminalEnvSchema = z.object({
 	ITERM_SESSION_ID: z.string().optional(),
 	KITTY_WINDOW_ID: z.string().optional(),
 	ALACRITTY_WINDOW_ID: z.string().optional(),
-	__CFBundleIdentifier: z.string().optional(),
+	__CFAppIdentifier: z.string().optional(),
 })
 
 type LinuxTerminal =
@@ -577,7 +577,7 @@ function detectCurrentMacTerminal(): MacTerminal {
 	if (env.ITERM_SESSION_ID) return "iterm"
 	if (env.KITTY_WINDOW_ID) return "kitty"
 	if (env.ALACRITTY_WINDOW_ID) return "alacritty"
-	if (env.__CFBundleIdentifier === "dev.warp.Warp-Stable") return "warp"
+	if (env.__CFAppIdentifier === "dev.warp.Warp-Stable") return "warp"
 
 	// Fallback to TERM_PROGRAM
 	const termProgram = env.TERM_PROGRAM?.toLowerCase()

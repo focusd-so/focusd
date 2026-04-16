@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func classifySlackActivity(ctx context.Context, input string) (*ClassificationResponse, error) {
+func classifySlackActivity(ctx context.Context, input string) (*LLMClassificationResult, error) {
 	const instructionSlackClassification = `
 You classify Slack activity for software engineers.
 
@@ -30,19 +30,9 @@ Return JSON only with exactly these keys:
   "detected_communication_channel": "channel name or empty string"
 }
 `
-
 	response, err := classify(ctx, instructionSlackClassification, input)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify Slack activity: %w", err)
-	}
-
-	switch response.Classification {
-	case ClassificationProductive, ClassificationNeutral, ClassificationDistracting:
-	default:
-		response.Classification = ClassificationNeutral
-		if response.Reasoning == "" {
-			response.Reasoning = "Defaulted to neutral due to invalid classification"
-		}
 	}
 
 	return response, nil

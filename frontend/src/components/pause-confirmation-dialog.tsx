@@ -240,7 +240,7 @@ export function PauseConfirmationDialog({
                 <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 overflow-hidden divide-y divide-emerald-500/10">
                   {blockedItems.map((item) => {
                     const app = item.usage.application;
-                    const key = app?.hostname || app?.bundle_id || String(item.usage.id);
+                    const key = app?.hostname || app?.name || String(item.usage.id);
                     const isAllowing = allowingKey === key;
 
                     return (

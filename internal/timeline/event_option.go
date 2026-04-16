@@ -7,24 +7,24 @@ import (
 
 type EventOption func(e *Event) error
 
-func WithStartedAt(t time.Time) EventOption {
+func WithOccurredAt(t time.Time) EventOption {
 	return func(e *Event) error {
 		if t.IsZero() {
 			t = time.Now()
 		}
 
-		e.StartedAt = t.UTC().Unix()
+		e.OccurredAt = t.UTC().Unix()
 
 		return nil
 	}
 }
 
-func WithEndedAt(t time.Time) EventOption {
+func WithFinishedAt(t time.Time) EventOption {
 	return func(e *Event) error {
 		if !t.IsZero() {
 			ts := t.UTC().Unix()
 
-			e.EndedAt = &ts
+			e.FinishedAt = &ts
 		}
 
 		return nil
@@ -53,6 +53,13 @@ func WithTags(tags ...Tag) EventOption {
 	return func(e *Event) error {
 		e.Tags = tags
 
+		return nil
+	}
+}
+
+func WithKey(key string) EventOption {
+	return func(e *Event) error {
+		e.Key = &key
 		return nil
 	}
 }

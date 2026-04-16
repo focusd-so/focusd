@@ -53,7 +53,7 @@ message DeviceHandshakeResponse {
 // LLM METHODS
 // ---------------------------------------------------------
 message LLMClassifyRequest {
-    string bundle_id = 1;
+    string app_id = 1;
     string window_title = 2;
     string website_url = 3;
     string website_title = 4;

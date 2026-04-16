@@ -122,7 +122,7 @@ if (typeof globalThis.require === 'undefined') {
 
 	sb.WriteString("\n// --- User Code ---\n")
 	sb.WriteString(transpiledCode)
-	
+
 	sb.WriteString("\n// Expose exported functions to globalThis\n")
 	sb.WriteString("var _exported = module.exports || exports;\n")
 	sb.WriteString("for (var key in _exported) { if (typeof _exported[key] === 'function') { globalThis[key] = _exported[key]; } }\n")

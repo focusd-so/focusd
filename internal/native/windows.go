@@ -21,7 +21,7 @@ func BlockApp(appName, title, reason string, tags []string) error {
 	return nil
 }
 
-func MinimiseApp(bundleID string) error {
+func MinimiseApp(appID string) error {
 	return nil
 }
 

@@ -9,8 +9,8 @@ import (
 // Contributor defines a package that extends the JS sandbox environment
 type Contributor interface {
 	Name() string
-	PolyfillSource() string         // JS code prepended to every execution
-	TypesDefinition() string        // TS types combined into types.d.ts
+	PolyfillSource() string  // JS code prepended to every execution
+	TypesDefinition() string // TS types combined into types.d.ts
 }
 
 // Global registry, automatically includes core contributor

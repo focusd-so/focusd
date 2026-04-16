@@ -11,21 +11,21 @@ import (
 type EventFilterOption func(*eventFilter)
 
 type eventFilter struct {
-	types         []string
-	tags          []string
-	startedAtFrom *int64
-	startedAtTo   *int64
-	endedAtFrom   *int64
-	endedAtTo     *int64
-	activeOnly    bool
-	limit         int
-	offset        int
-	orderBy       string
+	types          []string
+	tags           []string
+	occurredAtFrom *int64
+	occurredAtTo   *int64
+	endedAtFrom    *int64
+	endedAtTo      *int64
+	activeOnly     bool
+	limit          int
+	offset         int
+	orderBy        string
 }
 
 func newEventFilter(opts ...EventFilterOption) eventFilter {
 	filter := eventFilter{
-		orderBy: "started_at DESC",
+		orderBy: "occurred_at DESC",
 	}
 
 	for _, opt := range opts {
@@ -55,12 +55,12 @@ func ByStartTime(from, to time.Time) EventFilterOption {
 	return func(filter *eventFilter) {
 		if !from.IsZero() {
 			ts := from.UTC().Unix()
-			filter.startedAtFrom = &ts
+			filter.occurredAtFrom = &ts
 		}
 
 		if !to.IsZero() {
 			ts := to.UTC().Unix()
-			filter.startedAtTo = &ts
+			filter.occurredAtTo = &ts
 		}
 	}
 }
@@ -83,7 +83,7 @@ func ByAge(days int) EventFilterOption {
 	return func(filter *eventFilter) {
 		if days >= 0 {
 			ts := time.Now().UTC().AddDate(0, 0, -days).Unix()
-			filter.startedAtFrom = &ts
+			filter.occurredAtFrom = &ts
 		}
 	}
 }
@@ -110,15 +110,15 @@ func Offset(offset int) EventFilterOption {
 	}
 }
 
-func OrderByStartedAtAsc() EventFilterOption {
+func OrderByOccurredAtAsc() EventFilterOption {
 	return func(filter *eventFilter) {
-		filter.orderBy = "started_at ASC"
+		filter.orderBy = "occurred_at ASC"
 	}
 }
 
-func OrderByStartedAtDesc() EventFilterOption {
+func OrderByOccurredAtDesc() EventFilterOption {
 	return func(filter *eventFilter) {
-		filter.orderBy = "started_at DESC"
+		filter.orderBy = "occurred_at DESC"
 	}
 }
 
@@ -136,19 +136,19 @@ func applyEventFilter(query *gorm.DB, filterOpts ...EventFilterOption) *gorm.DB 
 	}
 
 	eventTypeColumn := eventTable + ".type"
-	startedAtColumn := eventTable + ".started_at"
-	endedAtColumn := eventTable + ".ended_at"
+	occurredAtColumn := eventTable + ".occurred_at"
+	endedAtColumn := eventTable + ".finished_at"
 
 	if len(filter.types) > 0 {
 		query = query.Where(eventTypeColumn+" IN ?", filter.types)
 	}
 
-	if filter.startedAtFrom != nil {
-		query = query.Where(startedAtColumn+" >= ?", *filter.startedAtFrom)
+	if filter.occurredAtFrom != nil {
+		query = query.Where(occurredAtColumn+" >= ?", *filter.occurredAtFrom)
 	}
 
-	if filter.startedAtTo != nil {
-		query = query.Where(startedAtColumn+" <= ?", *filter.startedAtTo)
+	if filter.occurredAtTo != nil {
+		query = query.Where(occurredAtColumn+" <= ?", *filter.occurredAtTo)
 	}
 
 	if filter.endedAtFrom != nil {
@@ -205,12 +205,12 @@ func modelTableName(db *gorm.DB, model any) string {
 func normalizeOrderBy(orderBy, eventTable string) string {
 	value := strings.TrimSpace(strings.ToUpper(orderBy))
 	switch value {
-	case "STARTED_AT ASC":
-		return eventTable + ".started_at ASC"
-	case "STARTED_AT DESC":
-		return eventTable + ".started_at DESC"
+	case "OCCURRED_AT ASC":
+		return eventTable + ".occurred_at ASC"
+	case "OCCURRED_AT DESC":
+		return eventTable + ".occurred_at DESC"
 	default:
-		return eventTable + ".started_at DESC"
+		return eventTable + ".occurred_at DESC"
 	}
 }
 

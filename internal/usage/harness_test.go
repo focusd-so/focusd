@@ -7,25 +7,26 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"reflect"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"connectrpc.com/connect"
-	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
-	"github.com/focusd-so/focusd/gen/api/v1/apiv1connect"
-	"github.com/focusd-so/focusd/internal/identity"
-	"github.com/focusd-so/focusd/internal/settings"
-	"github.com/focusd-so/focusd/internal/usage"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	apiv1 "github.com/focusd-so/focusd/gen/api/v1"
+	"github.com/focusd-so/focusd/gen/api/v1/apiv1connect"
+	"github.com/focusd-so/focusd/internal/identity"
+	"github.com/focusd-so/focusd/internal/settings"
+	"github.com/focusd-so/focusd/internal/timeline"
+	"github.com/focusd-so/focusd/internal/usage"
 )
 
 type usageHarness struct {
@@ -33,15 +34,14 @@ type usageHarness struct {
 	service *usage.Service
 	db      *gorm.DB
 
-	mu            sync.Mutex
-	usageEvents   []*usage.ApplicationUsage
-	pausedEvents  []usage.ProtectionPause
-	resumedEvents []usage.ProtectionPause
+	timelineService *timeline.Service
+
+	mu sync.Mutex
 }
 
 type usageHarnessConfig struct {
 	customRulesJS  string
-	llmResponse    usage.ClassificationResponse
+	llmResponse    usage.ClassificationResult
 	llmResponseRaw *string
 	accountTier    *apiv1.DeviceHandshakeResponse_AccountTier
 }
@@ -54,7 +54,7 @@ func withCustomRulesJS(customRules string) usageHarnessOption {
 	}
 }
 
-func withDummyLLMResponse(resp usage.ClassificationResponse) usageHarnessOption {
+func withDummyLLMResponse(resp usage.ClassificationResult) usageHarnessOption {
 	return func(cfg *usageHarnessConfig) {
 		cfg.llmResponse = resp
 	}
@@ -72,16 +72,20 @@ func withAccountTier(tier apiv1.DeviceHandshakeResponse_AccountTier) usageHarnes
 	}
 }
 
-func newUsageHarness(t *testing.T, opts ...usageHarnessOption) *usageHarness {
+func newHarness(t *testing.T, opts ...usageHarnessOption) *usageHarness {
 	t.Helper()
 
 	cfg := usageHarnessConfig{
-		llmResponse: usage.ClassificationResponse{
-			Classification:       usage.ClassificationNone,
-			ClassificationSource: usage.ClassificationSourceCloudLLMOpenAI,
-			Reasoning:            "dummy integration classification",
-			ConfidenceScore:      1,
-			Tags:                 []string{"other"},
+		llmResponse: usage.ClassificationResult{
+			LLMClassificationResult: &usage.LLMClassificationResult{
+				BasicClassificationResult: usage.BasicClassificationResult{
+					Classification:       usage.ClassificationNone,
+					ClassificationReason: "dummy integration classification",
+					Tags:                 []string{"other"},
+				},
+				ClassificationSource: usage.ClassificationSourceLLMOpenAI,
+				ConfidenceScore:      1,
+			},
 		},
 	}
 
@@ -98,31 +102,18 @@ func newUsageHarness(t *testing.T, opts ...usageHarnessOption) *usageHarness {
 	db, err := gorm.Open(sqlite.Open(memoryDSNForHarness(t)), &gorm.Config{})
 	require.NoError(t, err)
 
+	db.Migrator().AutoMigrate(&usage.Application{}, &usage.LLMDailySummary{})
+
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	h := &usageHarness{t: t, db: db}
-
-	h.service, err = usage.NewService(ctx, db)
+	timelineService, err := timeline.NewService(db)
 	require.NoError(t, err)
 
-	h.service.OnUsageUpdated(func(appUsage *usage.ApplicationUsage) {
-		h.mu.Lock()
-		defer h.mu.Unlock()
-		h.usageEvents = append(h.usageEvents, appUsage)
-	})
+	h := &usageHarness{t: t, db: db, timelineService: timelineService}
 
-	h.service.OnProtectionPause(func(pause usage.ProtectionPause) {
-		h.mu.Lock()
-		defer h.mu.Unlock()
-		h.pausedEvents = append(h.pausedEvents, pause)
-	})
-
-	h.service.OnProtectionResumed(func(pause usage.ProtectionPause) {
-		h.mu.Lock()
-		defer h.mu.Unlock()
-		h.resumedEvents = append(h.resumedEvents, pause)
-	})
+	h.service, err = usage.NewService(ctx, db, timelineService)
+	require.NoError(t, err)
 
 	return h
 }
@@ -176,10 +167,10 @@ func memoryDSNForHarness(t *testing.T) string {
 
 func (h *usageHarness) TitleChanged(appName, windowTitle string, browserURL *string) *usageHarness {
 	h.t.Helper()
-	h.retryLocked(func() error {
-		_, err := h.service.TitleChanged(context.Background(), appName, windowTitle, appName, "", nil, browserURL, nil)
-		return err
-	})
+
+	err := h.service.TitleChanged(context.Background(), appName, windowTitle, "", browserURL, nil)
+	require.NoError(h.t, err)
+
 	return h
 }
 
@@ -189,301 +180,87 @@ func (h *usageHarness) Await(dur time.Duration) *usageHarness {
 	return h
 }
 
-func (h *usageHarness) TitleChangedRaw(executablePath, windowTitle, appName, icon string, bundleID, browserURL, appCategory *string) *usageHarness {
-	h.t.Helper()
-	h.retryLocked(func() error {
-		_, err := h.service.TitleChanged(context.Background(), executablePath, windowTitle, appName, icon, bundleID, browserURL, appCategory)
-		return err
-	})
-	return h
-}
-
 func (h *usageHarness) EnterIdle() *usageHarness {
 	h.t.Helper()
-	h.IdleChanged(true)
-	return h
-}
+	err := h.service.IdleChanged(context.Background(), true)
+	require.NoError(h.t, err)
 
-func (h *usageHarness) IdleChanged(isIdle bool) *usageHarness {
-	h.t.Helper()
-	h.retryLocked(func() error {
-		_, err := h.service.IdleChanged(context.Background(), isIdle)
-		return err
-	})
 	return h
 }
 
 func (h *usageHarness) Pause(durationSeconds int, reason string) *usageHarness {
 	h.t.Helper()
-	h.retryLocked(func() error {
-		_, err := h.service.PauseProtection(durationSeconds, reason)
-		return err
-	})
+	err := h.service.ProtectionPause(durationSeconds, reason)
+	require.NoError(h.t, err)
+
 	return h
 }
 
 func (h *usageHarness) Resume(reason string) *usageHarness {
 	h.t.Helper()
-	h.retryLocked(func() error {
-		_, err := h.service.ResumeProtection(reason)
-		return err
-	})
-	return h
-}
-
-func (h *usageHarness) Whitelist(appName, hostname string, duration time.Duration) *usageHarness {
-	h.t.Helper()
-	h.retryLocked(func() error {
-		return h.service.Whitelist(appName, hostname, duration)
-	})
-	return h
-}
-
-func (h *usageHarness) RemoveActiveWhitelists() *usageHarness {
-	h.t.Helper()
-	h.retryLocked(func() error {
-		wls, err := h.service.GetWhitelist()
-		if err != nil {
-			return err
-		}
-		for _, wl := range wls {
-			if err := h.service.RemoveWhitelist(wl.ID); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	return h
-}
-
-func (h *usageHarness) UsageList() []usage.ApplicationUsage {
-	h.t.Helper()
-	var (
-		usages []usage.ApplicationUsage
-		err    error
-	)
-	h.retryLocked(func() error {
-		usages, err = h.service.GetUsageList(usage.GetUsageListOptions{})
-		return err
-	})
-	return usages
-}
-
-func (h *usageHarness) OpenUsage() usage.ApplicationUsage {
-	h.t.Helper()
-
-	var appUsage usage.ApplicationUsage
-	h.retryLocked(func() error {
-		return h.db.Preload("Application").Preload("Tags").Where("ended_at IS NULL").Order("started_at DESC").First(&appUsage).Error
-	})
-	return appUsage
-}
-
-func (h *usageHarness) LastUsageByTitle(windowTitle string) usage.ApplicationUsage {
-	h.t.Helper()
-
-	var appUsage usage.ApplicationUsage
-	h.retryLocked(func() error {
-		return h.db.Preload("Application").Preload("Tags").Where("window_title = ?", windowTitle).Order("started_at DESC").First(&appUsage).Error
-	})
-	return appUsage
-}
-
-func (h *usageHarness) AssertLastUsage(check ...func(*usage.ApplicationUsage)) *usageHarness {
-	h.t.Helper()
-
-	var appUsage usage.ApplicationUsage
-	h.retryLocked(func() error {
-		return h.db.Preload("Application").Preload("Tags").Order("id DESC").First(&appUsage).Error
-	})
-
-	for _, c := range check {
-		c(&appUsage)
-	}
+	err := h.service.ProtectionResume(reason)
+	require.NoError(h.t, err)
 
 	return h
 }
 
-func (h *usageHarness) AssertPreviousUsage(check ...func(*usage.ApplicationUsage)) *usageHarness {
+func (h *usageHarness) AllowApp(appName string, duration time.Duration) *usageHarness {
 	h.t.Helper()
-
-	var appUsages []usage.ApplicationUsage
-	h.retryLocked(func() error {
-		return h.db.Preload("Application").Preload("Tags").Order("id DESC").Limit(2).Find(&appUsages).Error
-	})
-
-	if len(appUsages) < 2 {
-		for _, c := range check {
-			c(nil)
-		}
-	} else {
-		for _, c := range check {
-			c(&appUsages[1])
-		}
-	}
+	err := h.service.AllowApp(appName, duration)
+	require.NoError(h.t, err)
 
 	return h
 }
 
-func (h *usageHarness) AssertUpdateEventsCount(count int) *usageHarness {
-	h.t.Helper()
-
-	require.Equal(h.t, count, len(h.UsageEvents()))
-	return h
-}
-
-func (h *usageHarness) AssertUsagesCount(count int) *usageHarness {
-	h.t.Helper()
-
-	require.Equal(h.t, count, h.CountUsages())
-	return h
-}
-
-func (h *usageHarness) CountUsages() int {
+func (h *usageHarness) AssertApplicationCount(expected int) *usageHarness {
 	h.t.Helper()
 
 	var count int64
-	h.retryLocked(func() error {
-		return h.db.Model(&usage.ApplicationUsage{}).Count(&count).Error
-	})
-	return int(count)
-}
+	err := h.db.Model(&usage.Application{}).Count(&count).Error
+	require.NoError(h.t, err)
 
-func (h *usageHarness) retryLocked(fn func() error) {
-	h.t.Helper()
+	require.Equal(h.t, int64(expected), count)
 
-	deadline := time.Now().Add(1500 * time.Millisecond)
-	for {
-		err := fn()
-		if err == nil {
-			return
-		}
-
-		if !strings.Contains(err.Error(), "database table is locked") {
-			require.NoError(h.t, err)
-		}
-
-		if time.Now().After(deadline) {
-			require.NoError(h.t, err)
-		}
-
-		time.Sleep(20 * time.Millisecond)
-	}
-}
-
-func (h *usageHarness) UsageEvents() []*usage.ApplicationUsage {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return append([]*usage.ApplicationUsage(nil), h.usageEvents...)
-}
-
-func (h *usageHarness) ResetUsageEvents() *usageHarness {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.usageEvents = nil
 	return h
 }
 
-func assertUsageApplicationName(t *testing.T, appName string) func(*usage.ApplicationUsage) {
-	t.Helper()
+func (h *usageHarness) AssertApplicationExists(appName string) *usageHarness {
+	h.t.Helper()
 
-	return func(u *usage.ApplicationUsage) {
-		require.Equal(t, appName, u.Application.Name)
-	}
+	var app usage.Application
+	err := h.db.Where("name = ?", appName).First(&app).Error
+	require.NoError(h.t, err)
+
+	return h
 }
 
-func assertUsageHostname(t *testing.T, hostname string) func(*usage.ApplicationUsage) {
-	t.Helper()
+func (h *usageHarness) AssertLastActiveEvent(types []string, fn func(*timeline.Event)) *usageHarness {
+	h.t.Helper()
 
-	return func(u *usage.ApplicationUsage) {
-		require.Equal(t, hostname, fromPtr(u.Application.Hostname))
-	}
+	event, err := h.timelineService.GetActiveEventOfTypes(types)
+	require.NoError(h.t, err)
+
+	fn(event)
+
+	return h
 }
 
-func assertUsageClassification(t *testing.T, classification usage.Classification) func(*usage.ApplicationUsage) {
-	t.Helper()
+func (h *usageHarness) AssertPreviousEvent(types []string, fn func(*timeline.Event)) *usageHarness {
+	h.t.Helper()
 
-	return func(u *usage.ApplicationUsage) {
-		require.Equal(t, classification, u.Classification)
+	events, err := h.timelineService.ListEvents(timeline.ByTypes(types...), timeline.Limit(2), timeline.OrderByOccurredAtDesc())
+	require.NoError(h.t, err)
+
+	if len(events) < 2 {
+		fn(nil)
+		return h
 	}
-}
 
-func assertUsageClassificationSource(t *testing.T, source usage.ClassificationSource) func(*usage.ApplicationUsage) {
-	t.Helper()
+	slog.Info("events", "events0", *events[0], "events1", *events[1])
 
-	return func(u *usage.ApplicationUsage) {
-		require.Equal(t, source, fromPtr(u.ClassificationSource))
-	}
-}
+	fn(events[1])
 
-func assertUsageClassificationReasoning(t *testing.T, reasoning string) func(*usage.ApplicationUsage) {
-	t.Helper()
-
-	return func(u *usage.ApplicationUsage) {
-		require.Equal(t, reasoning, fromPtr(u.ClassificationReasoning))
-	}
-}
-
-func assertUsageClassificationConfidence(t *testing.T, confidence float32) func(*usage.ApplicationUsage) {
-	t.Helper()
-
-	return func(u *usage.ApplicationUsage) {
-		require.Equal(t, confidence, fromPtr(u.ClassificationConfidence))
-	}
-}
-
-func assertUsageTags(t *testing.T, tags ...string) func(*usage.ApplicationUsage) {
-	t.Helper()
-
-	return func(u *usage.ApplicationUsage) {
-		actualTags := make([]string, len(u.Tags))
-		for i, tag := range u.Tags {
-			actualTags[i] = tag.Tag
-		}
-		require.ElementsMatch(t, tags, actualTags)
-	}
-}
-
-func assertClassificationSandboxRecorded(t *testing.T) func(*usage.ApplicationUsage) {
-	t.Helper()
-
-	return func(u *usage.ApplicationUsage) {
-		require.NotNil(t, u.ClassificationSandboxContext)
-		require.NotNil(t, u.ClassificationSandboxResponse)
-		require.NotNil(t, u.ClassificationSandboxLogs)
-	}
-}
-
-func assertEnforcementAction(t *testing.T, mode usage.EnforcementAction) func(*usage.ApplicationUsage) {
-	t.Helper()
-
-	return func(u *usage.ApplicationUsage) {
-		require.Equal(t, mode, u.EnforcementAction)
-	}
-}
-
-func assertEnforcementSource(t *testing.T, source usage.EnforcementSource) func(*usage.ApplicationUsage) {
-	t.Helper()
-
-	return func(u *usage.ApplicationUsage) {
-		require.Equal(t, source, fromPtr(u.EnforcementSource))
-	}
-}
-
-func assertUsageOpened(t *testing.T) func(*usage.ApplicationUsage) {
-	t.Helper()
-
-	return func(u *usage.ApplicationUsage) {
-		require.Nil(t, u.EndedAt)
-	}
-}
-
-func assertUsageClosed(t *testing.T) func(*usage.ApplicationUsage) {
-	t.Helper()
-
-	return func(u *usage.ApplicationUsage) {
-		require.NotNil(t, u.EndedAt)
-	}
+	return h
 }
 
 func overrideTestConfig(t *testing.T, cfg usageHarnessConfig) {
@@ -561,15 +338,6 @@ func stubFaviconFetcher(t *testing.T) {
 	t.Cleanup(func() {
 		http.DefaultClient.Transport = oldTransport
 	})
-}
-
-func withPtr[T any](v T) *T {
-	// check if v is zero value
-	if reflect.ValueOf(v).IsZero() {
-		return nil
-	}
-
-	return &v
 }
 
 func fromPtr[T any](v *T) T {

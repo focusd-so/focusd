@@ -2,7 +2,6 @@ package usage
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -14,7 +13,6 @@ import (
 
 type Service struct {
 	// external services and dependencies
-	db              *gorm.DB
 	timelineService *timeline.Service
 
 	appBlocker func(appName, title, reason string, tags []string, browserURL *string)
@@ -22,22 +20,12 @@ type Service struct {
 	// mu serializes title change processing to prevent race conditions
 	// when multiple events fire concurrently
 	mu sync.Mutex
+
+	db *gorm.DB
 }
 
-func NewService(ctx context.Context, timelineService *timeline.Service, db *gorm.DB, options ...Option) (*Service, error) {
-	if err := db.AutoMigrate(
-		&Application{},
-		&ApplicationUsage{},
-		&ApplicationUsageTags{},
-		&ProtectionPause{},
-		&ProtectionWhitelist{},
-		&SandboxExecutionLog{},
-		&LLMDailySummary{},
-	); err != nil {
-		return nil, fmt.Errorf("failed to migrate usage tables: %w", err)
-	}
-
-	service := &Service{db: db, timelineService: timelineService}
+func NewService(ctx context.Context, db *gorm.DB, timelineService *timeline.Service, options ...Option) (*Service, error) {
+	service := &Service{timelineService: timelineService, db: db}
 
 	for _, option := range options {
 		option(service)
@@ -76,7 +64,10 @@ func (s *Service) scheduleJobs(ctx context.Context) {
 
 // removeOldSandboxExecutionLogs deletes sandbox execution logs older than 7 days.
 func (s *Service) removeOldSandboxExecutionLogs(ctx context.Context) error {
-	sevenDaysAgo := time.Now().Add(-7 * 24 * time.Hour)
+	// TODO: delete using timeline service instead of accessing db directly
 
-	return s.db.Where("created_at < ?", sevenDaysAgo).Delete(&SandboxExecutionLog{}).Error
+	// sevenDaysAgo := time.Now().Add(-7 * 24 * time.Hour)
+	// return s.db.Where("created_at < ?", sevenDaysAgo).Delete(&SandboxExecutionLog{}).Error
+
+	return nil
 }

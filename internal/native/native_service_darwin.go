@@ -58,11 +58,11 @@ static int loginItemEnabled(void) {
 	return 0;
 }
 
-// getInstalledAppName returns the display name of the app with the given bundle ID,
+// getInstalledAppName returns the display name of the app with the given application id,
 // or NULL if the app is not installed.
-static const char* getInstalledAppName(const char* bundleID) {
+static const char* getInstalledAppName(const char* appID) {
 	@autoreleasepool {
-		NSString *bid = [NSString stringWithUTF8String:bundleID];
+		NSString *bid = [NSString stringWithUTF8String:appID];
 		NSURL *appURL = [[NSWorkspace sharedWorkspace] URLForApplicationWithBundleIdentifier:bid];
 		if (appURL == nil) {
 			return NULL;
@@ -111,15 +111,15 @@ func (s *NativeService) RequestAccessibility() bool {
 }
 
 // CheckAutomation silently checks whether automation permission for a given
-// bundle ID is already granted, without triggering a TCC prompt.
-func (s *NativeService) CheckAutomation(bundleID string) bool {
-	return CheckAutomationPermission(bundleID)
+// application id is already granted, without triggering a TCC prompt.
+func (s *NativeService) CheckAutomation(appID string) bool {
+	return CheckAutomationPermission(appID)
 }
 
-// RequestAutomation triggers the macOS TCC prompt for a specific app bundle ID.
+// RequestAutomation triggers the macOS TCC prompt for a specific app application id.
 // Returns true if permission was granted (or was already granted).
-func (s *NativeService) RequestAutomation(bundleID string) bool {
-	return RequestAutomationPermission(bundleID)
+func (s *NativeService) RequestAutomation(appID string) bool {
+	return RequestAutomationPermission(appID)
 }
 
 // OpenSettings opens System Settings → Privacy & Security → Automation.
@@ -161,24 +161,24 @@ func (s *NativeService) LoginItemEnabled() bool {
 }
 
 var browserPriority = map[string]int{
-	"com.apple.Safari":        0,
-	"com.google.Chrome":       1,
-	"com.brave.Browser":       2,
-	"com.microsoft.edgemac":   3,
-	"com.operasoftware.Opera": 4,
-	"com.vivaldi.Vivaldi":     5,
+	"com.apple.Safari":           0,
+	"com.google.Chrome":          1,
+	"com.brave.Browser":          2,
+	"com.microsoft.edgemac":      3,
+	"com.operasoftware.Opera":    4,
+	"com.vivaldi.Vivaldi":        5,
 	"company.thebrowser.Browser": 6,
 }
 
 // GetInstalledBrowsers returns all known browsers that are installed on the system,
 // sorted with popular browsers first.
 func (s *NativeService) GetInstalledBrowsers() []InstalledBrowser {
-	allBundleIDs := make([]string, 0, len(chromeBaseBundleIDs)+len(safariBasedBundleIDs))
-	allBundleIDs = append(allBundleIDs, safariBasedBundleIDs...)
-	allBundleIDs = append(allBundleIDs, chromeBaseBundleIDs...)
+	allAppIDs := make([]string, 0, len(chromeBaseAppIDs)+len(safariBasedAppIDs))
+	allAppIDs = append(allAppIDs, safariBasedAppIDs...)
+	allAppIDs = append(allAppIDs, chromeBaseAppIDs...)
 
 	var installed []InstalledBrowser
-	for _, bid := range allBundleIDs {
+	for _, bid := range allAppIDs {
 		cBid := C.CString(bid)
 		cName := C.getInstalledAppName(cBid)
 		C.free(unsafe.Pointer(cBid))
@@ -187,12 +187,12 @@ func (s *NativeService) GetInstalledBrowsers() []InstalledBrowser {
 		}
 		name := C.GoString(cName)
 		C.free(unsafe.Pointer(cName))
-		installed = append(installed, InstalledBrowser{BundleID: bid, Name: name})
+		installed = append(installed, InstalledBrowser{AppID: bid, Name: name})
 	}
 
 	sort.SliceStable(installed, func(i, j int) bool {
-		pi, okI := browserPriority[installed[i].BundleID]
-		pj, okJ := browserPriority[installed[j].BundleID]
+		pi, okI := browserPriority[installed[i].AppID]
+		pj, okJ := browserPriority[installed[j].AppID]
 		if okI && okJ {
 			return pi < pj
 		}

@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/focusd-so/focusd/internal/sandbox"
 	v8 "rogchap.com/v8go"
+
+	"github.com/focusd-so/focusd/internal/sandbox"
 )
 
 type usageContributor struct {

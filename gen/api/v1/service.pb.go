@@ -282,7 +282,7 @@ func (x *DeviceHandshakeResponse) GetTrialEndsAt() int64 {
 // ---------------------------------------------------------
 type LLMClassifyRequest struct {
 	state                  protoimpl.MessageState `protogen:"open.v1"`
-	BundleId               string                 `protobuf:"bytes,1,opt,name=bundle_id,json=bundleId,proto3" json:"bundle_id,omitempty"`
+	AppId                  string                 `protobuf:"bytes,1,opt,name=app_id,json=appId,proto3" json:"app_id,omitempty"`
 	WindowTitle            string                 `protobuf:"bytes,2,opt,name=window_title,json=windowTitle,proto3" json:"window_title,omitempty"`
 	WebsiteUrl             string                 `protobuf:"bytes,3,opt,name=website_url,json=websiteUrl,proto3" json:"website_url,omitempty"`
 	WebsiteTitle           string                 `protobuf:"bytes,4,opt,name=website_title,json=websiteTitle,proto3" json:"website_title,omitempty"`
@@ -322,9 +322,9 @@ func (*LLMClassifyRequest) Descriptor() ([]byte, []int) {
 	return file_api_v1_service_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *LLMClassifyRequest) GetBundleId() string {
+func (x *LLMClassifyRequest) GetAppId() string {
 	if x != nil {
-		return x.BundleId
+		return x.AppId
 	}
 	return ""
 }
@@ -633,9 +633,9 @@ const file_api_v1_service_proto_rawDesc = "" +
 	"\x11ACCOUNT_TIER_FREE\x10\x01\x12\x16\n" +
 	"\x12ACCOUNT_TIER_TRIAL\x10\x02\x12\x15\n" +
 	"\x11ACCOUNT_TIER_PLUS\x10\x03\x12\x14\n" +
-	"\x10ACCOUNT_TIER_PRO\x10\x04\"\x85\x02\n" +
-	"\x12LLMClassifyRequest\x12\x1b\n" +
-	"\tbundle_id\x18\x01 \x01(\tR\bbundleId\x12!\n" +
+	"\x10ACCOUNT_TIER_PRO\x10\x04\"\xff\x01\n" +
+	"\x12LLMClassifyRequest\x12\x15\n" +
+	"\x06app_id\x18\x01 \x01(\tR\x05appId\x12!\n" +
 	"\fwindow_title\x18\x02 \x01(\tR\vwindowTitle\x12\x1f\n" +
 	"\vwebsite_url\x18\x03 \x01(\tR\n" +
 	"websiteUrl\x12#\n" +

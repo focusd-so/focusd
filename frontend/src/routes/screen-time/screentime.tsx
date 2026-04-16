@@ -39,7 +39,6 @@ export interface UsageAggregation {
     icon: string | null;
     hostname: string | null;
     domain: string | null;
-    bundle_id: string | null;
   };
   total_duration: number;
   usage_count: number;

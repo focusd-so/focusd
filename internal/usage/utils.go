@@ -6,18 +6,22 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"reflect"
 	"strings"
 	"time"
 
 	readability "codeberg.org/readeck/go-readability"
 	"golang.org/x/net/html"
+	"golang.org/x/net/publicsuffix"
 )
 
-func parseURLNormalized(browserURL string) (*url.URL, error) {
-	u, err := url.ParseRequestURI(browserURL)
+func parseURLNormalized(browserURL *string) (*url.URL, string, error) {
+	if browserURL == nil || *browserURL == "" {
+		return nil, "", nil
+	}
+
+	u, err := url.ParseRequestURI(*browserURL)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	hostname := strings.ToLower(strings.TrimSpace(u.Hostname()))
@@ -26,7 +30,9 @@ func parseURLNormalized(browserURL string) (*url.URL, error) {
 
 	u.Host = hostname
 
-	return u, nil
+	domain, _ := publicsuffix.EffectiveTLDPlusOne(u.Hostname())
+
+	return u, domain, nil
 }
 
 type MetaData struct {
@@ -111,24 +117,6 @@ func fetchMainContent(ctx context.Context, rawURL string) (string, error) {
 	}
 
 	return article.TextContent, nil
-}
-
-func createSandboxContext(appName string, url *string) sandboxContext {
-	opts := []sandboxContextOption{WithAppNameContext(appName)}
-	if url != nil {
-		opts = append(opts, WithBrowserURLContext(*url))
-	}
-
-	return NewSandboxContext(opts...)
-}
-
-func withPtr[T any](v T) *T {
-	// check if v is zero value
-	if reflect.ValueOf(v).IsZero() {
-		return nil
-	}
-
-	return &v
 }
 
 func fromPtr[T any](v *T) T {

@@ -1,6 +1,8 @@
 package usage
 
 import (
+	"log/slog"
+	"net/url"
 	"time"
 
 	"golang.org/x/net/publicsuffix"
@@ -62,6 +64,30 @@ type sandboxContext struct {
 
 type sandboxContextOption func(*sandboxContext)
 
+func (s *Service) createSandboxContext(opts ...sandboxContextOption) sandboxContext {
+	ctx := sandboxContext{}
+
+	for _, opt := range opts {
+		opt(&ctx)
+	}
+
+	if ctx.Now == nil {
+		ctx.Now = func(loc *time.Location) time.Time {
+			return time.Now().In(loc)
+		}
+	}
+
+	if err := s.populateInsightsContext(&ctx); err != nil {
+		slog.Debug("failed to populate sandbox insights context", "error", err)
+	}
+
+	if err := s.populateCurrentUsageContext(&ctx); err != nil {
+		slog.Debug("failed to populate sandbox current-usage context", "error", err)
+	}
+
+	return ctx
+}
+
 func WithAppNameContext(appName string) sandboxContextOption {
 	return func(ctx *sandboxContext) {
 		ctx.Usage.Meta.AppName = appName
@@ -74,16 +100,16 @@ func WithWindowTitleContext(title string) sandboxContextOption {
 	}
 }
 
-func WithBrowserURLContext(url string) sandboxContextOption {
+func WithBrowserURLContext(url *url.URL) sandboxContextOption {
 	return func(ctx *sandboxContext) {
-		ctx.Usage.Meta.URL = url
-
-		u, err := parseURLNormalized(url)
-		if err == nil {
-			ctx.Usage.Meta.Host = u.Hostname()
-			ctx.Usage.Meta.Path = u.Path
-			ctx.Usage.Meta.Domain, _ = publicsuffix.EffectiveTLDPlusOne(u.Hostname())
+		if url == nil {
+			return
 		}
+
+		ctx.Usage.Meta.URL = url.String()
+		ctx.Usage.Meta.Host = url.Hostname()
+		ctx.Usage.Meta.Path = url.Path
+		ctx.Usage.Meta.Domain, _ = publicsuffix.EffectiveTLDPlusOne(url.Hostname())
 	}
 }
 
@@ -111,14 +137,4 @@ func WithClassificationContext(classification Classification) sandboxContextOpti
 	return func(ctx *sandboxContext) {
 		ctx.Usage.Meta.Classification = string(classification)
 	}
-}
-
-func NewSandboxContext(opts ...sandboxContextOption) sandboxContext {
-	ctx := sandboxContext{}
-
-	for _, opt := range opts {
-		opt(&ctx)
-	}
-
-	return ctx
 }

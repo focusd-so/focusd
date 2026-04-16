@@ -28,7 +28,7 @@ You are a Software Engineering Application Intent Classifier. Your job is to det
 
 # Metadata Signals
 
-**Bundle ID** (when provided) is a precise, machine-readable identifier for the app (e.g. "com.apple.dt.Xcode", "com.spotify.client"). Use it as a strong classification signal.
+**Application ID** (when provided) is a precise, machine-readable identifier for the app (e.g. "com.apple.dt.Xcode", "com.spotify.client"). Use it as a strong classification signal.
 
 **App Store Category** (when provided) is Apple's own pre-assigned category for the app. Treat it as the strongest available signal:
 - "public.app-category.developer-tools" -> productive

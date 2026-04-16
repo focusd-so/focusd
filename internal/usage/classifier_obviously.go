@@ -2,6 +2,7 @@ package usage
 
 import (
 	"context"
+	"net/url"
 	"slices"
 	"strings"
 )
@@ -494,32 +495,27 @@ var alwaysAllowPathCategories = []hostnameCategory{
 //  2. Obviously productive applications (e.g. developer tools, productivity apps, etc.)
 //  3. Applications that are used mixed of productive and distracting content depending on the usage context
 //     eg. Slack - funny dogs videos is distracting, but billing-internal-channel is supporting for communication
-func (s *Service) classifyObviously(ctx context.Context, appName string, url *string) (*ClassificationResponse, error) {
+func (s *Service) classifyObviously(ctx context.Context, appName string, url *url.URL) (*ObviouslyClassificationResult, error) {
 	if url != nil {
-		return s.classifyObviouslyWebsite(ctx, *url)
+		return s.classifyObviouslyWebsite(ctx, url)
 	}
 
 	return s.classifyObviouslyApplication(ctx, appName)
 }
 
-func (s *Service) classifyObviouslyWebsite(ctx context.Context, browserURL string) (*ClassificationResponse, error) {
-	u, err := parseURLNormalized(browserURL)
-	if err != nil {
-		return nil, err
-	}
-
-	hostname := u.Hostname()
-	path := u.Path
+func (s *Service) classifyObviouslyWebsite(ctx context.Context, browserURL *url.URL) (*ObviouslyClassificationResult, error) {
+	hostname := browserURL.Hostname()
+	path := browserURL.Path
 
 	hasPath := path != "" && path != "/"
 
 	if isDeterministicCriticalNoBlockURL(browserURL) {
-		return &ClassificationResponse{
-			Classification:       ClassificationNeutral,
-			ClassificationSource: ClassificationSourceObviously,
-			Reasoning:            "Payment/booking flow detected - safety override to avoid interruption",
-			ConfidenceScore:      1.0,
-			Tags:                 []string{"other"},
+		return &ObviouslyClassificationResult{
+			BasicClassificationResult: BasicClassificationResult{
+				Classification: ClassificationNeutral,
+				ClassificationReason: "Payment/booking flow detected - safety override to avoid interruption",
+				Tags:           []string{"other"},
+			},
 		}, nil
 	}
 
@@ -529,12 +525,12 @@ func (s *Service) classifyObviouslyWebsite(ctx context.Context, browserURL strin
 		if slices.ContainsFunc(cat.hostnames, func(prefix string) bool {
 			return strings.HasPrefix(fullURL, prefix)
 		}) {
-			return &ClassificationResponse{
-				Classification:       ClassificationProductive,
-				ClassificationSource: ClassificationSourceObviously,
-				Reasoning:            cat.reasoning,
-				ConfidenceScore:      1.0,
-				Tags:                 cat.tags,
+			return &ObviouslyClassificationResult{
+				BasicClassificationResult: BasicClassificationResult{
+					Classification: ClassificationProductive,
+					ClassificationReason: cat.reasoning,
+					Tags:           cat.tags,
+				},
 			}, nil
 		}
 	}
@@ -560,12 +556,12 @@ func (s *Service) classifyObviouslyWebsite(ctx context.Context, browserURL strin
 			return nil, nil
 		}
 		// Exact homepage - ambiguous, could go either way
-		return &ClassificationResponse{
-			Classification:       ClassificationNeutral,
-			ClassificationSource: ClassificationSourceObviously,
-			Reasoning:            ambiguousHostnameCategory.reasoning,
-			ConfidenceScore:      1.0,
-			Tags:                 ambiguousHostnameCategory.tags,
+		return &ObviouslyClassificationResult{
+			BasicClassificationResult: BasicClassificationResult{
+				Classification: ClassificationNeutral,
+				ClassificationReason: ambiguousHostnameCategory.reasoning,
+				Tags:           ambiguousHostnameCategory.tags,
+			},
 		}, nil
 	}
 
@@ -579,12 +575,12 @@ func (s *Service) classifyObviouslyWebsite(ctx context.Context, browserURL strin
 				if slices.ContainsFunc(cat.hostnames, func(prefix string) bool {
 					return strings.HasPrefix(fullURL, prefix)
 				}) {
-					return &ClassificationResponse{
-						Classification:       ClassificationDistracting,
-						ClassificationSource: ClassificationSourceObviously,
-						Reasoning:            cat.reasoning,
-						ConfidenceScore:      1.0,
-						Tags:                 cat.tags,
+					return &ObviouslyClassificationResult{
+						BasicClassificationResult: BasicClassificationResult{
+							Classification: ClassificationDistracting,
+							ClassificationReason: cat.reasoning,
+							Tags:           cat.tags,
+						},
 					}, nil
 				}
 			}
@@ -592,12 +588,12 @@ func (s *Service) classifyObviouslyWebsite(ctx context.Context, browserURL strin
 			return nil, nil
 		}
 		// Exact homepage - distracting
-		return &ClassificationResponse{
-			Classification:       ClassificationDistracting,
-			ClassificationSource: ClassificationSourceObviously,
-			Reasoning:            exactBlockOnlyCategory.reasoning,
-			ConfidenceScore:      1.0,
-			Tags:                 exactBlockOnlyCategory.tags,
+		return &ObviouslyClassificationResult{
+			BasicClassificationResult: BasicClassificationResult{
+				Classification: ClassificationDistracting,
+				ClassificationReason: exactBlockOnlyCategory.reasoning,
+				Tags:           exactBlockOnlyCategory.tags,
+			},
 		}, nil
 	}
 
@@ -605,12 +601,12 @@ func (s *Service) classifyObviouslyWebsite(ctx context.Context, browserURL strin
 	// Block regardless of path
 	for _, cat := range alwaysBlockCategories {
 		if matchesAny(cat.hostnames) {
-			return &ClassificationResponse{
-				Classification:       ClassificationDistracting,
-				ClassificationSource: ClassificationSourceObviously,
-				Reasoning:            cat.reasoning,
-				ConfidenceScore:      1.0,
-				Tags:                 cat.tags,
+			return &ObviouslyClassificationResult{
+				BasicClassificationResult: BasicClassificationResult{
+					Classification: ClassificationDistracting,
+					ClassificationReason: cat.reasoning,
+					Tags:           cat.tags,
+				},
 			}, nil
 		}
 	}
@@ -619,12 +615,12 @@ func (s *Service) classifyObviouslyWebsite(ctx context.Context, browserURL strin
 	// Allow regardless of path
 	for _, cat := range alwaysProductiveCategories {
 		if matchesAny(cat.hostnames) {
-			return &ClassificationResponse{
-				Classification:       ClassificationProductive,
-				ClassificationSource: ClassificationSourceObviously,
-				Reasoning:            cat.reasoning,
-				ConfidenceScore:      1.0,
-				Tags:                 cat.tags,
+			return &ObviouslyClassificationResult{
+				BasicClassificationResult: BasicClassificationResult{
+					Classification: ClassificationProductive,
+					ClassificationReason: cat.reasoning,
+					Tags:           cat.tags,
+				},
 			}, nil
 		}
 	}
@@ -633,6 +629,6 @@ func (s *Service) classifyObviouslyWebsite(ctx context.Context, browserURL strin
 	return nil, nil
 }
 
-func (s *Service) classifyObviouslyApplication(ctx context.Context, appName string) (*ClassificationResponse, error) {
+func (s *Service) classifyObviouslyApplication(ctx context.Context, appName string) (*ObviouslyClassificationResult, error) {
 	return nil, nil
 }

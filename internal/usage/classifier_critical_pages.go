@@ -105,13 +105,12 @@ var pathBasedProviderSignals = map[string][]string{
 	"shopify.com":  {"checkout", "payment", "billing"},
 }
 
-func isDeterministicCriticalNoBlockURL(rawURL string) bool {
-	u, err := url.Parse(rawURL)
-	if err != nil {
+func isDeterministicCriticalNoBlockURL(rawURL *url.URL) bool {
+	if rawURL == nil {
 		return false
 	}
 
-	host := strings.ToLower(strings.TrimPrefix(u.Hostname(), "www."))
+	host := strings.ToLower(strings.TrimPrefix(rawURL.Hostname(), "www."))
 	if host == "" {
 		return false
 	}
@@ -120,7 +119,7 @@ func isDeterministicCriticalNoBlockURL(rawURL string) bool {
 		return true
 	}
 
-	pathSignals := normalizeForMatch(strings.Join([]string{u.Path, u.RawQuery, u.Fragment}, " "))
+	pathSignals := normalizeForMatch(strings.Join([]string{rawURL.Path, rawURL.RawQuery, rawURL.Fragment}, " "))
 	for providerSignal, tokens := range pathBasedProviderSignals {
 		if strings.Contains(host, providerSignal) && hasAnyToken(pathSignals, tokens) {
 			return true
@@ -146,13 +145,13 @@ func isDeterministicCriticalNoBlockURL(rawURL string) bool {
 	return false
 }
 
-func isSuspiciousCriticalContext(rawURL, title, mainContent string) bool {
-	if rawURL == "" && title == "" && mainContent == "" {
+func isSuspiciousCriticalContext(u *url.URL, title, mainContent string) bool {
+	if u == nil && title == "" && mainContent == "" {
 		return false
 	}
 
 	var urlSignals string
-	if u, err := url.Parse(rawURL); err == nil {
+	if u != nil {
 		urlSignals = strings.Join([]string{u.Path, u.RawQuery, u.Fragment}, " ")
 	}
 

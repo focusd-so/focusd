@@ -5,20 +5,24 @@ import (
 )
 
 type Event struct {
-	ID        int64  `json:"id" gorm:"primaryKey;autoIncrement;not null"`
-	StartedAt int64  `json:"started_at" gorm:"index:idx_timeline_event_started_at,not null"`
-	Type      string `json:"type" gorm:"index:idx_timeline_event_type,not null"`
-	Payload   string `json:"payload" gorm:"not null,default:'{}'"`
+	ID         int64  `json:"id" gorm:"primaryKey;autoIncrement;not null"`
+	OccurredAt int64  `json:"occurred_at" gorm:"index:idx_timeline_event_occurred_at,not null"`
+	Type       string `json:"type" gorm:"index:idx_timeline_event_type,not null"`
+	Payload    string `json:"payload" gorm:"not null,default:'{}'"`
+	TraceID    string `json:"trace_id" gorm:"index:idx_timeline_event_trace_id"`
 
-	// some events may not have ended_at, like one time action from the user
-	EndedAt *int64 `json:"ended_at" gorm:"index:idx_timeline_event_ended_at"`
-	Tags    []Tag  `json:"tags,omitempty" gorm:"many2many:timeline_event_tag;"`
+	ParentID   *int64  `json:"parent_id" gorm:"index:idx_timeline_event_parent_id"`
+	FinishedAt *int64  `json:"ended_at" gorm:"index:idx_timeline_event_ended_at"`
+	Key        *string `json:"key" gorm:"index:idx_timeline_event_key"`
+
+	// Tags are optional
+	Tags []Tag `json:"tags,omitempty" gorm:"many2many:timeline_event_tag;"`
 }
 
 func NewEvent(eventType string, opts ...EventOption) Event {
 	event := Event{
-		StartedAt: time.Now().UTC().Unix(),
-		Type:      eventType,
+		OccurredAt: time.Now().UTC().Unix(),
+		Type:       eventType,
 	}
 
 	for _, opt := range opts {

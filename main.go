@@ -131,9 +131,12 @@ func main() {
 	identityService := identity.NewService(apiAuthenticatedClient)
 
 	fsService := fs.NewService(configDir)
-	timelineService := timeline.NewService(db)
+	timelineService, err := timeline.NewService(db)
+	if err != nil {
+		log.Fatal("failed to create timeline service: %w", err)
+	}
 
-	usageService, err := usage.NewService(ctx, timelineService, db)
+	usageService, err := usage.NewService(ctx, db, timelineService)
 	if err != nil {
 		log.Fatal("failed to create usage service: %w", err)
 	}
@@ -162,26 +165,20 @@ func main() {
 
 		var (
 			url      *string
-			bundleID *string
 			category *string
 		)
 		if event.URL != "" {
 			url = &event.URL
 		}
-		if event.BundleID != "" {
-			bundleID = &event.BundleID
-		}
 		if event.AppCategory != "" {
 			category = &event.AppCategory
 		}
 
-		appUsage, err := usageService.TitleChanged(
+		err := usageService.TitleChanged(
 			ctx,
-			event.ExecutablePath,
-			event.Title,
 			event.AppName,
+			event.Title,
 			event.Icon,
-			bundleID,
 			url,
 			category,
 		)
@@ -190,8 +187,7 @@ func main() {
 			return
 		}
 
-		handleBlockedUsage(appUsage, event.AppName, event.Title, url)
-
+		// handleBlockedUsage(appUsage, event.AppName, event.Title, url)
 	})
 
 	var updaterService *updater.Service
@@ -452,12 +448,12 @@ type pageTitleChangedPayload struct {
 	WindowID  int     `json:"windowId"`
 	URL       *string `json:"url"`
 	Timestamp string  `json:"timestamp"`
+	Icon      string  `json:"icon"`
 }
 
 type pageTitleClassifiedPayload struct {
-	TabID int                     `json:"tabId"`
-	Title string                  `json:"title"`
-	Usage *usage.ApplicationUsage `json:"usage"`
+	TabID int    `json:"tabId"`
+	Title string `json:"title"`
 }
 
 type pageTitleErrorPayload struct {
@@ -487,13 +483,11 @@ func handleExtensionMessage(ctx context.Context, usageService *usage.Service, ap
 			browserURL = message.URL
 		}
 
-		appUsage, err := usageService.TitleChanged(
+		err := usageService.TitleChanged(
 			ctx,
 			applicationName,
 			message.Title,
-			applicationName,
-			"",
-			nil,
+			message.Icon,
 			browserURL,
 			nil,
 		)
@@ -502,14 +496,14 @@ func handleExtensionMessage(ctx context.Context, usageService *usage.Service, ap
 			return writePageTitleError(conn, message.TabID, err.Error())
 		}
 
-		handleBlockedUsage(appUsage, applicationName, message.Title, browserURL)
+		// handleBlockedUsage(appUsage, applicationName, message.Title, browserURL)
 
 		return conn.WriteJSON(map[string]any{
 			"type": "page_title_classified",
 			"payload": pageTitleClassifiedPayload{
 				TabID: message.TabID,
 				Title: message.Title,
-				Usage: appUsage,
+				// Usage: appUsage,
 			},
 		})
 	default:

@@ -175,7 +175,7 @@ function ActivityPage() {
     itemsList.forEach((item) => {
       // Check if this item is in the whitelist
       // For web content (has hostname): match by hostname only
-      // For native apps (no hostname): match by bundle_id only
+      // For native apps (no hostname): match by app name only
       const whitelistEntry = allowedItems.find((w) => {
         const itemHostname = item.usage.application?.hostname;
         const itemName = item.usage.application?.name;
@@ -293,7 +293,7 @@ function ActivityPage() {
               ) : (
                 filteredBlockedUsages.map((item) => (
                   <BlockedUsageItem
-                    key={item.usage.application?.hostname || item.usage.application?.bundle_id || ""}
+                    key={item.usage.application?.hostname || item.usage.application?.name || ""}
                     item={item}
                   />
                 ))

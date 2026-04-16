@@ -12,10 +12,10 @@ package native
 #include <ApplicationServices/ApplicationServices.h>
 
 // checkAutomationPermission uses AEDeterminePermissionToAutomateTarget to
-// silently check if automation permission for a bundle ID is granted.
+// silently check if automation permission for a application id is granted.
 // Returns 1 if granted, 0 otherwise.
-static int checkAutomationPermission(const char* bundleID) {
-    NSString* bid = [NSString stringWithUTF8String:bundleID];
+static int checkAutomationPermission(const char* appID) {
+    NSString* bid = [NSString stringWithUTF8String:appID];
 
     NSAppleEventDescriptor* targetDesc = [NSAppleEventDescriptor descriptorWithBundleIdentifier:bid];
 
@@ -30,7 +30,7 @@ static int checkAutomationPermission(const char* bundleID) {
 }
 
 // Forward declaration of Go callback
-extern void goOnTitleChange(int pid, char* bundleID, char* title, char* appName, char* executablePath, char* appIcon, char* appCategory);
+extern void goOnTitleChange(int pid, char* appID, char* title, char* appName, char* executablePath, char* appIcon, char* appCategory);
 
 // Global state
 static AXObserverRef gObserver = NULL;
@@ -58,7 +58,15 @@ static void emitTitleChange(pid_t pid, NSString* title) {
     NSRunningApplication* app = [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
     if (!app) return;
 
-    const char* bundleIDStr = [app.bundleIdentifier UTF8String] ?: "unknown";
+    NSString* appIDValue = @"unknown";
+    if (app.bundleURL) {
+        NSBundle* appBundle = [NSBundle bundleWithURL:app.bundleURL];
+        if (appBundle) {
+            NSString* id = [appBundle objectForInfoDictionaryKey:@"CFBundleIdentifier"];
+            if (id) appIDValue = id;
+        }
+    }
+    const char* appIDStr = [appIDValue UTF8String] ?: "unknown";
     const char* titleStr = [title UTF8String] ?: "";
     const char* appNameStr = [app.localizedName UTF8String] ?: "";
     const char* execPathStr = [app.executableURL.path UTF8String] ?: "";
@@ -88,7 +96,7 @@ static void emitTitleChange(pid_t pid, NSString* title) {
     }
     const char* appCategoryC = [appCategoryStr UTF8String] ?: "";
 
-    goOnTitleChange((int)pid, (char*)bundleIDStr, (char*)titleStr, (char*)appNameStr, (char*)execPathStr, (char*)appIconStr, (char*)appCategoryC);
+    goOnTitleChange((int)pid, (char*)appIDStr, (char*)titleStr, (char*)appNameStr, (char*)execPathStr, (char*)appIconStr, (char*)appCategoryC);
 }
 
 // AXObserver callback
@@ -257,10 +265,10 @@ func startObserver() {
 }
 
 //export goOnTitleChange
-func goOnTitleChange(cPID C.int, cBundleID *C.char, cTitle *C.char, cAppName *C.char, cExecutablePath *C.char, cAppIcon *C.char, cAppCategory *C.char) {
+func goOnTitleChange(cPID C.int, cAppID *C.char, cTitle *C.char, cAppName *C.char, cExecutablePath *C.char, cAppIcon *C.char, cAppCategory *C.char) {
 	// Copy C strings to Go strings synchronously (C memory may be freed after return)
 	pid := int(cPID)
-	bundleID := C.GoString(cBundleID)
+	appID := C.GoString(cAppID)
 	title := C.GoString(cTitle)
 	appName := C.GoString(cAppName)
 	executablePath := C.GoString(cExecutablePath)
@@ -271,8 +279,8 @@ func goOnTitleChange(cPID C.int, cBundleID *C.char, cTitle *C.char, cAppName *C.
 		var browserURL string
 
 		// If it's a browser, resolve URL & precise title synchronously via AppleScript
-		if IsBrowser(bundleID) {
-			bURL, bTitle := getBrowserURLAndTitle(bundleID)
+		if IsBrowser(appID) {
+			bURL, bTitle := getBrowserURLAndTitle(appID)
 			browserURL = bURL
 
 			// Override the accessibility API title with the browser's true active tab title.
@@ -289,7 +297,7 @@ func goOnTitleChange(cPID C.int, cBundleID *C.char, cTitle *C.char, cAppName *C.
 			PID:            pid,
 			ExecutablePath: executablePath,
 			AppName:        appName,
-			BundleID:       bundleID,
+			AppID:          appID,
 			Icon:           appIcon,
 			Title:          title,
 			AppIcon:        appIcon,
@@ -314,9 +322,9 @@ func GetIdentity() (string, error) {
 	return fmt.Sprintf("%s:%s:%s", uuid, serial, appSalt), nil
 }
 
-func getBrowserURLAndTitle(bundleID string) (string, string) {
+func getBrowserURLAndTitle(appID string) (string, string) {
 	// Check if this is a supported browser first
-	if !IsBrowser(bundleID) {
+	if !IsBrowser(appID) {
 		return "", ""
 	}
 
@@ -325,7 +333,7 @@ func getBrowserURLAndTitle(bundleID string) (string, string) {
 
 	var script string
 
-	if slices.Contains(safariBasedBundleIDs, bundleID) {
+	if slices.Contains(safariBasedAppIDs, appID) {
 		script = fmt.Sprintf(`tell app id "%s"
 	try
 		set docURL to URL of front document
@@ -334,7 +342,7 @@ func getBrowserURLAndTitle(bundleID string) (string, string) {
 	on error
 		return ""
 	end try
-end tell`, bundleID)
+end tell`, appID)
 	} else {
 		// For Chromium-based browsers, use a more robust script that filters out
 		// automation/headless windows by checking visibility, mode, and dimensions
@@ -357,13 +365,13 @@ end tell`, bundleID)
         end try
     end repeat
     return ""
-end tell`, bundleID)
+end tell`, appID)
 	}
 
 	cmd := exec.CommandContext(ctx, "osascript", "-e", script)
 	output, err := cmd.Output()
 	if err != nil {
-		slog.Error("failed to get browser URL and title", "bundleID", bundleID, "error", err)
+		slog.Error("failed to get browser URL and title", "appID", appID, "error", err)
 		return "", ""
 	}
 
@@ -385,17 +393,17 @@ end tell`, bundleID)
 // // Suppress unused import warning
 // var _ = unsafe.Pointer(nil)
 
-// IsBrowser checks if the given bundleID is a known browser
-func IsBrowser(bundleID string) bool {
-	return slices.Contains(chromeBaseBundleIDs, bundleID) || slices.Contains(safariBasedBundleIDs, bundleID) || bundleID == "com.apple.Safari"
+// IsBrowser checks if the given appID is a known browser
+func IsBrowser(appID string) bool {
+	return slices.Contains(chromeBaseAppIDs, appID) || slices.Contains(safariBasedAppIDs, appID) || appID == "com.apple.Safari"
 }
 
-func getBundleID(appName string) (string, error) {
-	script := fmt.Sprintf(`tell application "%s" to get bundle identifier`, appName)
+func getAppID(appName string) (string, error) {
+	script := fmt.Sprintf(`tell application "%s" to get application id`, appName)
 	cmd := exec.Command("osascript", "-e", script)
 	output, err := cmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("failed to get bundle ID: %w", err)
+		return "", fmt.Errorf("failed to get application id: %w", err)
 	}
 	return strings.TrimSpace(string(output)), nil
 }
@@ -461,21 +469,21 @@ end tell`, appName, targetURL, encodedData)
 	return nil
 }
 
-func minimiseApp(bundleID string) {
-	appleScript := fmt.Sprintf(`set bid to "%s"
+func minimiseApp(appName string) {
+	appleScript := fmt.Sprintf(`set appName to "%s"
 tell application "System Events"
-  tell (first process whose bundle identifier is bid)
+  tell (first process whose name is appName)
     repeat with w in windows
       try
         set value of attribute "AXMinimized" of w to true
       end try
     end repeat
   end tell
-end tell`, bundleID)
+end tell`, appName)
 
 	cmd := exec.Command("osascript", "-e", appleScript)
 	if err := cmd.Run(); err != nil {
-		slog.Error("Failed to minimise app", "bundleID", bundleID, "error", err)
+		slog.Error("Failed to minimise app", "appName", appName, "error", err)
 	}
 }
 
@@ -486,19 +494,19 @@ func BlockApp(appName, title, reason string, tags []string) error {
 }
 
 // CheckAutomationPermission checks whether automation permission for a given
-// bundle ID is already granted, without triggering a TCC prompt.
+// application id is already granted, without triggering a TCC prompt.
 // Returns true if granted, false if denied or not yet asked.
-func CheckAutomationPermission(bundleID string) bool {
-	cBundleID := C.CString(bundleID)
-	defer C.free(unsafe.Pointer(cBundleID))
-	return C.checkAutomationPermission(cBundleID) != 0
+func CheckAutomationPermission(appID string) bool {
+	cAppID := C.CString(appID)
+	defer C.free(unsafe.Pointer(cAppID))
+	return C.checkAutomationPermission(cAppID) != 0
 }
 
 // RequestAutomationPermission runs a harmless AppleScript to intentionally
 // trigger the macOS TCC prompt right away during your onboarding UI.
-func RequestAutomationPermission(bundleID string) bool {
+func RequestAutomationPermission(appID string) bool {
 	// We ask for the 'version' property which exists on almost all macOS apps.
-	script := fmt.Sprintf(`tell application id "%s" to get version`, bundleID)
+	script := fmt.Sprintf(`tell application id "%s" to get version`, appID)
 	cmd := exec.Command("osascript", "-e", script)
 
 	err := cmd.Run()
@@ -518,7 +526,7 @@ func OpenAutomationSettings() {
 	}
 }
 
-var chromeBaseBundleIDs = []string{
+var chromeBaseAppIDs = []string{
 	"com.google.Chrome",
 	"com.google.Chrome.beta",
 	"com.google.Chrome.dev",
@@ -542,7 +550,7 @@ var chromeBaseBundleIDs = []string{
 	"company.thebrowser.Browser",
 }
 
-var safariBasedBundleIDs = []string{
+var safariBasedAppIDs = []string{
 	"com.apple.Safari",
 	"com.apple.SafariTechnologyPreview",
 }

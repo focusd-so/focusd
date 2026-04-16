@@ -145,7 +145,7 @@ tasks:
       CONFIG: '{{.CONFIG | default "Debug"}}'
       DERIVED: '{{.DERIVED | default "build/ios/DerivedData"}}'
       UDID: '{{.UDID}}'         # from `task ios:device:list`
-      BUNDLE_ID: '{{.BUNDLE_ID}}' # e.g., com.yourco.wails.ios.dev
+      APP_ID: '{{.APP_ID}}' # e.g., com.yourco.wails.ios.dev
       TEAM_ID: '{{.TEAM_ID}}'   # optional, if your project is not already set up for signing
     preconditions:
       - sh: xcrun -f xcodebuild
@@ -158,8 +158,8 @@ tasks:
         msg: "Set SCHEME to your app scheme (e.g., SCHEME=ios.dev)."
       - sh: test -n '{{.UDID}}'
         msg: "Set UDID to your device UDID (see: task ios:device:list)."
-      - sh: test -n '{{.BUNDLE_ID}}'
-        msg: "Set BUNDLE_ID to your app's bundle identifier (e.g., com.yourco.wails.ios.dev)."
+      - sh: test -n '{{.APP_ID}}'
+        msg: "Set APP_ID to your app identifier (e.g., com.yourco.wails.ios.dev)."
     cmds:
       - |
         set -euo pipefail
@@ -175,7 +175,7 @@ tasks:
         )
         # Optionally inject signing identifiers if provided
         if [ -n '{{.TEAM_ID}}' ]; then XCB_ARGS+=(DEVELOPMENT_TEAM={{.TEAM_ID}}); fi
-        if [ -n '{{.BUNDLE_ID}}' ]; then XCB_ARGS+=(PRODUCT_BUNDLE_IDENTIFIER={{.BUNDLE_ID}}); fi
+        if [ -n '{{.APP_ID}}' ]; then XCB_ARGS+=(PRODUCT_BUNDLE_IDENTIFIER={{.APP_ID}}); fi
         xcodebuild "${XCB_ARGS[@]}" build | xcpretty || true
         # If xcpretty isn't installed, run without it
         if [ "${PIPESTATUS[0]}" -ne 0 ]; then
@@ -189,5 +189,5 @@ tasks:
         fi
         echo "Installing: $APP_PATH"
         xcrun devicectl device install app --device "{{.UDID}}" "$APP_PATH"
-        echo "Launching: {{.BUNDLE_ID}}"
-        xcrun devicectl device process launch --device "{{.UDID}}" --stderr console --stdout console "{{.BUNDLE_ID}}"
+        echo "Launching: {{.APP_ID}}"
+        xcrun devicectl device process launch --device "{{.UDID}}" --stderr console --stdout console "{{.APP_ID}}"

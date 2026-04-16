@@ -8,7 +8,7 @@ import (
 )
 
 func TestEventFilters(t *testing.T) {
-	harness := newTimelineHarness(t)
+	harness := NewHarness(t)
 	now := time.Now().UTC()
 
 	// Seed data
@@ -19,39 +19,52 @@ func TestEventFilters(t *testing.T) {
 		{
 			eventType: "app_usage",
 			opts: []EventOption{
-				WithStartedAt(now.Add(-10 * time.Hour)),
-				WithEndedAt(now.Add(-9 * time.Hour)),
-				WithTags(NewTag("vscode", "default"), NewTag("productivity", "default")),
+				WithOccurredAt(now.Add(-10 * time.Hour)),
+				WithFinishedAt(now.Add(-9 * time.Hour)),
+				WithTags(
+					NewTag("vscode", "default"),
+					NewTag("productivity", "default"),
+				),
 			},
 		},
 		{
 			eventType: "app_usage",
 			opts: []EventOption{
-				WithStartedAt(now.Add(-8 * time.Hour)),
-				WithEndedAt(now.Add(-7 * time.Hour)),
-				WithTags(NewTag("slack", "default"), NewTag("communication", "default")),
+				WithOccurredAt(now.Add(-8 * time.Hour)),
+				WithFinishedAt(now.Add(-7 * time.Hour)),
+				WithTags(
+					NewTag("slack", "default"),
+					NewTag("communication", "default"),
+				),
 			},
 		},
 		{
 			eventType: "website_visit",
 			opts: []EventOption{
-				WithStartedAt(now.Add(-6 * time.Hour)),
-				WithEndedAt(now.Add(-5 * time.Hour)),
-				WithTags(NewTag("github", "default"), NewTag("productivity", "default")),
+				WithOccurredAt(now.Add(-6 * time.Hour)),
+				WithFinishedAt(now.Add(-5 * time.Hour)),
+				WithTags(
+					NewTag("github", "default"),
+					NewTag("productivity", "default"),
+				),
 			},
 		},
 		{
 			eventType: "focus_session",
 			opts: []EventOption{
-				WithStartedAt(now.Add(-2 * time.Hour)), // Active event
-				WithTags(NewTag("deep_work", "default")),
+				WithOccurredAt(now.Add(-2 * time.Hour)), // Active event
+				WithTags(
+					NewTag("deep_work", "default"),
+				),
 			},
 		},
 		{
 			eventType: "focus_session",
 			opts: []EventOption{
-				WithStartedAt(now.Add(-1 * time.Hour)), // Active event
-				WithTags(NewTag("learning", "default")),
+				WithOccurredAt(now.Add(-1 * time.Hour)), // Active event
+				WithTags(
+					NewTag("learning", "default"),
+				),
 			},
 		},
 	}
@@ -114,12 +127,12 @@ func TestEventFilters(t *testing.T) {
 	})
 
 	t.Run("OrderBy", func(t *testing.T) {
-		ascEvents := harness.ListEvents(OrderByStartedAtAsc(), Limit(1))
+		ascEvents := harness.ListEvents(OrderByOccurredAtAsc(), Limit(1))
 		require.Len(t, ascEvents, 1)
 		require.Equal(t, "app_usage", ascEvents[0].Type)
 		require.Equal(t, []string{"vscode", "productivity"}, ascEvents[0].TagsSlice())
 
-		descEvents := harness.ListEvents(OrderByStartedAtDesc(), Limit(1))
+		descEvents := harness.ListEvents(OrderByOccurredAtDesc(), Limit(1))
 		require.Len(t, descEvents, 1)
 		require.Equal(t, "focus_session", descEvents[0].Type)
 		require.Equal(t, []string{"learning"}, descEvents[0].TagsSlice())

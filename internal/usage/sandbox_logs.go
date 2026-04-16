@@ -1,43 +1,43 @@
 package usage
 
-import (
-	"time"
-)
+import "github.com/focusd-so/focusd/internal/timeline"
 
 // GetSandboxExecutionLogs retrieves paginated sandbox execution logs from the database.
 // It supports fuzzy search on context and response fields, and filtering by log type.
 // Only returns logs from the last 7 days.
-func (s *Service) GetSandboxExecutionLogs(logType string, search string, page, pageSize int) ([]SandboxExecutionLog, error) {
-	if pageSize <= 0 {
-		pageSize = 50
-	}
-	if page < 0 {
-		page = 0
-	}
+func (s *Service) GetSandboxExecutionLogs(logType string, search string, page, pageSize int) ([]*timeline.Event, error) {
+	// TODO: use timeline package to get sandbox execution logs
+	return nil, nil
+	// if pageSize <= 0 {
+	// 	pageSize = 50
+	// }
+	// if page < 0 {
+	// 	page = 0
+	// }
 
-	sevenDaysAgo := time.Now().Add(-7 * 24 * time.Hour).Unix()
+	// sevenDaysAgo := time.Now().Add(-7 * 24 * time.Hour).Unix()
 
-	query := s.db.Where("created_at >= ?", sevenDaysAgo)
+	// query := s.db.Where("created_at >= ?", sevenDaysAgo)
 
-	if logType != "" {
-		query = query.Where("type = ?", logType)
-	}
+	// if logType != "" {
+	// 	query = query.Where("type = ?", logType)
+	// }
 
-	if search != "" {
-		likePattern := "%" + search + "%"
-		query = query.Where("context LIKE ? OR response LIKE ? OR logs LIKE ?", likePattern, likePattern, likePattern)
-	}
+	// if search != "" {
+	// 	likePattern := "%" + search + "%"
+	// 	query = query.Where("context LIKE ? OR response LIKE ? OR logs LIKE ?", likePattern, likePattern, likePattern)
+	// }
 
-	var logs []SandboxExecutionLog
-	err := query.
-		Order("created_at DESC").
-		Offset(page * pageSize).
-		Limit(pageSize).
-		Find(&logs).Error
+	// var logs []SandboxExecutionLog
+	// err := query.
+	// 	Order("created_at DESC").
+	// 	Offset(page * pageSize).
+	// 	Limit(pageSize).
+	// 	Find(&logs).Error
 
-	if err != nil {
-		return nil, err
-	}
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	return logs, nil
+	// return logs, nil
 }

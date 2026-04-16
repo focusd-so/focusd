@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -22,15 +23,15 @@ import (
 	"google.golang.org/api/option"
 )
 
-func (s *Service) ClassifyWithLLM(ctx context.Context, appName, title string, url, bundleID, appCategory *string) (*ClassificationResponse, error) {
+func (s *Service) ClassifyWithLLM(ctx context.Context, appName, title string, url *url.URL, appCategory *string) (*LLMClassificationResult, error) {
 	if url != nil {
-		return s.classifyWebsite(ctx, *url, title)
+		return s.classifyWebsite(ctx, url, title)
 	}
 
-	return s.classifyApplication(ctx, appName, title, bundleID, appCategory)
+	return s.classifyApplication(ctx, appName, title, appCategory)
 }
 
-func classify(ctx context.Context, instructions, input string) (*ClassificationResponse, error) {
+func classify(ctx context.Context, instructions, input string) (*LLMClassificationResult, error) {
 	switch settings.GetConfig().ClassificationLLMProvider {
 	case settings.LLMProviderGoogle:
 		return classifyWithGemini(ctx, instructions, input)
@@ -45,7 +46,7 @@ func classify(ctx context.Context, instructions, input string) (*ClassificationR
 		if resp == "" {
 			return nil, errors.New("dummy_classification_response is not set")
 		}
-		var classification ClassificationResponse
+		var classification LLMClassificationResult
 		if err := json.Unmarshal([]byte(resp), &classification); err != nil {
 			return nil, err
 		}
@@ -72,7 +73,7 @@ func newSignedLLMHTTPClient() *http.Client {
 	}
 }
 
-func classifyWithGemini(ctx context.Context, instructions, input string) (*ClassificationResponse, error) {
+func classifyWithGemini(ctx context.Context, instructions, input string) (*LLMClassificationResult, error) {
 	// Use the strongest current non-reasoning Gemini model.
 	models := map[apiv1.DeviceHandshakeResponse_AccountTier]string{
 		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_UNSPECIFIED: "gemini-2.5-flash-lite",
@@ -101,7 +102,7 @@ func classifyWithGemini(ctx context.Context, instructions, input string) (*Class
 	return classifyWithLLM(ctx, model, instructions, input)
 }
 
-func classifyWithOpenAI(ctx context.Context, instructions, input string) (*ClassificationResponse, error) {
+func classifyWithOpenAI(ctx context.Context, instructions, input string) (*LLMClassificationResult, error) {
 	// Use the strongest current non-reasoning OpenAI model.
 	models := map[apiv1.DeviceHandshakeResponse_AccountTier]string{
 		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_UNSPECIFIED: "gpt-4.1",
@@ -124,7 +125,7 @@ func classifyWithOpenAI(ctx context.Context, instructions, input string) (*Class
 	return classifyWithLLM(ctx, model, instructions, input)
 }
 
-func classifyWithAnthropic(ctx context.Context, instructions, input string) (*ClassificationResponse, error) {
+func classifyWithAnthropic(ctx context.Context, instructions, input string) (*LLMClassificationResult, error) {
 	// Use the strongest current non-reasoning Claude model.
 	models := map[apiv1.DeviceHandshakeResponse_AccountTier]string{
 		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_UNSPECIFIED: "claude-sonnet-4-5",
@@ -147,7 +148,7 @@ func classifyWithAnthropic(ctx context.Context, instructions, input string) (*Cl
 	return classifyWithLLM(ctx, model, instructions, input)
 }
 
-func classifyWithGrok(ctx context.Context, instructions, input string) (*ClassificationResponse, error) {
+func classifyWithGrok(ctx context.Context, instructions, input string) (*LLMClassificationResult, error) {
 	// Use the strongest current non-reasoning Grok model.
 	models := map[apiv1.DeviceHandshakeResponse_AccountTier]string{
 		apiv1.DeviceHandshakeResponse_ACCOUNT_TIER_UNSPECIFIED: "grok-4.20-beta-latest-non-reasoning",
@@ -170,7 +171,7 @@ func classifyWithGrok(ctx context.Context, instructions, input string) (*Classif
 	return classifyWithLLM(ctx, model, instructions, input)
 }
 
-func classifyWithLLM(ctx context.Context, model llms.Model, instructions, input string) (*ClassificationResponse, error) {
+func classifyWithLLM(ctx context.Context, model llms.Model, instructions, input string) (*LLMClassificationResult, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -193,7 +194,7 @@ func classifyWithLLM(ctx context.Context, model llms.Model, instructions, input 
 
 	slog.Info("LLM classification response", "resp", text)
 
-	var response ClassificationResponse
+	var response LLMClassificationResult
 
 	if err := json.Unmarshal([]byte(text), &response); err != nil {
 		return nil, err
@@ -201,13 +202,13 @@ func classifyWithLLM(ctx context.Context, model llms.Model, instructions, input 
 
 	switch settings.GetConfig().ClassificationLLMProvider {
 	case settings.LLMProviderGoogle:
-		response.ClassificationSource = ClassificationSourceCloudLLMGemini
+		response.ClassificationSource = ClassificationSourceLLMGemini
 	case settings.LLMProviderOpenAI:
-		response.ClassificationSource = ClassificationSourceCloudLLMOpenAI
+		response.ClassificationSource = ClassificationSourceLLMOpenAI
 	case settings.LLMProviderAnthropic:
-		response.ClassificationSource = ClassificationSourceCloudLLMAnthropic
+		response.ClassificationSource = ClassificationSourceLLMAnthropic
 	case settings.LLMProviderGroq:
-		response.ClassificationSource = ClassificationSourceCloudLLMGroq
+		response.ClassificationSource = ClassificationSourceLLMGroq
 	}
 
 	return &response, nil
