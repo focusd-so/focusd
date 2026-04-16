@@ -80,7 +80,7 @@ func (s *Service) ProtectionResume(reason string) error {
 
 	event.FinishedAt = new(time.Now().Unix())
 
-	if s.timelineService.UpdateEvent(event); err != nil {
+	if err := s.timelineService.UpdateEvent(event); err != nil {
 		return fmt.Errorf("updating event: %w", err)
 	}
 
@@ -167,9 +167,22 @@ func (s *Service) AllowGetAll() ([]*timeline.Event, error) {
 //
 // Returns an error if the deletion fails.
 func (s *Service) AllowRemove(id int64) error {
-	// return s.db.Delete(&timeline.Event{}, id).Error
+	allowed, err := s.timelineService.ListEvents(
+		timeline.ByTypes(EventTypeAllowUsage),
+		timeline.ActiveOnly(),
+	)
+	if err != nil {
+		return err
+	}
 
-	// TODO: use timeline service to remove an event by accessing the db directly
+	for _, event := range allowed {
+		if event.ID != id {
+			continue
+		}
+
+		return s.timelineService.EventFinished(event)
+	}
+
 	return nil
 }
 

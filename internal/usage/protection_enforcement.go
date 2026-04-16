@@ -40,6 +40,17 @@ func (s *Service) CalculateEnforcement(
 	browserURL *url.URL,
 	classification Classification,
 ) (EnforcementResult, error) {
+	// global pause takes precedence over any other decision.
+	if paused, _ := s.isProtectionPaused(); paused {
+		return EnforcementResult{
+			StandardEnforcementResult: &BasicEnforcementResult{
+				Action: EnforcementActionPaused,
+				Reason: "focus protection is temporarily paused by user",
+				Source: EnforcementSourcePaused,
+			},
+		}, nil
+	}
+
 	// when a usage is explicitly allowed, allow it!
 	if allowed, _ := s.isAllowed(appName, browserURL); allowed {
 		return EnforcementResult{
@@ -81,6 +92,15 @@ func (s *Service) CalculateEnforcement(
 		CustomRulesEnforcementResult: customRulesDecision,
 		StandardEnforcementResult:    standardEnforcementResult,
 	}, nil
+}
+
+func (s *Service) isProtectionPaused() (bool, error) {
+	event, err := s.timelineService.GetActiveEventOfType(EventTypeProtectionPause)
+	if err != nil {
+		return false, fmt.Errorf("failed to get active protection pause event: %w", err)
+	}
+
+	return event != nil, nil
 }
 
 func (s *Service) isAllowed(appName string, browserURL *url.URL) (bool, error) {
@@ -160,14 +180,17 @@ func (s *Service) calculateEnforcementCustomRules(sandboxCtx sandboxContext) (*C
 	customRulesTracePayload.Logs = result.Logs
 	customRulesTracePayload.Output = result.Output
 
-	var decision BasicEnforcementResult
+	var decision struct {
+		Action string `json:"enforcementAction"`
+		Reason string `json:"enforcementReason"`
+	}
 	if err := json.Unmarshal([]byte(result.Output), &decision); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal enforcement decision: %w", err)
 	}
 
 	return &CustomRulesEnforcementResult{
 		BasicEnforcementResult: BasicEnforcementResult{
-			Action: decision.Action,
+			Action: EnforcementAction(decision.Action),
 			Reason: decision.Reason,
 			Source: EnforcementSourceCustomRules,
 		},

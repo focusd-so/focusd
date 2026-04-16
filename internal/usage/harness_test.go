@@ -212,6 +212,22 @@ func (h *usageHarness) AllowApp(appName string, duration time.Duration) *usageHa
 	return h
 }
 
+func (h *usageHarness) AllowWebsite(rawURL string, duration time.Duration) *usageHarness {
+	h.t.Helper()
+	err := h.service.AllowHostname(rawURL, duration)
+	require.NoError(h.t, err)
+
+	return h
+}
+
+func (h *usageHarness) AllowURL(rawURL string, duration time.Duration) *usageHarness {
+	h.t.Helper()
+	err := h.service.AllowURL(rawURL, duration)
+	require.NoError(h.t, err)
+
+	return h
+}
+
 func (h *usageHarness) AssertApplicationCount(expected int) *usageHarness {
 	h.t.Helper()
 
