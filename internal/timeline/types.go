@@ -5,17 +5,13 @@ import (
 )
 
 type Event struct {
-	ID         int64  `json:"id" gorm:"primaryKey;autoIncrement;not null"`
-	OccurredAt int64  `json:"occurred_at" gorm:"index:idx_timeline_event_occurred_at,not null"`
-	Type       string `json:"type" gorm:"index:idx_timeline_event_type,not null"`
-	Payload    string `json:"payload" gorm:"not null,default:'{}'"`
-	TraceID    string `json:"trace_id" gorm:"index:idx_timeline_event_trace_id"`
-
-	ParentID   *int64  `json:"parent_id" gorm:"index:idx_timeline_event_parent_id"`
+	ID         int64   `json:"id" gorm:"primaryKey;autoIncrement;not null"`
+	OccurredAt int64   `json:"occurred_at" gorm:"index:idx_timeline_event_occurred_at,not null"`
+	Type       string  `json:"type" gorm:"index:idx_timeline_event_type,not null"`
+	Payload    string  `json:"payload" gorm:"not null,default:'{}'"`
 	FinishedAt *int64  `json:"ended_at" gorm:"index:idx_timeline_event_ended_at"`
 	Key        *string `json:"key" gorm:"index:idx_timeline_event_key"`
 
-	// Tags are optional
 	Tags []Tag `json:"tags,omitempty" gorm:"many2many:timeline_event_tag;"`
 }
 

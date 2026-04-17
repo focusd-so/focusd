@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/focusd-so/focusd/internal/timeline"
+	"github.com/google/uuid"
 )
 
 type ApplicationUsagePayload struct {
@@ -36,7 +37,7 @@ func (s *Service) IdleChanged(ctx context.Context, isIdle bool) error {
 	defer s.mu.Unlock()
 
 	// Get the current active usage or idle event
-	event, err := s.timelineService.GetActiveEventOfTypes([]string{EventTypeUsageChanged, EventTypeUserIdleChanged})
+	event, err := s.timelineService.GetActiveEventOfTypes(EventTypeUsageChanged, EventTypeUserIdleChanged)
 	if err != nil {
 		return err
 	}
@@ -83,9 +84,21 @@ func (s *Service) TitleChanged(ctx context.Context, appName, windowTitle, icon s
 		return fmt.Errorf("failed to get or create application: %w", err)
 	}
 
-	usageKey := fmt.Sprintf("app:%s,window:%s,url:%s", application.Name, windowTitle, fromPtr(browserURL))
+	usageKeyUUID := uuid.NewSHA1(uuid.NameSpaceURL, []byte(fmt.Sprintf("app:%s,window:%s,url:%s", application.Name, windowTitle, fromPtr(browserURL))))
 
-	base64UsageKey := base64.StdEncoding.EncodeToString([]byte(usageKey))
+	lastEvent, err := s.timelineService.GetActiveEventOfTypes(EventTypeUsageChanged, EventTypeUserIdleChanged)
+	if err != nil {
+		slog.Warn("failed to get last event", "error", err)
+	}
+
+	if lastEvent != nil {
+		if fromPtr(lastEvent.Key) == usageKeyUUID.String() && usageKeyUUID.String() != "" {
+			return nil
+		}
+		if err := s.timelineService.EventFinished(lastEvent); err != nil {
+			return fmt.Errorf("failed to finish last event: %w", err)
+		}
+	}
 
 	payload := ApplicationUsagePayload{WindowTitle: windowTitle, ApplicationID: application.ID}
 	if normalizedURL != nil {
@@ -94,7 +107,7 @@ func (s *Service) TitleChanged(ctx context.Context, appName, windowTitle, icon s
 
 	event, err := s.timelineService.CreateEvent(
 		EventTypeUsageChanged,
-		timeline.WithKey(base64UsageKey),
+		timeline.WithKey(usageKeyUUID.String()),
 		timeline.WithPayload(payload),
 	)
 	if err != nil {
@@ -110,6 +123,12 @@ func (s *Service) TitleChanged(ctx context.Context, appName, windowTitle, icon s
 	payload.Classification = classificationResult.Classification()
 	payload.ClassificationSource = classificationResult.ClassificationSource()
 	payload.ClassificationReason = classificationResult.ClassificationReason()
+
+	for _, tag := range classificationResult.Tags() {
+		event.Tags = append(event.Tags, timeline.NewTag(tag, TagTypeClassificationTag))
+	}
+
+	event.Tags = append(event.Tags, timeline.NewTag(string(classificationResult.Classification()), TagTypeClassification))
 
 	if err := s.timelineService.UpdateEvent(&event, timeline.WithPayload(payload)); err != nil {
 		return err

@@ -844,7 +844,7 @@ export function mockSandboxLogEvents(logType: string, search: string): TimelineE
       return new TimelineEvent({
         id: nextMockEventId(),
         occurred_at: occurredAt,
-        type: "custom_rules_trace",
+        type: "classification",
         payload: JSON.stringify(payload),
         trace_id: "",
         parent_id: null,

@@ -73,7 +73,7 @@ func TestIdleChanged_Transitions(t *testing.T) {
 		h.TitleChanged("Google Chrome", "Google", new("https://www.google.com"))
 
 		active, err := h.timelineService.GetActiveEventOfTypes(
-			[]string{usage.EventTypeUsageChanged, usage.EventTypeUserIdleChanged},
+			usage.EventTypeUsageChanged, usage.EventTypeUserIdleChanged,
 		)
 		require.NoError(t, err)
 		require.NotNil(t, active)

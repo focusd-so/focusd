@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Service struct {
@@ -83,20 +84,35 @@ func (s Service) EventFinished(event *Event) error {
 	return s.UpdateEvent(event, WithFinishedAt(time.Now()))
 }
 
-func (s Service) UpdateEvent(e *Event, opts ...EventOption) error {
+func (s Service) UpdateEvent(event *Event, opts ...EventOption) error {
 	for _, opt := range opts {
-		opt(e)
-	}
-
-	if err := s.db.Save(e).Error; err != nil {
-		return err
+		opt(event)
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for _, sub := range s.onEvent[e.Type] {
-		sub(e)
+	if len(event.Tags) > 0 {
+		for i := range event.Tags {
+			tag := &event.Tags[i]
+
+			onConflict := clause.OnConflict{
+				Columns:   []clause.Column{{Name: "name"}, {Name: "type"}},
+				DoNothing: true,
+			}
+
+			if err := s.db.Clauses(onConflict).FirstOrCreate(tag).Error; err != nil {
+				return fmt.Errorf("failed to upsert tag %q (%q): %w", tag.Name, tag.Type, err)
+			}
+		}
+	}
+
+	if err := s.db.Save(event).Error; err != nil {
+		return fmt.Errorf("failed to save event: %w", err)
+	}
+
+	for _, sub := range s.onEvent[event.Type] {
+		sub(event)
 	}
 
 	return nil
@@ -116,11 +132,11 @@ func (s Service) ListEvents(opts ...EventFilterOption) ([]*Event, error) {
 
 // GetActiveEventOfType returns the last active event of requested type.
 func (s Service) GetActiveEventOfType(eventType string) (*Event, error) {
-	return s.GetActiveEventOfTypes([]string{eventType})
+	return s.GetActiveEventOfTypes(eventType)
 }
 
 // GetActiveEventOfTypes returns the last active event cross requested types.
-func (s Service) GetActiveEventOfTypes(eventTypes []string) (*Event, error) {
+func (s Service) GetActiveEventOfTypes(eventTypes ...string) (*Event, error) {
 	if len(eventTypes) == 0 {
 		return nil, nil
 	}

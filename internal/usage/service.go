@@ -76,3 +76,16 @@ func (s *Service) removeOldSandboxExecutionLogs(ctx context.Context) error {
 
 	return nil
 }
+
+func (s *Service) CloseLastActiveUsageEvent() error {
+	lastEvent, err := s.timelineService.GetActiveEventOfTypes(EventTypeUsageChanged, EventTypeUserIdleChanged)
+	if err != nil {
+		return err
+	}
+
+	if lastEvent != nil {
+		return s.timelineService.EventFinished(lastEvent)
+	}
+
+	return nil
+}

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
-	"time"
 
 	"github.com/focusd-so/focusd/internal/sandbox"
 	"github.com/focusd-so/focusd/internal/settings"
@@ -133,52 +132,12 @@ func (s *Service) isAllowed(appName string, browserURL *url.URL) (bool, error) {
 }
 
 func (s *Service) calculateEnforcementCustomRules(sandboxCtx sandboxContext) (*CustomRulesEnforcementResult, error) {
-	contextJSON, err := json.Marshal(sandboxCtx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal sandbox context: %w", err)
-	}
 
-	customRulesEvent, err := s.timelineService.CreateEvent(
-		EventTypeCustomRulesTrace,
-		timeline.WithPayload(CustomRulesTracePayload{
-			Context: string(contextJSON),
-		}),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create custom rules trace event: %w", err)
-	}
-
-	customRulesTracePayload := CustomRulesTracePayload{
-		Context: string(contextJSON),
-	}
-
-	result, err := s.executeEnforcementCustomRules(sandboxCtx)
-
-	if result != nil {
-		customRulesTracePayload.Logs = result.Logs
-		customRulesTracePayload.Output = result.Output
-	}
-
-	defer func() {
-		s.timelineService.UpdateEvent(
-			&customRulesEvent,
-			timeline.WithPayload(customRulesTracePayload),
-			timeline.WithFinishedAt(time.Now()),
-		)
-	}()
-
-	if err != nil {
-		customRulesTracePayload.Error = err.Error()
-
-		return nil, err
-	}
+	result, sandboxErr := s.executeEnforcementCustomRules(sandboxCtx)
 
 	if result == nil || result.Output == "" || result.Output == "null" || result.Output == "undefined" {
 		return nil, nil
 	}
-
-	customRulesTracePayload.Logs = result.Logs
-	customRulesTracePayload.Output = result.Output
 
 	var decision struct {
 		Action string `json:"enforcementAction"`
@@ -188,12 +147,21 @@ func (s *Service) calculateEnforcementCustomRules(sandboxCtx sandboxContext) (*C
 		return nil, fmt.Errorf("failed to unmarshal enforcement decision: %w", err)
 	}
 
+	contextJSON, err := json.Marshal(sandboxCtx)
+	if err != nil {
+		slog.Warn("failed to marshal sandbox context", "error", err)
+	}
+
 	return &CustomRulesEnforcementResult{
 		BasicEnforcementResult: BasicEnforcementResult{
 			Action: EnforcementAction(decision.Action),
 			Reason: decision.Reason,
 			Source: EnforcementSourceCustomRules,
 		},
+		SandboLogs:     result.Logs,
+		SanboxOutput:   &result.Output,
+		SandboxContext: new(string(contextJSON)),
+		SandboxError:   new(string(sandboxErr.Error())),
 	}, nil
 }
 

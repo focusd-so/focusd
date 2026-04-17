@@ -34,9 +34,11 @@ const (
 	ClassificationNeutral     Classification = "neutral"
 	ClassificationSystem      Classification = "system"
 
+	TagTypeClassificationTag = "classification_tag"
+	TagTypeClassification    = "classification"
+
 	EventTypeProtectionStatusChanged = "protection_status_changed"
 	EventTypeAllowUsage              = "allow_usage"
-	EventTypeCustomRulesTrace        = "custom_rules_trace"
 	EventTypeUsageChanged            = "usage_changed"
 	EventTypeUserIdleChanged         = "user_idle_changed"
 )
@@ -131,6 +133,17 @@ func (cr ClassificationResult) ClassificationReason() string {
 		return cr.ObviouslyClassificationResult.ClassificationReason
 	default:
 		return cr.LLMClassificationResult.ClassificationReason
+	}
+}
+
+func (cr ClassificationResult) Tags() []string {
+	switch cr.ClassificationSource() {
+	case ClassificationSourceCustomRules:
+		return cr.CustomRulesClassificationResult.Tags
+	case ClassificationSourceObviously:
+		return cr.ObviouslyClassificationResult.Tags
+	default:
+		return cr.LLMClassificationResult.Tags
 	}
 }
 

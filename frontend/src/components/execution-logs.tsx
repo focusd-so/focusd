@@ -104,7 +104,7 @@ function eventToLogView(event: TimelineEvent): SandboxLogView {
   // classification / enforcement_action will land in the event "type" tag.
   return {
     id: event.id,
-    type: event.type === "custom_rules_trace" ? "classification" : event.type,
+    type: event.type,
     created_at: event.occurred_at,
     context: payload.context ?? "",
     response: payload.resp ?? "",

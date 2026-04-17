@@ -253,7 +253,7 @@ func (h *usageHarness) AssertApplicationExists(appName string) *usageHarness {
 func (h *usageHarness) AssertLastActiveEvent(types []string, fn func(*timeline.Event)) *usageHarness {
 	h.t.Helper()
 
-	event, err := h.timelineService.GetActiveEventOfTypes(types)
+	event, err := h.timelineService.GetActiveEventOfTypes(types...)
 	require.NoError(h.t, err)
 
 	fn(event)
