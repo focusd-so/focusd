@@ -22,28 +22,28 @@ func TestIdleChanged_Transitions(t *testing.T) {
 		h.TitleChanged("Google Chrome", "Google", new("https://www.google.com")).
 			AssertApplicationCount(1).
 			AssertApplicationExists("google.com").
-			AssertLastActiveEvent([]string{usage.EventTypeUsageChanged, usage.EventTypeUserIdle}, func(e *timeline.Event) {
+			AssertLastActiveEvent([]string{usage.EventTypeUsageChanged, usage.EventTypeUserIdleChanged}, func(e *timeline.Event) {
 				require.Equal(t, usage.EventTypeUsageChanged, e.Type)
 				require.Nil(t, e.FinishedAt)
 			}).
 			Await(1*time.Second).
 			EnterIdle().
-			AssertPreviousEvent([]string{usage.EventTypeUsageChanged, usage.EventTypeUserIdle}, func(e *timeline.Event) {
+			AssertPreviousEvent([]string{usage.EventTypeUsageChanged, usage.EventTypeUserIdleChanged}, func(e *timeline.Event) {
 				require.Equal(t, usage.EventTypeUsageChanged, e.Type)
 				require.NotNil(t, e.FinishedAt)
 			}).
-			AssertLastActiveEvent([]string{usage.EventTypeUsageChanged, usage.EventTypeUserIdle}, func(e *timeline.Event) {
-				require.Equal(t, usage.EventTypeUserIdle, e.Type)
+			AssertLastActiveEvent([]string{usage.EventTypeUsageChanged, usage.EventTypeUserIdleChanged}, func(e *timeline.Event) {
+				require.Equal(t, usage.EventTypeUserIdleChanged, e.Type)
 				require.Nil(t, e.FinishedAt)
 			}).
 			Await(1*time.Second).
 			TitleChanged("Google Chrome", "Google", new("https://www.linkedin.com")).
 			AssertApplicationExists("linkedin.com").
-			AssertPreviousEvent([]string{usage.EventTypeUserIdle, usage.EventTypeUsageChanged}, func(e *timeline.Event) {
-				require.Equal(t, usage.EventTypeUserIdle, e.Type)
+			AssertPreviousEvent([]string{usage.EventTypeUserIdleChanged, usage.EventTypeUsageChanged}, func(e *timeline.Event) {
+				require.Equal(t, usage.EventTypeUserIdleChanged, e.Type)
 				require.NotNil(t, e.FinishedAt)
 			}).
-			AssertLastActiveEvent([]string{usage.EventTypeUsageChanged, usage.EventTypeUserIdle}, func(e *timeline.Event) {
+			AssertLastActiveEvent([]string{usage.EventTypeUsageChanged, usage.EventTypeUserIdleChanged}, func(e *timeline.Event) {
 				require.Equal(t, usage.EventTypeUsageChanged, e.Type)
 				require.Nil(t, e.FinishedAt)
 			})
@@ -53,16 +53,16 @@ func TestIdleChanged_Transitions(t *testing.T) {
 		h.TitleChanged("Google Chrome", "Google", new("https://www.google.com")).
 			Await(1*time.Second).
 			EnterIdle().
-			AssertLastActiveEvent([]string{usage.EventTypeUserIdle, usage.EventTypeUsageChanged}, func(e *timeline.Event) {
-				require.Equal(t, usage.EventTypeUserIdle, e.Type)
+			AssertLastActiveEvent([]string{usage.EventTypeUserIdleChanged, usage.EventTypeUsageChanged}, func(e *timeline.Event) {
+				require.Equal(t, usage.EventTypeUserIdleChanged, e.Type)
 				require.Nil(t, e.FinishedAt)
 			}).
 			EnterIdle().
-			AssertLastActiveEvent([]string{usage.EventTypeUserIdle, usage.EventTypeUsageChanged}, func(e *timeline.Event) {
-				require.Equal(t, usage.EventTypeUserIdle, e.Type)
+			AssertLastActiveEvent([]string{usage.EventTypeUserIdleChanged, usage.EventTypeUsageChanged}, func(e *timeline.Event) {
+				require.Equal(t, usage.EventTypeUserIdleChanged, e.Type)
 				require.Nil(t, e.FinishedAt)
 			}).
-			AssertPreviousEvent([]string{usage.EventTypeUserIdle, usage.EventTypeUsageChanged}, func(e *timeline.Event) {
+			AssertPreviousEvent([]string{usage.EventTypeUserIdleChanged, usage.EventTypeUsageChanged}, func(e *timeline.Event) {
 				require.Equal(t, usage.EventTypeUsageChanged, e.Type)
 				require.NotNil(t, e.FinishedAt)
 			})
@@ -73,19 +73,19 @@ func TestIdleChanged_Transitions(t *testing.T) {
 		h.TitleChanged("Google Chrome", "Google", new("https://www.google.com"))
 
 		active, err := h.timelineService.GetActiveEventOfTypes(
-			[]string{usage.EventTypeUsageChanged, usage.EventTypeUserIdle},
+			[]string{usage.EventTypeUsageChanged, usage.EventTypeUserIdleChanged},
 		)
 		require.NoError(t, err)
 		require.NotNil(t, active)
 		require.NoError(t, h.timelineService.EventFinished(active))
 
-		before, err := h.timelineService.ListEvents(timeline.ByTypes(usage.EventTypeUserIdle))
+		before, err := h.timelineService.ListEvents(timeline.ByTypes(usage.EventTypeUserIdleChanged))
 		require.NoError(t, err)
 
 		err = h.service.IdleChanged(context.Background(), true)
 		require.NoError(t, err)
 
-		after, err := h.timelineService.ListEvents(timeline.ByTypes(usage.EventTypeUserIdle))
+		after, err := h.timelineService.ListEvents(timeline.ByTypes(usage.EventTypeUserIdleChanged))
 		require.NoError(t, err)
 		require.Len(t, after, len(before)) // no new idle event
 	})

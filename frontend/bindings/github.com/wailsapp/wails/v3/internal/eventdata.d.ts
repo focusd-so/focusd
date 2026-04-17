@@ -7,15 +7,15 @@ import type { Events } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import type * as usage$0 from "../../../../focusd-so/focusd/internal/usage/models.js";
+import type * as timeline$0 from "../../../../focusd-so/focusd/internal/timeline/models.js";
 
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
             "authctx:updated": any;
-            "daily-summary:ready": usage$0.LLMDailySummary;
-            "protection:status": usage$0.ProtectionPause;
-            "usage:update": usage$0.ApplicationUsage | null;
+            "protection_status_changed": timeline$0.Event | null;
+            "usage_changed": timeline$0.Event | null;
+            "user_idle_changed": timeline$0.Event | null;
         }
     }
 }

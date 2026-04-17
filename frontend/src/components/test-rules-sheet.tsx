@@ -28,7 +28,9 @@ import {
   IconTag,
 } from "@tabler/icons-react";
 import { TestClassifyCustomRules, GetSandboxExecutionLogs } from "../../bindings/github.com/focusd-so/focusd/internal/usage/service";
-import type { ClassificationResponse, SandboxExecutionLog } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
+import type { CustomRulesClassificationResult, CustomRulesTracePayload } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
+import type { Event as TimelineEvent } from "../../bindings/github.com/focusd-so/focusd/internal/timeline/models";
+import { parsePayload } from "@/lib/timeline";
 
 const TIMEZONES = [
   {
@@ -164,8 +166,8 @@ export function TestRulesSheet({
   const [datetime, setDatetime] = useState(formatDatetimeLocal(new Date()));
   const [timezone, setTimezone] = useState("local");
   const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<ClassificationResponse | null>(null);
-  const [lastLog, setLastLog] = useState<SandboxExecutionLog | null>(null);
+  const [result, setResult] = useState<CustomRulesClassificationResult | null>(null);
+  const [lastLog, setLastLog] = useState<{ logs: string; output: string; context: string; error: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hasRun, setHasRun] = useState(false);
 
@@ -193,9 +195,21 @@ export function TestRulesSheet({
       // Always fetch the latest execution log to capture console output
       // (logs aren't included in the response when classification is null)
       try {
-        const logs = await GetSandboxExecutionLogs("", "", 0, 1);
-        if (logs && logs.length > 0) {
-          setLastLog(logs[0]);
+        const events = (await GetSandboxExecutionLogs("", "", 0, 1)) as (TimelineEvent | null)[];
+        const event = events && events[0];
+        if (event) {
+          const payload = parsePayload<CustomRulesTracePayload>(event);
+          if (payload) {
+            setLastLog({
+              context: payload.context ?? "",
+              output: payload.resp ?? "",
+              error: payload.error ?? "",
+              logs:
+                payload.logs && payload.logs.length > 0
+                  ? JSON.stringify(payload.logs)
+                  : "",
+            });
+          }
         }
       } catch {
         // Non-critical — just won't show logs
@@ -326,7 +340,7 @@ export function TestRulesSheet({
                     </div>
 
                     {/* Show console logs from execution log even on no-match */}
-                    {lastLog?.logs && lastLog.logs.trim() !== "null" && (
+                    {lastLog?.logs && lastLog.logs.trim() !== "" && (
                       <div>
                         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1 flex items-center gap-1">
                           <IconTerminal className="w-3 h-3" />
@@ -354,13 +368,13 @@ export function TestRulesSheet({
                         </Badge>
                       </div>
 
-                      {result.reasoning && (
+                      {result.classification_reason && (
                         <div>
                           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1 block">
                             Reasoning
                           </span>
                           <p className="text-xs text-foreground/80 leading-relaxed">
-                            {result.reasoning}
+                            {result.classification_reason}
                           </p>
                         </div>
                       )}
@@ -399,26 +413,26 @@ export function TestRulesSheet({
                     )}
 
                     {/* Sandbox Response */}
-                    {result.sandbox_response && result.sandbox_response !== "no response" && (
+                    {result.sandbox_output && result.sandbox_output !== "no response" && (
                       <div>
                         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1 block">
                           Sandbox Response
                         </span>
                         <pre className="text-[11px] text-green-400/80 bg-background/50 rounded-lg p-2.5 overflow-x-auto max-h-[120px] overflow-y-auto font-mono whitespace-pre-wrap break-all border border-border/30">
-                          {tryParseJSON(result.sandbox_response)}
+                          {tryParseJSON(result.sandbox_output)}
                         </pre>
                       </div>
                     )}
 
                     {/* Console Logs */}
-                    {result.sandbox_logs && result.sandbox_logs.trim() !== "null" && (
+                    {result.sandbox_logs && result.sandbox_logs.length > 0 && (
                       <div>
                         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1 flex items-center gap-1">
                           <IconTerminal className="w-3 h-3" />
                           Console Logs
                         </span>
                         <pre className="text-[11px] text-yellow-400/80 bg-background/50 rounded-lg p-2.5 overflow-x-auto max-h-[100px] overflow-y-auto font-mono whitespace-pre-wrap break-all border border-border/30">
-                          {formatSandboxLogs(result.sandbox_logs)}
+                          {formatSandboxLogs(JSON.stringify(result.sandbox_logs))}
                         </pre>
                       </div>
                     )}

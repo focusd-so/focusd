@@ -19,6 +19,10 @@ type Event struct {
 	Tags []Tag `json:"tags,omitempty" gorm:"many2many:timeline_event_tag;"`
 }
 
+func (e Event) TableName() string {
+	return "timeline_event"
+}
+
 func NewEvent(eventType string, opts ...EventOption) Event {
 	event := Event{
 		OccurredAt: time.Now().UTC().Unix(),
@@ -30,10 +34,6 @@ func NewEvent(eventType string, opts ...EventOption) Event {
 	}
 
 	return event
-}
-
-func (e Event) Table() string {
-	return "timeline_event"
 }
 
 func (e Event) TagsSlice() []string {
@@ -58,7 +58,7 @@ func NewTag(name, tagType string) Tag {
 	return Tag{Name: name, Type: tagType}
 }
 
-func (e Tag) Table() string {
+func (e Tag) TableName() string {
 	return "timeline_tag"
 }
 
@@ -67,6 +67,6 @@ type EventTag struct {
 	TagID   int64 `json:"tag_id" gorm:"primaryKey;not null"`
 }
 
-func (e EventTag) Table() string {
+func (e EventTag) TableName() string {
 	return "timeline_event_tag"
 }

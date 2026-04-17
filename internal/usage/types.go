@@ -34,11 +34,11 @@ const (
 	ClassificationNeutral     Classification = "neutral"
 	ClassificationSystem      Classification = "system"
 
-	EventTypeProtectionPause  = "protection_pause"
-	EventTypeAllowUsage       = "allow_usage"
-	EventTypeCustomRulesTrace = "custom_rules_trace"
-	EventTypeUsageChanged     = "usage_changed"
-	EventTypeUserIdle         = "user_idle"
+	EventTypeProtectionStatusChanged = "protection_status_changed"
+	EventTypeAllowUsage              = "allow_usage"
+	EventTypeCustomRulesTrace        = "custom_rules_trace"
+	EventTypeUsageChanged            = "usage_changed"
+	EventTypeUserIdleChanged         = "user_idle_changed"
 )
 
 func (c Classification) IsProductiveOrDistracting() bool {

@@ -2,6 +2,7 @@ package usage
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -26,6 +27,10 @@ type Service struct {
 
 func NewService(ctx context.Context, db *gorm.DB, timelineService *timeline.Service, options ...Option) (*Service, error) {
 	service := &Service{timelineService: timelineService, db: db}
+
+	if err := db.AutoMigrate(&Application{}); err != nil {
+		return nil, fmt.Errorf("failed to migrate application: %w", err)
+	}
 
 	for _, option := range options {
 		option(service)

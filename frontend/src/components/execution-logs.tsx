@@ -1,5 +1,4 @@
-import { useState, useMemo } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -18,11 +17,10 @@ import {
   IconAlertTriangle,
   IconTerminal,
 } from "@tabler/icons-react";
-import { GetSandboxExecutionLogs } from "../../bindings/github.com/focusd-so/focusd/internal/usage/service";
-import type { SandboxExecutionLog } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
 import { useDeferredValue } from "react";
-
-const PAGE_SIZE = 30;
+import { useSandboxLogs, useUsingDevFallbackData } from "@/hooks/queries/use-usage";
+import { parsePayload, type CustomRulesTracePayload } from "@/lib/timeline";
+import type { Event as TimelineEvent } from "../../bindings/github.com/focusd-so/focusd/internal/timeline/models";
 
 function formatTimestamp(unixSeconds: number): string {
   const date = new Date(unixSeconds * 1000);
@@ -44,17 +42,10 @@ function tryParseJSON(str: string | null | undefined): string {
   }
 }
 
-function formatSandboxLogs(logsStr: string | null | undefined): string {
-  if (!logsStr) return "";
-  try {
-    const logs = JSON.parse(logsStr);
-    if (Array.isArray(logs)) {
-      return logs.join("\n");
-    }
-    return logsStr;
-  } catch {
-    return logsStr;
-  }
+function formatSandboxLogs(logs: string[] | null | undefined): string {
+  if (!logs) return "";
+  if (Array.isArray(logs)) return logs.join("\n");
+  return String(logs);
 }
 
 function extractAppInfo(contextStr: string): string {
@@ -73,9 +64,9 @@ function extractAppInfo(contextStr: string): string {
     const meta =
       usage && typeof usage.meta === "object" && usage.meta !== null
         ? (usage.meta as Record<string, unknown>)
-        : root;
+        : (usage ?? root);
 
-    const appName = getString(meta, "appName");
+    const appName = getString(meta, "appName") || getString(meta, "app");
     const host = getString(meta, "host") || getString(meta, "hostname");
     const domain = getString(meta, "domain");
     const title = getString(meta, "title");
@@ -92,7 +83,37 @@ function extractAppInfo(contextStr: string): string {
   }
 }
 
-function LogEntry({ log }: { log: SandboxExecutionLog }) {
+interface SandboxLogView {
+  id: number;
+  type: string;
+  created_at: number;
+  context: string;
+  response: string;
+  logs: string[];
+  error: string;
+}
+
+function eventToLogView(event: TimelineEvent): SandboxLogView {
+  const payload = parsePayload<CustomRulesTracePayload>(event) ?? {
+    context: "",
+    logs: [],
+    resp: "",
+    error: "",
+  };
+  // The timeline event currently uses a single trace type; future split between
+  // classification / enforcement_action will land in the event "type" tag.
+  return {
+    id: event.id,
+    type: event.type === "custom_rules_trace" ? "classification" : event.type,
+    created_at: event.occurred_at,
+    context: payload.context ?? "",
+    response: payload.resp ?? "",
+    logs: payload.logs ?? [],
+    error: payload.error ?? "",
+  };
+}
+
+function LogEntry({ log }: { log: SandboxLogView }) {
   const [expanded, setExpanded] = useState(false);
   const hasError = !!log.error;
   const appInfo = extractAppInfo(log.context);
@@ -144,7 +165,7 @@ function LogEntry({ log }: { log: SandboxExecutionLog }) {
                 </span>
               </>
             )}
-            {log.logs && log.logs !== "null" && !expanded && (
+            {log.logs.length > 0 && !expanded && (
               <>
                 <span className="text-[10px] text-muted-foreground/30">·</span>
                 <span className="text-[10px] text-yellow-400/50 truncate max-w-[200px]">
@@ -158,7 +179,6 @@ function LogEntry({ log }: { log: SandboxExecutionLog }) {
 
       {expanded && (
         <div className="border-t border-border/30 p-3 space-y-3">
-          {/* Context */}
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1 block">
               Context
@@ -168,7 +188,6 @@ function LogEntry({ log }: { log: SandboxExecutionLog }) {
             </pre>
           </div>
 
-          {/* Response */}
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1 block">
               Response
@@ -178,8 +197,7 @@ function LogEntry({ log }: { log: SandboxExecutionLog }) {
             </pre>
           </div>
 
-          {/* Console Logs */}
-          {log.logs && log.logs.trim() !== "null" && (
+          {log.logs.length > 0 && (
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1 flex items-center gap-1">
                 <IconTerminal className="w-3 h-3" />
@@ -191,7 +209,6 @@ function LogEntry({ log }: { log: SandboxExecutionLog }) {
             </div>
           )}
 
-          {/* Error */}
           {hasError && (
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-red-400/50 mb-1 block">
@@ -218,33 +235,14 @@ export function ExecutionLogsSheet({
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [typeFilter, setTypeFilter] = useState("");
+  const usingFallback = useUsingDevFallbackData();
 
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-  } = useInfiniteQuery({
-    queryKey: ["sandbox-logs", typeFilter, deferredSearch],
-    initialPageParam: 0,
-    queryFn: ({ pageParam }) =>
-      GetSandboxExecutionLogs(typeFilter, deferredSearch, pageParam as number, PAGE_SIZE),
-    getNextPageParam: (lastPage: SandboxExecutionLog[], allPages) => {
-      return lastPage.length === PAGE_SIZE ? allPages.length : undefined;
-    },
-    enabled: open,
-  });
+  const { data: events = [], isLoading } = useSandboxLogs(typeFilter, deferredSearch);
 
-  const logs = useMemo(() => {
-    return data?.pages.flat() || [];
-  }, [data]);
-
-  const loadMore = () => {
-    if (hasNextPage && !isFetchingNextPage) {
-      fetchNextPage();
-    }
-  };
+  const logs = useMemo<SandboxLogView[]>(
+    () => events.map(eventToLogView),
+    [events],
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -256,7 +254,14 @@ export function ExecutionLogsSheet({
           </SheetDescription>
         </SheetHeader>
 
-        {/* Search & Filters */}
+        {usingFallback && (
+          <div className="px-4 pt-3">
+            <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200/90">
+              Showing sample data — backend endpoint pending timeline rewrite.
+            </div>
+          </div>
+        )}
+
         <div className="px-4 py-3 flex items-center gap-2 border-b border-border/30 shrink-0">
           <div className="relative flex-1">
             <IconSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50" />
@@ -295,7 +300,6 @@ export function ExecutionLogsSheet({
           </div>
         </div>
 
-        {/* Log List */}
         <ScrollArea className="flex-1 min-h-0">
           <div className="p-3 space-y-2">
             {logs.length === 0 && !isLoading ? (
@@ -309,27 +313,11 @@ export function ExecutionLogsSheet({
                 )}
               </div>
             ) : (
-              <>
-                {logs.map((log) => (
-                  <LogEntry key={log.id} log={log} />
-                ))}
-                {hasNextPage && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={loadMore}
-                    disabled={isFetchingNextPage}
-                    className="w-full h-8 text-xs text-muted-foreground/50 hover:text-muted-foreground"
-                  >
-                    {isFetchingNextPage ? "Loading..." : "Load more"}
-                  </Button>
-                )}
-              </>
+              logs.map((log) => <LogEntry key={log.id} log={log} />)
             )}
           </div>
         </ScrollArea>
 
-        {/* Footer */}
         <div className="px-4 py-2 border-t border-border/30 shrink-0">
           <p className="text-[10px] text-muted-foreground/40 text-center">
             {logs.length} log{logs.length !== 1 ? "s" : ""} loaded · retained for

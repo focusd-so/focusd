@@ -95,7 +95,7 @@ func (s *Service) CalculateEnforcement(
 }
 
 func (s *Service) isProtectionPaused() (bool, error) {
-	event, err := s.timelineService.GetActiveEventOfType(EventTypeProtectionPause)
+	event, err := s.timelineService.GetActiveEventOfType(EventTypeProtectionStatusChanged)
 	if err != nil {
 		return false, fmt.Errorf("failed to get active protection pause event: %w", err)
 	}

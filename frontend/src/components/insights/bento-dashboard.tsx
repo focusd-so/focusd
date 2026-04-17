@@ -4,7 +4,6 @@ import {
   IconChevronRight,
   IconHistory,
 } from "@tabler/icons-react";
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +27,7 @@ import { TopBlockedCard } from "./top-blocked-card";
 import { TopDistractionsCard } from "./top-distractions-card";
 import { CategoriesCard } from "./categories-card";
 import { CommunicationCard } from "./communication-card";
+import { useDayInsights, useUsingDevFallbackData } from "@/hooks/queries/use-usage";
 
 const MIN_SECONDS_FOR_INSIGHTS = 3600;
 
@@ -286,26 +286,13 @@ function isYesterday(date: Date): boolean {
 }
 
 export function BentoDashboard() {
-  const {
-    selectedDate,
-    overview,
-    isLoading: isStoreLoading,
-    error,
-    fetchOverview,
-    goToPrevDay,
-    goToNextDay,
-    goToToday,
-  } = useUsageStore();
+  const selectedDate = useUsageStore((state) => state.selectedDate);
+  const goToPrevDay = useUsageStore((state) => state.goToPrevDay);
+  const goToNextDay = useUsageStore((state) => state.goToNextDay);
+  const goToToday = useUsageStore((state) => state.goToToday);
 
-  const selectedDateKey = `${selectedDate.getFullYear()}-${selectedDate.getMonth()}-${selectedDate.getDate()}`;
-
-  const { isLoading: isQueryLoading } = useQuery({
-    queryKey: ["day-insights", selectedDateKey],
-    queryFn: () => fetchOverview(selectedDate),
-    retry: false,
-  });
-
-  const isLoading = isStoreLoading || isQueryLoading;
+  const { data: overview, isLoading, error } = useDayInsights(selectedDate);
+  const usingFallback = useUsingDevFallbackData();
 
   const productiveSeconds = overview?.productivity_score?.productive_seconds ?? 0;
   const distractingSeconds = overview?.productivity_score?.distracting_seconds ?? 0;
@@ -334,13 +321,18 @@ export function BentoDashboard() {
   if (error && !overview) {
     return (
       <div className="p-6 flex items-center justify-center h-full">
-        <div className="text-destructive text-sm">Failed to load insights: {error}</div>
+        <div className="text-destructive text-sm">Failed to load insights: {error.message}</div>
       </div>
     );
   }
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">
+      {usingFallback && (
+        <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200/90">
+          Showing sample data — backend endpoint pending timeline rewrite.
+        </div>
+      )}
       {/* Date Picker Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">

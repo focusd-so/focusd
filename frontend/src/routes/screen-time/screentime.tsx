@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   IconCalendar,
@@ -11,7 +11,6 @@ import {
   IconWorld,
 } from "@tabler/icons-react";
 import { format } from "date-fns";
-import { useUsageStore } from "@/stores/usage-store";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -31,7 +30,21 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { UsageItem, formatDuration } from "@/components/usage-item";
 import { cn } from "@/lib/utils";
-// Define local interface in case bindings are not yet updated
+import { useUsageStore } from "@/stores/usage-store";
+import {
+  useApplicationList,
+  useRecentUsages,
+  useUsageAggregation,
+  useUsingDevFallbackData,
+} from "@/hooks/queries/use-usage";
+import {
+  buildApplicationsById,
+  toUsageItemView,
+  type UsageItemView,
+} from "@/lib/usage-view";
+import { parsePayload, type ApplicationUsagePayload } from "@/lib/timeline";
+import { EnforcementAction } from "../../../bindings/github.com/focusd-so/focusd/internal/usage/models";
+
 export interface UsageAggregation {
   application: {
     id: number;
@@ -49,35 +62,53 @@ export const Route = createFileRoute("/screen-time/screentime")({
 });
 
 function ScreenTimePage() {
-  const {
-    screenTimeUsages,
-    screenTimeAggregation,
-    screenTimeFilters,
-    setScreenTimeFilters,
-    fetchScreenTimeUsages,
-    fetchScreenTimeAggregation,
-    isLoading,
-  } = useUsageStore();
+  const { screenTimeFilters, setScreenTimeFilters } = useUsageStore();
+  const date = screenTimeFilters.date;
+  const setDate = (d: Date) => setScreenTimeFilters({ date: d });
 
-  const [date, setDate] = useState<Date>(new Date());
   const [activeTab, setActiveTab] = useState("activity");
 
-  useEffect(() => {
-    // Sync local date to filters
-    setScreenTimeFilters({ Date: date });
-  }, [date, setScreenTimeFilters]);
+  const { data: recentEvents = [], isLoading: usagesLoading } = useRecentUsages();
+  const { data: aggregation = [], isLoading: aggLoading } = useUsageAggregation(screenTimeFilters);
+  const { data: applications } = useApplicationList();
+  const applicationsById = useMemo(
+    () => buildApplicationsById(applications),
+    [applications],
+  );
 
-  useEffect(() => {
-    if (activeTab === "activity") {
-      fetchScreenTimeUsages();
-    } else {
-      fetchScreenTimeAggregation();
-    }
-  }, [activeTab, screenTimeFilters, fetchScreenTimeUsages, fetchScreenTimeAggregation]);
+  const usingFallback = useUsingDevFallbackData();
+  const isLoading = usagesLoading || aggLoading;
+
+  const filteredViews: UsageItemView[] = useMemo(() => {
+    return recentEvents
+      .map((event) => {
+        const payload = parsePayload<ApplicationUsagePayload>(event);
+        const app = payload?.application_id
+          ? applicationsById.get(payload.application_id)
+          : undefined;
+        return toUsageItemView(event, app);
+      })
+      .filter((view) => {
+        if (
+          screenTimeFilters.classification &&
+          view.classification !== screenTimeFilters.classification
+        ) {
+          return false;
+        }
+        if (
+          screenTimeFilters.enforcementAction &&
+          view.enforcement_action !== screenTimeFilters.enforcementAction
+        ) {
+          return false;
+        }
+        return true;
+      });
+  }, [recentEvents, applicationsById, screenTimeFilters]);
+
+  const aggregationItems = aggregation as UsageAggregation[];
 
   return (
     <div className="flex flex-col h-full bg-background text-foreground">
-      {/* Header & Filters */}
       <div className="flex flex-col gap-4 p-6 border-b border-white/5 bg-white/[0.02]">
         <div className="flex items-center justify-between">
           <div>
@@ -113,13 +144,15 @@ function ScreenTimePage() {
           </div>
         </div>
 
+        {usingFallback && <SampleDataBanner />}
+
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 bg-white/5 p-1 rounded-lg border border-white/10">
             <Select
-              value={screenTimeFilters.Classification || "all"}
+              value={screenTimeFilters.classification || "all"}
               onValueChange={(v) =>
                 setScreenTimeFilters({
-                  Classification: v === "all" ? undefined : (v as any),
+                  classification: v === "all" ? undefined : v,
                 })
               }
             >
@@ -143,16 +176,16 @@ function ScreenTimePage() {
             size="sm"
             className={cn(
               "h-8 text-xs gap-2 transition-all",
-              screenTimeFilters.EnforcementAction === "block"
+              screenTimeFilters.enforcementAction === EnforcementAction.EnforcementActionBlock
                 ? "bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20"
                 : "opacity-60"
             )}
             onClick={() =>
               setScreenTimeFilters({
-                EnforcementAction:
-                  screenTimeFilters.EnforcementAction === "block"
+                enforcementAction:
+                  screenTimeFilters.enforcementAction === EnforcementAction.EnforcementActionBlock
                     ? undefined
-                    : ("block" as any),
+                    : EnforcementAction.EnforcementActionBlock,
               })
             }
           >
@@ -169,7 +202,6 @@ function ScreenTimePage() {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 min-h-0 overflow-hidden bg-background">
         <Tabs
           value={activeTab}
@@ -189,23 +221,13 @@ function ScreenTimePage() {
 
           <TabsContent value="activity" className="flex-1 min-h-0 mt-0 focus-visible:ring-0">
             <ScrollArea className="h-full pr-4 -mr-4 [&_[data-radix-scroll-area-scrollbar]]:opacity-0 hover:[&_[data-radix-scroll-area-scrollbar]]:opacity-100">
-              {screenTimeUsages.length === 0 ? (
+              {filteredViews.length === 0 ? (
                 <EmptyState icon={<IconListSearch className="w-10 h-10" />} message="No activity found for this filter." />
               ) : (
                 <div className="space-y-4">
-                  {screenTimeUsages.map((usage) => (
-                    <UsageItem key={usage.id} usage={usage} />
+                  {filteredViews.map((view) => (
+                    <UsageItem key={view.id} usage={view} />
                   ))}
-                  <div className="py-8 flex justify-center">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-muted-foreground hover:text-foreground"
-                      onClick={() => fetchScreenTimeUsages(true)}
-                    >
-                      Load More
-                    </Button>
-                  </div>
                 </div>
               )}
             </ScrollArea>
@@ -213,11 +235,11 @@ function ScreenTimePage() {
 
           <TabsContent value="aggregation" className="flex-1 min-h-0 mt-0 focus-visible:ring-0">
             <ScrollArea className="h-full pr-4 -mr-4 [&_[data-radix-scroll-area-scrollbar]]:opacity-0 hover:[&_[data-radix-scroll-area-scrollbar]]:opacity-100">
-              {screenTimeAggregation.length === 0 ? (
+              {aggregationItems.length === 0 ? (
                 <EmptyState icon={<IconChartBar className="w-10 h-10" />} message="No usage data to aggregate." />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {screenTimeAggregation.map((agg) => (
+                  {aggregationItems.map((agg) => (
                     <AggregationCard key={agg.application.id} aggregation={agg} />
                   ))}
                 </div>
@@ -226,6 +248,14 @@ function ScreenTimePage() {
           </TabsContent>
         </Tabs>
       </div>
+    </div>
+  );
+}
+
+function SampleDataBanner() {
+  return (
+    <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200/90">
+      Showing sample data — backend endpoint pending timeline rewrite.
     </div>
   );
 }

@@ -8,9 +8,16 @@ import { routeTree } from './routeTree.gen'
 
 import './styles.css'
 import reportWebVitals from './reportWebVitals.ts'
+import { bootstrapWailsEvents } from './lib/wails-events'
 
 // Create a client
 const queryClient = new QueryClient()
+
+// Wire Wails timeline events into the React Query cache exactly once for the
+// lifetime of the app. Doing this at module-load avoids a useEffect inside the
+// React tree (per project convention) and keeps subscriptions stable across
+// renders.
+bootstrapWailsEvents(queryClient)
 
 // Create a new router instance
 const router = createRouter({

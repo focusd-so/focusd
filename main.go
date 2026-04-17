@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/go-chi/chi/v5"
@@ -60,9 +59,9 @@ func init() {
 	// Register a custom event whose associated data type is string.
 	// This is not required, but the binding generator will pick up registered events
 	// and provide a strongly typed JS/TS API for them.
-	application.RegisterEvent[*usage.ApplicationUsage]("usage:update")
-	application.RegisterEvent[usage.ProtectionPause]("protection:status")
-	application.RegisterEvent[usage.LLMDailySummary]("daily-summary:ready")
+	application.RegisterEvent[*timeline.Event]("usage_changed")
+	application.RegisterEvent[*timeline.Event]("user_idle_changed")
+	application.RegisterEvent[*timeline.Event]("protection_status_changed")
 	application.RegisterEvent[any]("authctx:updated")
 }
 
@@ -222,33 +221,52 @@ func main() {
 		},
 	})
 
-	usageService.OnProtectionPause(func(pause usage.ProtectionPause) {
-		wailsApp.Event.Emit("protection:status", pause)
+	timelineService.On(usage.EventTypeProtectionStatusChanged, func(event *timeline.Event) {
+		wailsApp.Event.Emit("protection_status_changed", event)
+	})
+	timelineService.On(usage.EventTypeProtectionStatusChanged, func(event *timeline.Event) {
+		wailsApp.Event.Emit("protection_status_changed", event)
+	})
+	timelineService.On(usage.EventTypeUsageChanged, func(event *timeline.Event) {
+		wailsApp.Event.Emit("usage_changed", event)
+	})
+	timelineService.On(usage.EventTypeUserIdleChanged, func(event *timeline.Event) {
+		wailsApp.Event.Emit("user_idle_changed", event)
 	})
 
-	usageService.OnProtectionResumed(func(pause usage.ProtectionPause) {
-		wailsApp.Event.Emit("protection:status", pause)
-	})
+	// timelineService.OnEventCreated(usage.EventTypeProtectionResume, func(event *timeline.Event) {
+	// 	wailsApp.Event.Emit("protection:status", event)
+	// })
 
-	usageService.OnLLMDailySummaryReady(func(summary usage.LLMDailySummary) {
-		wailsApp.Event.Emit("daily-summary:ready", summary)
+	// usageService.OnProtectionPause(func(pause usage.ProtectionPause) {
+	// 	wailsApp.Event.Emit("protection:status", pause)
+	// })
 
-		// TODO: use proper system api to send a notification
-		exec.Command("osascript", "-e",
-			fmt.Sprintf(`display notification "%s" with title "Focusd" subtitle "Daily Summary"`,
-				summary.Headline)).Run()
-	})
+	// usageService.OnProtectionResumed(func(pause usage.ProtectionPause) {
+	// 	wailsApp.Event.Emit("protection:status", pause)
+	// })
+
+	// usageService.OnLLMDailySummaryReady(func(summary usage.LLMDailySummary) {
+	// 	wailsApp.Event.Emit("daily-summary:ready", summary)
+
+	// 	// TODO: use proper system api to send a notification
+	// 	exec.Command("osascript", "-e",
+	// 		fmt.Sprintf(`display notification "%s" with title "Focusd" subtitle "Daily Summary"`,
+	// 			summary.Headline)).Run()
+	// })
 
 	wailsApp.OnShutdown(cancel)
 
-	usageService.OnUsageUpdated(func(appUsage *usage.ApplicationUsage) {
-		if appUsage != nil {
-			wailsApp.Event.Emit("usage:update", appUsage)
-		}
-	})
+	// usageService.OnUsageUpdated(func(appUsage *usage.ApplicationUsage) {
+	// 	if appUsage != nil {
+	// 		wailsApp.Event.Emit("usage:update", appUsage)
+	// 	}
+	// })
 
 	native.OnIdleChange(func(idleSeconds float64) {
-		usageService.IdleChanged(ctx, idleSeconds > 120)
+		if err := usageService.IdleChanged(ctx, idleSeconds > 120); err != nil {
+			slog.Error("failed to handle idle change", "error", err)
+		}
 	})
 
 	if updaterService != nil {
@@ -521,29 +539,29 @@ func writePageTitleError(conn *websocket.Conn, tabID int, errMsg string) error {
 	})
 }
 
-func handleBlockedUsage(appUsage *usage.ApplicationUsage, appName, title string, browserURL *string) {
-	if appUsage == nil || appUsage.EnforcementAction != usage.EnforcementActionBlock {
-		return
-	}
+// func handleBlockedUsage(appUsage *usage.ApplicationUsage, appName, title string, browserURL *string) {
+// 	if appUsage == nil || appUsage.EnforcementAction != usage.EnforcementActionBlock {
+// 		return
+// 	}
 
-	tags := usage.ApplicationTagsSlice(appUsage.Tags).Tags()
-	reasoning := ""
-	if appUsage.ClassificationReasoning != nil {
-		reasoning = *appUsage.ClassificationReasoning
-	}
+// 	tags := usage.ApplicationTagsSlice(appUsage.Tags).Tags()
+// 	reasoning := ""
+// 	if appUsage.ClassificationReasoning != nil {
+// 		reasoning = *appUsage.ClassificationReasoning
+// 	}
 
-	if browserURL != nil {
-		slog.Info("browser url provided, blocking url", "url", *browserURL)
-		if err := native.BlockURL(*browserURL, title, reasoning, tags, appName); err != nil {
-			slog.Error("failed to block URL", "url", *browserURL, "error", err)
-			return
-		}
-	}
+// 	if browserURL != nil {
+// 		slog.Info("browser url provided, blocking url", "url", *browserURL)
+// 		if err := native.BlockURL(*browserURL, title, reasoning, tags, appName); err != nil {
+// 			slog.Error("failed to block URL", "url", *browserURL, "error", err)
+// 			return
+// 		}
+// 	}
 
-	if err := native.BlockApp(appName, title, reasoning, tags); err != nil {
-		slog.Error("failed to block app", "appName", appName, "error", err)
-	}
-}
+// 	if err := native.BlockApp(appName, title, reasoning, tags); err != nil {
+// 		slog.Error("failed to block app", "appName", appName, "error", err)
+// 	}
+// }
 
 func setUpWebServer(ctx context.Context, extensionSessionAPIKey string, usageService *usage.Service) (*chi.Mux, int, error) {
 	const port = 50533

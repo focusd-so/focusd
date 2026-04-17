@@ -36,7 +36,7 @@ func (s *Service) IdleChanged(ctx context.Context, isIdle bool) error {
 	defer s.mu.Unlock()
 
 	// Get the current active usage or idle event
-	event, err := s.timelineService.GetActiveEventOfTypes([]string{EventTypeUsageChanged, EventTypeUserIdle})
+	event, err := s.timelineService.GetActiveEventOfTypes([]string{EventTypeUsageChanged, EventTypeUserIdleChanged})
 	if err != nil {
 		return err
 	}
@@ -48,14 +48,14 @@ func (s *Service) IdleChanged(ctx context.Context, isIdle bool) error {
 
 	if isIdle {
 		// If we are already in idle state, do nothing (idempotency)
-		if event.Type == EventTypeUserIdle {
+		if event.Type == EventTypeUserIdleChanged {
 			return nil
 		}
 		// Transition from active usage to idle: finish current usage and start idle
 		if err := s.timelineService.EventFinished(event); err != nil {
 			return err
 		}
-		_, err = s.timelineService.CreateEvent(EventTypeUserIdle)
+		_, err = s.timelineService.CreateEvent(EventTypeUserIdleChanged)
 		return err
 	}
 

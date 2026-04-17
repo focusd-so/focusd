@@ -523,3 +523,338 @@ export function isToday(date: Date): boolean {
     date.getFullYear() === now.getFullYear()
   );
 }
+
+// ---------------------------------------------------------------------------
+// Backend-shaped fixtures (timeline events, DayInsights, etc).
+// Used as dev fallbacks while the timeline rewrite of GetUsageList /
+// GetUsageAggregation / GetDayInsights / GetSandboxExecutionLogs is pending.
+// ---------------------------------------------------------------------------
+
+import { Event as TimelineEvent } from "../../bindings/github.com/focusd-so/focusd/internal/timeline/models";
+import {
+  ApplicationUsagePayload,
+  ClassificationResult,
+  CommunicationBreakdown,
+  CustomRulesTracePayload,
+  DayInsights,
+  EnforcementResult,
+  LLMDailySummary,
+  ProductivityScore,
+} from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
+
+let mockEventIdCounter = 1_000_000;
+function nextMockEventId(): number {
+  mockEventIdCounter += 1;
+  return mockEventIdCounter;
+}
+
+interface MockUsageSeed {
+  applicationId: number;
+  appName: string;
+  hostname?: string;
+  windowTitle: string;
+  classification: "productive" | "distracting" | "neutral";
+  classificationSource: "obviously" | "custom_rules" | "llm_openai";
+  classificationReason?: string;
+  enforcementAction: "allow" | "block" | "paused";
+  enforcementSource?: "application" | "custom_rules" | "allowed" | "paused";
+  minutesAgo: number;
+  durationSeconds?: number;
+  tags?: string[];
+}
+
+function buildUsagePayload(seed: MockUsageSeed): ApplicationUsagePayload {
+  const enforcement = new EnforcementResult({
+    StandardEnforcementResult: {
+      Action: seed.enforcementAction,
+      Reason:
+        seed.enforcementAction === "block"
+          ? "distracting usage, focus protection is enabled"
+          : seed.enforcementAction === "paused"
+            ? "focus protection is temporarily paused by user"
+            : "non distracting usage",
+      Source: seed.enforcementSource ?? "application",
+    },
+    CustomRulesEnforcementResult: null,
+  });
+
+  const classification = new ClassificationResult({
+    custom_rules_classification_result: null,
+    llm_classification_result: null,
+    obviously_classification_result: null,
+  });
+
+  return new ApplicationUsagePayload({
+    application_id: seed.applicationId,
+    window_title: seed.windowTitle,
+    browser_url: seed.hostname ? `https://${seed.hostname}/` : undefined,
+    classification: seed.classification,
+    classification_reason: seed.classificationReason ?? "",
+    classification_source: seed.classificationSource,
+    classification_result: classification,
+    enforcement_result: enforcement,
+    tags: seed.tags ?? [],
+  });
+}
+
+function buildUsageEvent(seed: MockUsageSeed): TimelineEvent {
+  const occurredAt = Math.floor(Date.now() / 1000) - seed.minutesAgo * 60;
+  const finishedAt = seed.durationSeconds
+    ? occurredAt + seed.durationSeconds
+    : null;
+
+  const event = new TimelineEvent({
+    id: nextMockEventId(),
+    occurred_at: occurredAt,
+    type: "usage_changed",
+    payload: JSON.stringify(buildUsagePayload(seed)),
+    trace_id: "",
+    parent_id: null,
+    ended_at: finishedAt,
+    key: null,
+    tags: [],
+  });
+  return event;
+}
+
+const mockUsageSeeds: MockUsageSeed[] = [
+  {
+    applicationId: 1,
+    appName: "Visual Studio Code",
+    windowTitle: "focusd — main.go",
+    classification: "productive",
+    classificationSource: "obviously",
+    enforcementAction: "allow",
+    minutesAgo: 1,
+    durationSeconds: 25 * 60,
+    tags: ["coding"],
+  },
+  {
+    applicationId: 2,
+    appName: "Google Chrome",
+    hostname: "twitter.com",
+    windowTitle: "Home / X",
+    classification: "distracting",
+    classificationSource: "obviously",
+    enforcementAction: "block",
+    enforcementSource: "application",
+    minutesAgo: 6,
+    durationSeconds: 45,
+    tags: ["social_media"],
+  },
+  {
+    applicationId: 3,
+    appName: "Slack",
+    windowTitle: "Acme · #engineering",
+    classification: "neutral",
+    classificationSource: "obviously",
+    enforcementAction: "allow",
+    minutesAgo: 12,
+    durationSeconds: 5 * 60,
+    tags: ["communication"],
+  },
+  {
+    applicationId: 4,
+    appName: "Google Chrome",
+    hostname: "youtube.com",
+    windowTitle: "How browsers work — YouTube",
+    classification: "distracting",
+    classificationSource: "custom_rules",
+    classificationReason: "matched custom rule: video sites during work hours",
+    enforcementAction: "block",
+    enforcementSource: "custom_rules",
+    minutesAgo: 25,
+    durationSeconds: 30,
+    tags: ["video"],
+  },
+  {
+    applicationId: 5,
+    appName: "Visual Studio Code",
+    windowTitle: "focusd — protection.go",
+    classification: "productive",
+    classificationSource: "obviously",
+    enforcementAction: "allow",
+    minutesAgo: 60,
+    durationSeconds: 35 * 60,
+    tags: ["coding"],
+  },
+];
+
+export function mockRecentUsageEvents(): TimelineEvent[] {
+  return mockUsageSeeds.map(buildUsageEvent);
+}
+
+export interface MockUsageAggregationItem {
+  application: {
+    id: number;
+    name: string;
+    icon: string | null;
+    hostname: string | null;
+    domain: string | null;
+  };
+  total_duration: number;
+  usage_count: number;
+}
+
+export function mockUsageAggregation(): MockUsageAggregationItem[] {
+  return mockAppUsage.map((app, i) => ({
+    application: {
+      id: i + 1,
+      name: app.name,
+      icon: null,
+      hostname: app.hostname ?? null,
+      domain: app.hostname ?? null,
+    },
+    total_duration: app.totalMinutes * 60,
+    usage_count: app.sessionsCount,
+  }));
+}
+
+export function mockDayInsights(): DayInsights {
+  const today = getDataForDate(new Date());
+
+  const productivityScore = new ProductivityScore({
+    productive_seconds: today.stats.productiveMinutes * 60,
+    distracting_seconds: today.stats.distractingMinutes * 60,
+    idle_seconds: today.stats.neutralMinutes * 60,
+    other_seconds: 0,
+    productivity_score: today.stats.focusScore,
+  });
+
+  const hourly: Record<string, ProductivityScore> = {};
+  for (const slot of today.hourlyBreakdown) {
+    hourly[String(slot.hour)] = new ProductivityScore({
+      productive_seconds: slot.productiveMinutes * 60,
+      distracting_seconds: slot.distractingMinutes * 60,
+      idle_seconds: slot.neutralMinutes * 60,
+      other_seconds: 0,
+      productivity_score:
+        slot.productiveMinutes + slot.distractingMinutes > 0
+          ? Math.round(
+              (slot.productiveMinutes /
+                (slot.productiveMinutes + slot.distractingMinutes)) *
+                100,
+            )
+          : 0,
+    });
+  }
+
+  const topDistractions: Record<string, number> = {};
+  for (const item of today.topDistractions) {
+    topDistractions[item.hostname ?? item.name] = item.minutes * 60;
+  }
+
+  const topBlocked: Record<string, number> = {};
+  for (const blocked of today.blockedAttempts) {
+    topBlocked[blocked.hostname] = blocked.count * 60;
+  }
+
+  const projectBreakdown: Record<string, number> = {};
+  for (const project of today.projects) {
+    projectBreakdown[project.name] = project.totalMinutes * 60;
+  }
+
+  const communicationBreakdown: Record<string, CommunicationBreakdown> = {};
+  for (const channel of today.communicationChannels) {
+    communicationBreakdown[channel.name] = new CommunicationBreakdown({
+      name: channel.name,
+      channel: channel.name,
+      duration_seconds: channel.minutes * 60,
+    });
+  }
+
+  const summary = new LLMDailySummary({
+    id: 1,
+    date: new Date().toISOString().slice(0, 10),
+    headline: today.aiSummary.tldr.slice(0, 60),
+    narrative: today.aiSummary.tldr,
+    key_pattern: today.aiSummary.dangerZone,
+    wins: JSON.stringify([
+      `Peak focus window ${today.aiSummary.peakFocusWindow}`,
+      `Top app: ${today.aiSummary.topApp.name} ${formatMinutes(today.aiSummary.topApp.minutes)}`,
+    ]),
+    suggestion: today.aiSummary.tip,
+    day_vibe: today.stats.focusScore >= 75 ? "locked-in" : "balanced",
+    context_switch_count: today.stats.contextSwitches,
+    longest_focus_minutes: today.stats.longestSessionMinutes,
+    deep_work_minutes: today.stats.deepWorkSessions * 30,
+    blocked_attempt_count: today.stats.blockedAttempts,
+    created_at: Math.floor(Date.now() / 1000),
+  });
+
+  return new DayInsights({
+    productivity_score: productivityScore,
+    productivity_per_hour_breakdown: hourly,
+    llm_daily_summary: summary,
+    top_distractions: topDistractions,
+    top_blocked: topBlocked,
+    project_breakdown: projectBreakdown,
+    communication_breakdown: communicationBreakdown,
+  });
+}
+
+export function mockSandboxLogEvents(logType: string, search: string): TimelineEvent[] {
+  const samples: Array<{ context: object; output: string; logs?: string[]; error?: string }> = [
+    {
+      context: {
+        usage: {
+          app: "Slack",
+          host: undefined,
+          title: "#engineering · Acme",
+        },
+      },
+      output: `{"classification":"productive","classification_reason":"native app rule matched"}`,
+      logs: ["[rule] matched native_app:Slack", "[rule] returning productive"],
+    },
+    {
+      context: {
+        usage: {
+          app: "Google Chrome",
+          host: "youtube.com",
+          title: "Home — YouTube",
+        },
+      },
+      output: `{"enforcementAction":"block","enforcementReason":"video sites during work hours"}`,
+      logs: ["[rule] hostname=youtube.com matched", "[rule] working hours -> block"],
+    },
+    {
+      context: {
+        usage: { app: "Visual Studio Code", title: "focusd — service.go" },
+      },
+      output: "",
+      logs: ["[rule] no rule matched, deferring"],
+      error: "",
+    },
+  ];
+
+  const events = samples
+    .filter((_sample, i) => {
+      if (logType && i === 0 && logType !== "classification") return false;
+      if (logType && i === 1 && logType !== "enforcement_action") return false;
+      return true;
+    })
+    .map((sample, i) => {
+      const occurredAt = Math.floor(Date.now() / 1000) - i * 90;
+      const payload = new CustomRulesTracePayload({
+        context: JSON.stringify(sample.context),
+        logs: sample.logs ?? [],
+        resp: sample.output,
+        error: sample.error ?? "",
+      });
+      return new TimelineEvent({
+        id: nextMockEventId(),
+        occurred_at: occurredAt,
+        type: "custom_rules_trace",
+        payload: JSON.stringify(payload),
+        trace_id: "",
+        parent_id: null,
+        ended_at: occurredAt,
+        key: null,
+        tags: [],
+      });
+    });
+
+  if (!search) return events;
+  const needle = search.toLowerCase();
+  return events.filter((event) => event.payload.toLowerCase().includes(needle));
+}

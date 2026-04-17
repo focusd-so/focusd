@@ -8,20 +8,18 @@ import { Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as usage$0 from "../../../../focusd-so/focusd/internal/usage/models.js";
+import * as timeline$0 from "../../../../focusd-so/focusd/internal/timeline/models.js";
 
 function configure() {
     Object.freeze(Object.assign($Create.Events, {
-        "daily-summary:ready": $$createType0,
-        "protection:status": $$createType1,
-        "usage:update": $$createType3,
+        "protection_status_changed": $$createType1,
+        "usage_changed": $$createType1,
+        "user_idle_changed": $$createType1,
     }));
 }
 
 // Private type creation functions
-const $$createType0 = usage$0.LLMDailySummary.createFrom;
-const $$createType1 = usage$0.ProtectionPause.createFrom;
-const $$createType2 = usage$0.ApplicationUsage.createFrom;
-const $$createType3 = $Create.Nullable($$createType2);
+const $$createType0 = timeline$0.Event.createFrom;
+const $$createType1 = $Create.Nullable($$createType0);
 
 configure();

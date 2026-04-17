@@ -32,7 +32,7 @@ func (s *Service) ProtectionPause(durationSeconds int, reason string) error {
 	dur := time.Duration(durationSeconds) * time.Second
 	willEndAt := time.Now().Add(dur)
 
-	event, err := s.timelineService.GetActiveEventOfType(EventTypeProtectionPause)
+	event, err := s.timelineService.GetActiveEventOfType(EventTypeProtectionStatusChanged)
 	if err != nil {
 		return err
 	}
@@ -48,7 +48,7 @@ func (s *Service) ProtectionPause(durationSeconds int, reason string) error {
 	}
 
 	_, err = s.timelineService.CreateEvent(
-		EventTypeProtectionPause,
+		EventTypeProtectionStatusChanged,
 		timeline.WithFinishedAt(willEndAt),
 		timeline.WithPayload(PauseProtectionPayload{PauseReason: reason}),
 	)
@@ -68,7 +68,7 @@ func (s *Service) ProtectionPause(durationSeconds int, reason string) error {
 //
 // Returns an error if the timeline event update fails.
 func (s *Service) ProtectionResume(reason string) error {
-	event, err := s.timelineService.GetActiveEventOfType(EventTypeProtectionPause)
+	event, err := s.timelineService.GetActiveEventOfType(EventTypeProtectionStatusChanged)
 	if err != nil {
 		return err
 	}
@@ -92,7 +92,7 @@ func (s *Service) ProtectionResume(reason string) error {
 //
 // Returns the active event if found, or nil if protection is currently active.
 func (s *Service) ProtectionGetStatus() (*timeline.Event, error) {
-	return s.timelineService.GetActiveEventOfType(EventTypeProtectionPause)
+	return s.timelineService.GetActiveEventOfType(EventTypeProtectionStatusChanged)
 }
 
 // PauseGetHistory retrieves the history of protection pauses within the specified number of days.
@@ -103,7 +103,7 @@ func (s *Service) ProtectionGetStatus() (*timeline.Event, error) {
 // Returns a slice of timeline events ordered by age.
 func (s *Service) PauseGetHistory(days int) ([]*timeline.Event, error) {
 	return s.timelineService.ListEvents(
-		timeline.ByTypes(EventTypeProtectionPause),
+		timeline.ByTypes(EventTypeProtectionStatusChanged),
 		timeline.ByAge(days),
 	)
 }

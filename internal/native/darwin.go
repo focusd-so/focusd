@@ -254,7 +254,9 @@ func startObserver() {
 				fmt.Printf("\rIdle: %.2f sec", idle)
 			}
 
-			onIdleChange(idle)
+			if onIdleChange != nil {
+				onIdleChange(idle)
+			}
 
 			time.Sleep(5 * time.Second)
 		}
@@ -292,6 +294,9 @@ func goOnTitleChange(cPID C.int, cAppID *C.char, cTitle *C.char, cAppName *C.cha
 			}
 		}
 
+		if onTitleChange == nil {
+			return
+		}
 		onTitleChange(NativeEvent{
 			Type:           AxEventTypeTitle,
 			PID:            pid,

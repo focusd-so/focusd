@@ -28,7 +28,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useUsageStore } from "@/stores/usage-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useAccountStore } from "@/stores/account-store";
 import { SmartBlockingStatus } from "@/components/smart-blocking-status";
@@ -41,23 +40,40 @@ import {
 } from "@/components/usage-item";
 import { AllowCustomDialog } from "@/components/allow-custom-dialog";
 import { hasNonDefaultCustomRules } from "@/lib/rules/default-rules";
-import type { ApplicationUsage } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
+import {
+  useApplicationList,
+  useBlockedItems,
+  useRecentUsages,
+  type BlockedItemView,
+} from "@/hooks/queries/use-usage";
+import {
+  useAllowApp,
+  useAllowHostname,
+  useAllowList,
+  useAllowURL,
+  useRemoveAllow,
+  type AllowedItem,
+} from "@/hooks/queries/use-allow";
+import {
+  buildApplicationsById,
+  toUsageItemView,
+  type UsageItemView,
+} from "@/lib/usage-view";
+import { parsePayload, type ApplicationUsagePayload } from "@/lib/timeline";
 import { DeviceHandshakeResponse_AccountTier } from "../../bindings/github.com/focusd-so/focusd/gen/api/v1/models";
 import { usePageSearch } from "@/hooks/use-page-search";
 
-// Extended blocked item for UI display with allowed status
 interface BlockedUsageDisplay {
-  usage: ApplicationUsage;
+  view: UsageItemView;
   count: number;
   isAllowed: boolean;
   expiresAt: number | null;
-  whitelistId: number | null;
+  allowId: number | null;
 }
 
 export const Route = createFileRoute("/activity")({
   component: ActivityPage,
 });
-
 
 function ClassificationSourceBadge({
   source,
@@ -124,13 +140,29 @@ function ClassificationSourceBadge({
   return badgeContent;
 }
 
+function matchesAllowed(view: UsageItemView, allowed: AllowedItem): boolean {
+  if (allowed.hostname && view.application?.hostname) {
+    return allowed.hostname === view.application.hostname;
+  }
+  if (allowed.url && view.browser_url) {
+    return allowed.url === view.browser_url;
+  }
+  if (allowed.app_name && view.application?.name) {
+    return allowed.app_name === view.application.name;
+  }
+  return false;
+}
 
 function ActivityPage() {
-  // Use specific selectors to avoid re-rendering on every store change (like currentTime polling)
-  const recentUsages = useUsageStore((state) => state.recentUsages);
-  const getBlockedItemsList = useUsageStore((state) => state.getBlockedItemsList);
-  const allowedItems = useUsageStore((state) => state.allowedItems);
-  const blockedItems = useUsageStore((state) => state.blockedItems); // Subscribe to blocked items map
+  const { data: recentEvents = [] } = useRecentUsages();
+  const blockedRaw = useBlockedItems();
+  const { items: allowedItems } = useAllowList();
+  const { data: applications } = useApplicationList();
+  const applicationsById = useMemo(
+    () => buildApplicationsById(applications),
+    [applications],
+  );
+
   const customRules = useSettingsStore((state) => state.customRules);
   const { checkoutLink, fetchAccountTier } = useAccountStore();
   const { data: accountTier } = useQuery({
@@ -147,106 +179,87 @@ function ActivityPage() {
     placeholder: "Search blocked + recent...",
   });
 
-  // Defer rendering of the full list to make navigation instant
   const [renderCount, setRenderCount] = useState(15);
 
   React.useEffect(() => {
-    if (recentUsages.length > 15) {
-      // Small timeout to allow the initial frame (with 15 items) to paint first
-      const timer = setTimeout(() => {
-        setRenderCount(100);
-      }, 50);
+    if (recentEvents.length > 15) {
+      const timer = setTimeout(() => setRenderCount(100), 50);
       return () => clearTimeout(timer);
     }
-  }, [recentUsages.length]);
+  }, [recentEvents.length]);
 
-  // Get active usages
-  const activeUsages = useMemo(
-    () => recentUsages,
-    [recentUsages]
+  const activeUsages: UsageItemView[] = useMemo(
+    () =>
+      recentEvents.map((event) => {
+        const payload = parsePayload<ApplicationUsagePayload>(event);
+        const app = payload?.application_id
+          ? applicationsById.get(payload.application_id)
+          : undefined;
+        return toUsageItemView(event, app);
+      }),
+    [recentEvents, applicationsById],
   );
 
-  // Combine blocked items with allowed items for display
-  const blockedUsagesDisplay = useMemo(() => {
-    const itemsList = getBlockedItemsList();
-    const result: BlockedUsageDisplay[] = [];
-
-    // Process blocked items
-    itemsList.forEach((item) => {
-      // Check if this item is in the whitelist
-      // For web content (has hostname): match by hostname only
-      // For native apps (no hostname): match by app name only
-      const whitelistEntry = allowedItems.find((w) => {
-        const itemHostname = item.usage.application?.hostname;
-        const itemName = item.usage.application?.name;
-
-        if (w.hostname) {
-          // Whitelist entry is for a website - match by hostname only
-          return w.hostname === itemHostname;
-        } else if (w.appname) {
-          // Whitelist entry is for a native app - match by name only
-          return w.appname === itemName;
-        }
-        return false;
-      });
-
-      result.push({
-        usage: item.usage,
-        count: item.count,
-        isAllowed: !!whitelistEntry,
-        expiresAt: whitelistEntry?.expires_at || null,
-        whitelistId: whitelistEntry?.id || null,
-      });
+  const blockedItemViews = useMemo<BlockedUsageDisplay[]>(() => {
+    return blockedRaw.map(({ event, count }: BlockedItemView) => {
+      const payload = parsePayload<ApplicationUsagePayload>(event);
+      const app = payload?.application_id
+        ? applicationsById.get(payload.application_id)
+        : undefined;
+      const view = toUsageItemView(event, app);
+      const allowMatch = allowedItems.find((a) => matchesAllowed(view, a));
+      return {
+        view,
+        count,
+        isAllowed: !!allowMatch,
+        expiresAt: allowMatch?.expires_at ?? null,
+        allowId: allowMatch?.id ?? null,
+      };
     });
+  }, [blockedRaw, allowedItems, applicationsById]);
 
-    // Add allowed items that aren't in blocked list
-    allowedItems.forEach((allowed) => {
-      // Use same matching logic as above
-      const alreadyInList = result.some((r) => {
-        if (allowed.hostname) {
-          return r.usage.application?.hostname === allowed.hostname;
-        } else if (allowed.appname) {
-          return r.usage.application?.name === allowed.appname;
-        }
-        return false;
+  const allowedOnlyDisplay = useMemo<BlockedUsageDisplay[]>(() => {
+    const seen = new Set<string>();
+    for (const item of blockedItemViews) {
+      seen.add(`${item.view.application?.hostname ?? ""}|${item.view.application?.name ?? ""}`);
+    }
+    const out: BlockedUsageDisplay[] = [];
+    for (const allowed of allowedItems) {
+      const key = `${allowed.hostname ?? ""}|${allowed.app_name ?? ""}`;
+      if (seen.has(key)) continue;
+
+      const matchView = activeUsages.find((u) =>
+        matchesAllowed(u, allowed),
+      );
+      if (!matchView) continue;
+
+      out.push({
+        view: matchView,
+        count: 0,
+        isAllowed: true,
+        expiresAt: allowed.expires_at,
+        allowId: allowed.id,
       });
+    }
+    return out;
+  }, [allowedItems, activeUsages, blockedItemViews]);
 
-      if (!alreadyInList) {
-        // Find a recent usage for this allowed item to get display info
-        const recentUsage = recentUsages.find((u) => {
-          if (allowed.hostname) {
-            return u.application?.hostname === allowed.hostname;
-          } else if (allowed.appname) {
-            return u.application?.name === allowed.appname;
-          }
-          return false;
-        });
-
-        if (recentUsage) {
-          result.push({
-            usage: recentUsage,
-            count: 0,
-            isAllowed: true,
-            expiresAt: allowed.expires_at,
-            whitelistId: allowed.id,
-          });
-        }
-      }
-    });
-
-    // Sort by recency (latest first)
-    return result.sort((a, b) => (b.usage.started_at ?? 0) - (a.usage.started_at ?? 0));
-  }, [getBlockedItemsList, blockedItems, allowedItems, recentUsages]);
+  const blockedUsagesDisplay = useMemo(
+    () =>
+      [...blockedItemViews, ...allowedOnlyDisplay].sort(
+        (a, b) => (b.view.started_at ?? 0) - (a.view.started_at ?? 0),
+      ),
+    [blockedItemViews, allowedOnlyDisplay],
+  );
 
   const filteredBlockedUsages = useMemo(() => {
     if (!searchQuery) return blockedUsagesDisplay;
     const q = searchQuery.toLowerCase();
-    return blockedUsagesDisplay.filter((item) => {
-      const { usage } = item;
-      const name = usage.application?.name?.toLowerCase() || "";
-      const host = usage.application?.hostname?.toLowerCase() || "";
-      const title = usage.window_title?.toLowerCase() || "";
-      const tags = usage.tags?.map((t: any) => t.tag.toLowerCase()).join(" ") || "";
+    return blockedUsagesDisplay.filter(({ view }) => {
+      const name = view.application?.name?.toLowerCase() || "";
+      const host = view.application?.hostname?.toLowerCase() || "";
+      const title = view.window_title?.toLowerCase() || "";
+      const tags = view.tags.join(" ").toLowerCase();
       return name.includes(q) || host.includes(q) || title.includes(q) || tags.includes(q);
     });
   }, [blockedUsagesDisplay, searchQuery]);
@@ -254,12 +267,11 @@ function ActivityPage() {
   const filteredActiveUsages = useMemo(() => {
     if (!searchQuery) return activeUsages;
     const q = searchQuery.toLowerCase();
-
-    return activeUsages.filter((usage) => {
-      const name = usage.application?.name?.toLowerCase() || "";
-      const host = usage.application?.hostname?.toLowerCase() || "";
-      const title = usage.window_title?.toLowerCase() || "";
-      const tags = usage.tags?.map((t: any) => t.tag.toLowerCase()).join(" ") || "";
+    return activeUsages.filter((view) => {
+      const name = view.application?.name?.toLowerCase() || "";
+      const host = view.application?.hostname?.toLowerCase() || "";
+      const title = view.window_title?.toLowerCase() || "";
+      const tags = view.tags.join(" ").toLowerCase();
       return name.includes(q) || host.includes(q) || title.includes(q) || tags.includes(q);
     });
   }, [activeUsages, searchQuery]);
@@ -293,7 +305,7 @@ function ActivityPage() {
               ) : (
                 filteredBlockedUsages.map((item) => (
                   <BlockedUsageItem
-                    key={item.usage.application?.hostname || item.usage.application?.name || ""}
+                    key={item.view.application?.hostname || item.view.application?.name || String(item.view.id)}
                     item={item}
                   />
                 ))
@@ -337,8 +349,8 @@ function ActivityPage() {
               </div>
             ) : (
               <div className="space-y-1.5">
-                {filteredActiveUsages.slice(0, renderCount).map((usage) => (
-                  <UsageItem key={usage.id} usage={usage} />
+                {filteredActiveUsages.slice(0, renderCount).map((view) => (
+                  <UsageItem key={view.id} usage={view} />
                 ))}
               </div>
             )}
@@ -349,24 +361,22 @@ function ActivityPage() {
   );
 }
 
-
 function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
-  const { usage, count, isAllowed, expiresAt, whitelistId } = item;
-  const isWeb = !!usage.application?.hostname;
+  const { view, count, isAllowed, expiresAt, allowId } = item;
+  const isWeb = !!view.application?.hostname;
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [isCustomDialogOpen, setIsCustomDialogOpen] = useState(false);
-  const addToWhitelist = useUsageStore((state) => state.addToWhitelist);
-  const removeFromWhitelist = useUsageStore((state) => state.removeFromWhitelist);
+  const allowAppMutation = useAllowApp();
+  const allowHostnameMutation = useAllowHostname();
+  const allowURLMutation = useAllowURL();
+  const removeAllowMutation = useRemoveAllow();
 
-  // Calculate if this item was recently blocked (e.g. within last 5 minutes)
   const isRecentlyBlocked = React.useMemo(() => {
-    if (!usage.started_at || isAllowed) return false;
+    if (!view.started_at || isAllowed) return false;
     const now = Math.floor(Date.now() / 1000);
-    // 5 minutes = 300 seconds
-    return (now - usage.started_at) < 300;
-  }, [usage.started_at, isAllowed]);
+    return (now - view.started_at) < 300;
+  }, [view.started_at, isAllowed]);
 
-  // Timer effect for countdown
   React.useEffect(() => {
     if (!isAllowed || !expiresAt) {
       setTimeLeft(null);
@@ -377,10 +387,7 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
       const remaining = expiresAt - Math.floor(Date.now() / 1000);
       if (remaining <= 0) {
         setTimeLeft(null);
-        // Remove from whitelist when time expires to return to blocked state
-        if (whitelistId) {
-          removeFromWhitelist(whitelistId);
-        }
+        if (allowId) removeAllowMutation.mutate(allowId);
       } else {
         setTimeLeft(remaining);
       }
@@ -389,39 +396,51 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [isAllowed, expiresAt, whitelistId, removeFromWhitelist]);
+  }, [isAllowed, expiresAt, allowId, removeAllowMutation]);
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
 
-    // Always pad minutes and seconds. Include hours if >= 1
     if (hours > 0) {
       return `${hours}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
     }
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const handleAllowWithDuration = async (durationMinutes: number) => {
-    const appname = usage.application?.name || "";
-    const hostname = usage.application?.hostname || "";
-    await addToWhitelist(appname, hostname, durationMinutes);
+  const handleAllowSite = async (durationMinutes: number) => {
+    if (isWeb && view.browser_url) {
+      await allowHostnameMutation.mutateAsync({
+        rawURL: view.browser_url,
+        durationMinutes,
+      });
+    } else if (view.application?.name) {
+      await allowAppMutation.mutateAsync({
+        appName: view.application.name,
+        durationMinutes,
+      });
+    }
+  };
+
+  const handleAllowExactURL = async (durationMinutes: number) => {
+    if (!view.browser_url) return;
+    await allowURLMutation.mutateAsync({
+      rawURL: view.browser_url,
+      durationMinutes,
+    });
   };
 
   const handleExtendDuration = async (addedMinutes: number) => {
     if (!expiresAt) return;
     const now = Math.floor(Date.now() / 1000);
-    // If it already expired, just add from now
     const currentRemaining = Math.max(0, expiresAt - now);
     const totalMinutes = Math.floor(currentRemaining / 60) + addedMinutes;
-    await handleAllowWithDuration(totalMinutes);
+    await handleAllowSite(totalMinutes);
   };
 
   const handleUnallow = async () => {
-    if (whitelistId) {
-      await removeFromWhitelist(whitelistId);
-    }
+    if (allowId) await removeAllowMutation.mutateAsync(allowId);
   };
 
   const borderColor = isAllowed ? "border-yellow-500/20" : isRecentlyBlocked ? "border-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.1)]" : "border-red-500/20";
@@ -438,26 +457,27 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
   const iconColor = isAllowed ? "text-yellow-500/60" : "text-red-500/60";
 
   const termSource = formatEnforcementSource(
-    usage.enforcement_source,
-    usage.classification_reasoning
+    view.enforcement_source,
+    view.classification_reason
   );
+
+  const allowSiteLabel = isWeb ? "this site" : "this app";
 
   return (
     <div
       className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all group ${borderColor} ${bgColor}`}
     >
-      {/* App Icon */}
       <div
         className={`relative w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0 ring-1 ${iconBgColor} transition-all`}
       >
-        {usage.application?.icon ? (
+        {view.application?.icon ? (
           <img
             src={
-              usage.application.icon.startsWith("data:")
-                ? usage.application.icon
-                : `data:image/png;base64,${usage.application.icon}`
+              view.application.icon.startsWith("data:")
+                ? view.application.icon
+                : `data:image/png;base64,${view.application.icon}`
             }
-            alt={usage.application?.hostname || usage.application?.name}
+            alt={view.application?.hostname || view.application?.name}
             className={`w-8 h-8 object-contain ${isAllowed ? "" : "grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100"} transition-all`}
           />
         ) : isWeb ? (
@@ -467,21 +487,18 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
         )}
       </div>
 
-      {/* Title + Meta — left side */}
       <div className="flex flex-col min-w-0 flex-1 justify-center gap-0.5">
-        {/* Row 1: Name + status badge */}
         <div className="flex items-center gap-2">
           <TruncatedLabel
             className={`text-xs font-semibold truncate ${textColor} transition-colors`}
           >
-            {usage.application?.hostname || usage.application?.name || "Unknown"}
+            {view.application?.hostname || view.application?.name || "Unknown"}
           </TruncatedLabel>
           <span className={`text-[9px] font-bold ${statusColor} uppercase tracking-wider opacity-90 shrink-0`}>
             {isAllowed ? "ALLOWED" : "BLOCKED"}
           </span>
         </div>
 
-        {/* Row 2: Window title / rule source */}
         <div className="flex items-start gap-1.5 overflow-hidden text-left">
           {termSource && !isAllowed && (
             <span className="text-[9px] text-white/40 flex items-center gap-0.5 shrink-0">
@@ -500,20 +517,19 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
               )}
             </span>
           )}
-          {termSource && !isAllowed && usage.window_title && (
+          {termSource && !isAllowed && view.window_title && (
             <span className="text-white/20 text-[9px] shrink-0">—</span>
           )}
-          {usage.window_title && (
+          {view.window_title && (
             <TruncatedLabel className="text-[9px] text-white/35 truncate max-w-[240px]">
-              {usage.window_title}
+              {view.window_title}
             </TruncatedLabel>
           )}
-          {/* Inline classification reasoning (quiet) */}
-          {!termSource && !usage.window_title && (
+          {!termSource && !view.window_title && (
             <ClassificationSourceBadge
-              source={usage.classification_source}
-              classification={usage.classification}
-              reasoning={usage.classification_reasoning}
+              source={view.classification_source}
+              classification={view.classification}
+              reasoning={view.classification_reason}
               variant={isAllowed ? "yellow" : "red"}
               isAllowedDistraction={isAllowed}
               className="!bg-transparent !border-transparent px-0 py-0 opacity-75 hover:opacity-100 transition-opacity font-normal"
@@ -522,12 +538,11 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
           )}
         </div>
 
-        {/* Row 3: classification badge (when there IS also a window title) */}
-        {(termSource || usage.window_title) && usage.classification_source && (
+        {(termSource || view.window_title) && view.classification_source && (
           <ClassificationSourceBadge
-            source={usage.classification_source}
-            classification={usage.classification}
-            reasoning={usage.classification_reasoning}
+            source={view.classification_source}
+            classification={view.classification}
+            reasoning={view.classification_reason}
             variant={isAllowed ? "yellow" : "red"}
             isAllowedDistraction={isAllowed}
             className="!bg-transparent !border-transparent px-0 py-0 opacity-75 hover:opacity-100 transition-opacity font-normal self-start text-left"
@@ -536,22 +551,21 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
         )}
       </div>
 
-      {/* Right side: time + tags + count */}
       <div className="flex items-center gap-1.5 shrink-0">
         <span className="text-[9px] text-muted-foreground/35 font-mono">
-          {formatSmartDate(usage.started_at)}
+          {formatSmartDate(view.started_at)}
         </span>
 
-        {usage.tags?.map((usageTag: any) => (
+        {view.tags.map((tag) => (
           <Badge
-            key={usageTag.tag}
+            key={tag}
             variant="outline"
             className={`px-1 py-0 text-[8px] font-bold rounded-sm border ${isAllowed
               ? "border-yellow-500/30 text-yellow-500/70 bg-yellow-500/5"
               : "border-red-500/30 text-red-500/70 bg-red-500/5"
               }`}
           >
-            {usageTag.tag}
+            {tag}
           </Badge>
         ))}
 
@@ -577,7 +591,6 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
         )}
       </div>
 
-      {/* Action buttons */}
       <div className="shrink-0">
         {!isAllowed && (
           <DropdownMenu>
@@ -594,28 +607,28 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="w-36 bg-neutral-950 border-white/10 text-white"
+              className="w-44 bg-neutral-950 border-white/10 text-white"
             >
               <DropdownMenuLabel className="text-[9px] font-semibold text-white/30 uppercase tracking-widest px-2 py-1">
-                Allow for…
+                Allow {allowSiteLabel} for…
               </DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-white/8" />
               <DropdownMenuItem
-                onClick={() => handleAllowWithDuration(15)}
+                onClick={() => handleAllowSite(15)}
                 className="text-sm text-white/80 hover:text-white focus:text-white focus:bg-white/8 cursor-pointer gap-2 justify-start"
               >
                 <IconClock className="w-3.5 h-3.5 opacity-60" />
                 15 minutes
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => handleAllowWithDuration(30)}
+                onClick={() => handleAllowSite(30)}
                 className="text-sm text-white/80 hover:text-white focus:text-white focus:bg-white/8 cursor-pointer gap-2 justify-start"
               >
                 <IconClock className="w-3.5 h-3.5 opacity-60" />
                 30 minutes
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => handleAllowWithDuration(60)}
+                onClick={() => handleAllowSite(60)}
                 className="text-sm text-white/80 hover:text-white focus:text-white focus:bg-white/8 cursor-pointer gap-2 justify-start"
               >
                 <IconClock className="w-3.5 h-3.5 opacity-60" />
@@ -629,6 +642,28 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
                 <IconCalendar className="w-3.5 h-3.5 opacity-60" />
                 Custom time...
               </DropdownMenuItem>
+              {isWeb && view.browser_url && (
+                <>
+                  <DropdownMenuSeparator className="bg-white/8" />
+                  <DropdownMenuLabel className="text-[9px] font-semibold text-white/30 uppercase tracking-widest px-2 py-1">
+                    Allow this URL only
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onClick={() => handleAllowExactURL(15)}
+                    className="text-sm text-white/80 hover:text-white focus:text-white focus:bg-white/8 cursor-pointer gap-2 justify-start"
+                  >
+                    <IconClock className="w-3.5 h-3.5 opacity-60" />
+                    15 minutes
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => handleAllowExactURL(60)}
+                    className="text-sm text-white/80 hover:text-white focus:text-white focus:bg-white/8 cursor-pointer gap-2 justify-start"
+                  >
+                    <IconClock className="w-3.5 h-3.5 opacity-60" />
+                    1 hour
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )}
@@ -699,8 +734,8 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
       <AllowCustomDialog
         open={isCustomDialogOpen}
         onOpenChange={setIsCustomDialogOpen}
-        onConfirm={handleAllowWithDuration}
-        appName={usage.application?.hostname || usage.application?.name || "App"}
+        onConfirm={handleAllowSite}
+        appName={view.application?.hostname || view.application?.name || "App"}
         defaultDate={expiresAt ? new Date(expiresAt * 1000) : undefined}
       />
     </div>

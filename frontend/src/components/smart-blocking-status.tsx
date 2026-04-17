@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   IconShield,
   IconPlayerPause,
@@ -8,7 +8,13 @@ import {
   IconAdjustments,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
-import { useUsageStore } from "@/stores/usage-store";
+import {
+  useProtectionStatus,
+  useResumeProtection,
+  usePauseHistory,
+} from "@/hooks/queries/use-protection";
+import { queryKeys } from "@/lib/query-keys";
+import { isEventActive } from "@/lib/timeline";
 import { PauseConfirmationDialog } from "@/components/pause-confirmation-dialog";
 
 function formatRemainingTime(seconds: number): string {
@@ -19,51 +25,48 @@ function formatRemainingTime(seconds: number): string {
 }
 
 export function SmartBlockingStatus() {
-  const currentPause = useUsageStore((state) => state.currentPause);
-  const resumeProtection = useUsageStore((state) => state.resumeProtection);
-  const getPauseHistory = useUsageStore((state) => state.getPauseHistory);
-  const initProtectionStore = useUsageStore((state) => state.initProtectionStore);
+  const { data: pauseEvent } = useProtectionStatus();
+  const resumeMutation = useResumeProtection();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [showPauseDialog, setShowPauseDialog] = useState(false);
   const hasTriggeredExpiration = useRef(false);
 
-  const handleOpenPauseDialog = () => {
-    getPauseHistory(7); // Fetch last 7 days of pause history
-    setShowPauseDialog(true);
-  };
+  // Pre-fetch pause history when the user opens the dialog so it has fresh
+  // data without doing an extra round-trip.
+  usePauseHistory(7, { enabled: showPauseDialog });
 
-  const isPaused = !!(currentPause && currentPause.id > 0);
+  const handleOpenPauseDialog = () => setShowPauseDialog(true);
 
-  // Reset expiration flag when pause changes
-  if (!isPaused) {
-    hasTriggeredExpiration.current = false;
-  }
+  const isPaused = isEventActive(pauseEvent ?? null);
+  if (!isPaused) hasTriggeredExpiration.current = false;
 
-  // Use React Query to poll current time every second when paused
+  // Poll the wall clock once per second only while paused so the countdown
+  // ticks down without triggering React re-renders elsewhere.
   const { data: currentTime = Date.now() } = useQuery<number>({
-    queryKey: ["currentTime", currentPause?.id],
+    queryKey: ["currentTime", pauseEvent?.id ?? null],
     queryFn: () => Date.now(),
     enabled: isPaused,
     refetchInterval: isPaused ? 1000 : false,
     staleTime: 0,
   });
 
-  // Calculate remaining seconds
   const remainingSeconds = isPaused
-    ? (currentPause?.resumed_at ?? 0) - Math.floor(currentTime / 1000)
+    ? (pauseEvent?.ended_at ?? 0) - Math.floor(currentTime / 1000)
     : 0;
 
-  // When timer expires, re-fetch protection status from backend to sync state
+  // When the local timer hits zero, the backend may not have emitted the
+  // "expired" event yet (it fires when the next usage event is processed).
+  // Re-fetch protection status so the UI flips back to active eagerly.
   if (isPaused && remainingSeconds <= 0 && !hasTriggeredExpiration.current) {
     hasTriggeredExpiration.current = true;
-    initProtectionStore();
+    queryClient.invalidateQueries({ queryKey: queryKeys.protectionStatus });
   }
 
   const navigateToCustomise = () => {
     navigate({ to: "/settings", search: { tab: "rules" } });
   };
 
-  // Paused state
   if (isPaused) {
     return (
       <div className="p-4 rounded-xl border border-yellow-500/20 bg-yellow-500/5 flex flex-row items-center justify-between gap-4 transition-all">
@@ -93,7 +96,7 @@ export function SmartBlockingStatus() {
             variant="outline"
             size="sm"
             className="bg-yellow-500/10 border-yellow-500/30 hover:bg-yellow-500/20 text-yellow-500 text-xs h-8 gap-2"
-            onClick={() => resumeProtection()}
+            onClick={() => resumeMutation.mutate("user manually resumed")}
           >
             <IconPlayerPlay className="w-3 h-3" />
             Resume
@@ -111,7 +114,6 @@ export function SmartBlockingStatus() {
     );
   }
 
-  // Active state (Default)
   return (
     <>
       <div className="p-4 rounded-xl border border-green-500/20 bg-green-500/5 flex flex-row items-center justify-between gap-4 transition-all hover:bg-green-500/[0.07] group/status">

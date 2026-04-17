@@ -13,8 +13,7 @@ type Service struct {
 	db *gorm.DB
 	mu *sync.Mutex
 
-	onCreated map[string][]func(*Event)
-	onUpdated map[string][]func(*Event)
+	onEvent map[string][]func(*Event)
 }
 
 func NewService(db *gorm.DB) (*Service, error) {
@@ -23,10 +22,9 @@ func NewService(db *gorm.DB) (*Service, error) {
 	}
 
 	return &Service{
-		db:        db,
-		mu:        &sync.Mutex{},
-		onCreated: make(map[string][]func(*Event)),
-		onUpdated: make(map[string][]func(*Event)),
+		db:      db,
+		mu:      &sync.Mutex{},
+		onEvent: make(map[string][]func(*Event)),
 	}, nil
 }
 
@@ -74,7 +72,7 @@ func (s Service) CreateEvent(eventType string, opts ...EventOption) (Event, erro
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for _, sub := range s.onCreated[eventType] {
+	for _, sub := range s.onEvent[eventType] {
 		sub(&event)
 	}
 
@@ -97,7 +95,7 @@ func (s Service) UpdateEvent(e *Event, opts ...EventOption) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for _, sub := range s.onUpdated[e.Type] {
+	for _, sub := range s.onEvent[e.Type] {
 		sub(e)
 	}
 
@@ -148,9 +146,9 @@ func (s Service) GetActiveEventOfTypes(eventTypes []string) (*Event, error) {
 	return &event, nil
 }
 
-func (s Service) OnEventCreated(eventType string, fn func(event *Event)) {
+func (s Service) On(eventType string, fn func(event *Event)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.onCreated[eventType] = append(s.onCreated[eventType], fn)
+	s.onEvent[eventType] = append(s.onEvent[eventType], fn)
 }

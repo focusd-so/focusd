@@ -31,8 +31,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useUsageStore } from "@/stores/usage-store";
 import { cn } from "@/lib/utils";
+import { usePauseProtection, usePauseHistory } from "@/hooks/queries/use-protection";
+import { useAllowApp, useAllowHostname } from "@/hooks/queries/use-allow";
+import { useBlockedItems } from "@/hooks/queries/use-usage";
+import { useApplicationList } from "@/hooks/queries/use-usage";
+import { buildApplicationsById, toUsageItemView } from "@/lib/usage-view";
+import { parsePayload, type ApplicationUsagePayload } from "@/lib/timeline";
 
 interface PauseConfirmationDialogProps {
   open: boolean;
@@ -93,17 +98,22 @@ export function PauseConfirmationDialog({
   open,
   onOpenChange,
 }: PauseConfirmationDialogProps) {
-  const getBlockedItemsList = useUsageStore((state) => state.getBlockedItemsList);
-  const addToWhitelist = useUsageStore((state) => state.addToWhitelist);
-  const pauseProtection = useUsageStore((state) => state.pauseProtection);
-  const pauseHistory = useUsageStore((state) => state.pauseHistory);
-  const getPauseHistory = useUsageStore((state) => state.getPauseHistory);
+  const blockedItemViews = useBlockedItems();
+  const { data: applications } = useApplicationList();
+  const applicationsById = useMemo(
+    () => buildApplicationsById(applications),
+    [applications],
+  );
+
+  const pauseProtection = usePauseProtection();
+  const allowAppMutation = useAllowApp();
+  const allowHostnameMutation = useAllowHostname();
+  const { data: pauseHistory } = usePauseHistory(30, { enabled: open });
   const navigate = useNavigate();
   const [pauseMode, setPauseMode] = useState<"duration" | "until">("duration");
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
   const [pauseUntilDate, setPauseUntilDate] = useState<Date | undefined>(undefined);
   const [pauseUntilTime, setPauseUntilTime] = useState<string>("");
-  const [isPausing, setIsPausing] = useState(false);
   const [allowingKey, setAllowingKey] = useState<string | null>(null);
 
   const resetPauseForm = () => {
@@ -113,15 +123,9 @@ export function PauseConfirmationDialog({
     setPauseUntilTime("");
   };
 
-  // Fetch pause history for the last 30 days when the dialog opens
-  // and reset selected duration when the dialog is closed.
   useEffect(() => {
-    if (open) {
-      getPauseHistory(30);
-    } else {
-      resetPauseForm();
-    }
-  }, [open, getPauseHistory]);
+    if (!open) resetPauseForm();
+  }, [open]);
 
   const pauseUntilDateTime = useMemo(() => {
     if (!pauseUntilDate || !pauseUntilTime) return null;
@@ -144,8 +148,18 @@ export function PauseConfirmationDialog({
       ? !!selectedDuration
       : !!pauseUntilDurationMinutes && pauseUntilDurationMinutes > 0;
 
-  // Get last 2 blocked items to show as quick allow options
-  const blockedItems = getBlockedItemsList().slice(0, 2);
+  // Surface the latest two blocked items as quick-allow shortcuts.
+  const blockedItems = useMemo(
+    () =>
+      blockedItemViews.slice(0, 2).map(({ event, count }) => {
+        const payload = parsePayload<ApplicationUsagePayload>(event);
+        const app = payload?.application_id
+          ? applicationsById.get(payload.application_id)
+          : undefined;
+        return { view: toUsageItemView(event, app), count };
+      }),
+    [blockedItemViews, applicationsById],
+  );
 
   const { todayCount, weekCount } = useMemo(() => {
     if (!pauseHistory) return { todayCount: 0, weekCount: 0 };
@@ -153,19 +167,16 @@ export function PauseConfirmationDialog({
     let tCount = 0;
     let wCount = 0;
 
-    // Create Date objects for midnight today and 7 days ago
     const now = new Date();
-    const startOfTodaySeconds = Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000);
+    const startOfTodaySeconds = Math.floor(
+      new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000,
+    );
     const oneWeekAgoSeconds = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
 
-    pauseHistory.forEach((p) => {
-      if (p.created_at >= startOfTodaySeconds) {
-        tCount++;
-      }
-      if (p.created_at >= oneWeekAgoSeconds) {
-        wCount++;
-      }
-    });
+    for (const event of pauseHistory) {
+      if (event.occurred_at >= startOfTodaySeconds) tCount++;
+      if (event.occurred_at >= oneWeekAgoSeconds) wCount++;
+    }
 
     return { todayCount: tCount, weekCount: wCount };
   }, [pauseHistory]);
@@ -181,14 +192,12 @@ export function PauseConfirmationDialog({
 
     if (!durationMinutes || durationMinutes <= 0) return;
 
-    setIsPausing(true);
-    try {
-      await pauseProtection(durationMinutes);
-      onOpenChange(false);
-      resetPauseForm();
-    } finally {
-      setIsPausing(false);
-    }
+    await pauseProtection.mutateAsync({
+      durationSeconds: durationMinutes * 60,
+      reason: "user manually paused",
+    });
+    onOpenChange(false);
+    resetPauseForm();
   };
 
   const handleCancel = () => {
@@ -196,23 +205,33 @@ export function PauseConfirmationDialog({
     resetPauseForm();
   };
 
-  const handleQuickAllow = async (appName: string, hostname: string, durationMinutes: number) => {
-    const key = hostname || appName;
+  const handleQuickAllow = async (
+    item: (typeof blockedItems)[number],
+    durationMinutes: number,
+  ) => {
+    const view = item.view;
+    const key = view.application?.hostname || view.application?.name || String(view.id);
     setAllowingKey(key);
     try {
-      await addToWhitelist(appName, hostname, durationMinutes);
+      if (view.application?.hostname && view.browser_url) {
+        await allowHostnameMutation.mutateAsync({
+          rawURL: view.browser_url,
+          durationMinutes,
+        });
+      } else if (view.application?.name) {
+        await allowAppMutation.mutateAsync({
+          appName: view.application.name,
+          durationMinutes,
+        });
+      }
       onOpenChange(false);
     } finally {
       setAllowingKey(null);
     }
   };
 
-  // Get display name for a blocked item
-  const getDisplayName = (item: (typeof blockedItems)[0]) => {
-    const app = item.usage.application;
-    if (app?.hostname) return app.hostname;
-    if (app?.name) return app.name;
-    return "Unknown";
+  const getDisplayName = (item: (typeof blockedItems)[number]) => {
+    return item.view.application?.hostname || item.view.application?.name || "Unknown";
   };
 
   return (
@@ -227,7 +246,6 @@ export function PauseConfirmationDialog({
         </DialogHeader>
 
         <DialogBody className="space-y-4 pt-6">
-          {/* Top Half: Selective Pause */}
           {blockedItems.length > 0 && (
             <>
               <div className="space-y-2">
@@ -239,19 +257,15 @@ export function PauseConfirmationDialog({
 
                 <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 overflow-hidden divide-y divide-emerald-500/10">
                   {blockedItems.map((item) => {
-                    const app = item.usage.application;
-                    const key = app?.hostname || app?.name || String(item.usage.id);
+                    const view = item.view;
+                    const key = view.application?.hostname || view.application?.name || String(view.id);
                     const isAllowing = allowingKey === key;
 
                     return (
-                      <div
-                        key={key}
-                        className="flex items-center gap-3 px-3 py-2.5"
-                      >
-                        {/* App Icon */}
-                        {app?.icon ? (
+                      <div key={key} className="flex items-center gap-3 px-3 py-2.5">
+                        {view.application?.icon ? (
                           <img
-                            src={`data:image/png;base64,${app.icon}`}
+                            src={`data:image/png;base64,${view.application.icon}`}
                             alt=""
                             className="w-5 h-5 rounded grayscale-[0.2]"
                           />
@@ -259,21 +273,17 @@ export function PauseConfirmationDialog({
                           <div className="w-5 h-5 rounded bg-muted-foreground/20" />
                         )}
 
-                        {/* App Name */}
                         <span className="text-xs font-medium text-muted-foreground flex-1 truncate">
                           {getDisplayName(item)}
                         </span>
 
-                        {/* Allow Buttons */}
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] text-muted-foreground/60 font-medium whitespace-nowrap">Allow for</span>
                           <div className="flex items-center rounded-md border border-border/40 bg-muted/30 overflow-hidden divide-x divide-border/40">
                             {[15, 30, 60].map((durationFn) => (
                               <button
                                 key={durationFn}
-                                onClick={() =>
-                                  handleQuickAllow(app?.name || "", app?.hostname || "", durationFn)
-                                }
+                                onClick={() => handleQuickAllow(item, durationFn)}
                                 disabled={isAllowing}
                                 className="px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:bg-green-500/10 hover:text-green-400 transition-all disabled:opacity-50"
                               >
@@ -296,7 +306,6 @@ export function PauseConfirmationDialog({
             </>
           )}
 
-          {/* Bottom Half: Global Pause */}
           <div className="space-y-4">
             <div className="flex flex-col gap-3 px-1">
               <div className="flex items-center gap-2">
@@ -316,7 +325,6 @@ export function PauseConfirmationDialog({
               )}
             </div>
 
-            {/* Duration Selection */}
             <div className="space-y-2">
               <div className="grid grid-cols-3 gap-2">
                 {PAUSE_OPTIONS.map((opt) => (
@@ -441,17 +449,16 @@ export function PauseConfirmationDialog({
           <Button
             variant="default"
             onClick={handleConfirmPause}
-            disabled={!canConfirmPause || isPausing}
+            disabled={!canConfirmPause || pauseProtection.isPending}
             className={`flex-1 rounded-xl h-11 font-semibold transition-all shadow-sm ${canConfirmPause
               ? "bg-orange-500 text-white hover:bg-orange-600 shadow-orange-500/10"
               : "bg-muted text-muted-foreground opacity-50"
               }`}
           >
-            {isPausing ? "Pausing..." : "Pause Protection"}
+            {pauseProtection.isPending ? "Pausing..." : "Pause Protection"}
           </Button>
         </DialogFooter>
 
-        {/* Bottom Tip */}
         <div className="px-6 py-3 border-t border-border/20 bg-muted/20 flex items-center justify-center gap-1.5">
           <IconBulb className="w-3 h-3 text-blue-500/60" />
           <p className="text-[10px] text-muted-foreground/80 leading-none">

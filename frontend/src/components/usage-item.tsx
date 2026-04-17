@@ -16,10 +16,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useUsageStore } from "@/stores/usage-store";
+import { useResumeProtection, useIsProtectionPaused } from "@/hooks/queries/use-protection";
 import { useAccountStore } from "@/stores/account-store";
-import type { ApplicationUsage } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
 import { EnforcementAction } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
+import type { UsageItemView } from "@/lib/usage-view";
 
 export function isDistracting(classification?: string | null): boolean {
   if (!classification) return false;
@@ -40,7 +40,6 @@ export function formatSmartDate(unixSeconds: number | null | undefined): string 
   const isToday = date.toDateString() === now.toDateString();
 
   if (isToday) {
-    // Time only: "2:34pm"
     const hours = date.getHours();
     const mins = date.getMinutes();
     const h = hours % 12 || 12;
@@ -48,7 +47,6 @@ export function formatSmartDate(unixSeconds: number | null | undefined): string 
     return `${h}:${mins.toString().padStart(2, "0")}${ampm}`;
   }
 
-  // Short date: "Jan 15"
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
@@ -115,7 +113,10 @@ export function formatClassificationSource(
         icon: "🙄",
         description: "C'mon... it's obviously distracting",
       };
-    case "cloud_llm":
+    case "llm_gemini":
+    case "llm_openai":
+    case "llm_grok":
+    case "llm_anthropic":
       return {
         label: "ai",
         icon: "✨",
@@ -156,22 +157,27 @@ export function formatEnforcementSource(
         description: reasoning || "Action determined by your custom rules",
         isLink: true,
       };
-    case "whitelist":
+    case "allowed":
       return {
         label: "allowed",
         icon: "✓",
         description: "Temporarily allowed by you",
       };
+    case "paused":
+      return {
+        label: "paused",
+        icon: "⏸",
+        description: "Focus protection is temporarily paused",
+      };
     default:
       return {
         label: source,
         icon: "❓",
-        description: "Unknown termination source",
+        description: "Unknown enforcement source",
       };
   }
 }
 
-// Helper function to extract text content from React nodes
 function extractTextContent(node: React.ReactNode): string {
   if (typeof node === "string" || typeof node === "number") {
     return String(node);
@@ -256,7 +262,7 @@ export function ClassificationReasoningLabel({
   onResume,
   enforcementSource,
 }: {
-  usage: ApplicationUsage;
+  usage: UsageItemView;
   icon?: string;
   description: string;
   isLink?: boolean;
@@ -278,9 +284,8 @@ export function ClassificationReasoningLabel({
     usage.enforcement_source === "custom_rules";
 
   const isCustomRulesClassification =
-    usage.classification_reasoning && usage.enforcement_source === "custom_rules";
+    usage.classification_reason && usage.enforcement_source === "custom_rules";
 
-  // Determine the label text based on priority
   const getLabelText = (): string => {
     if (isPausedDistraction) {
       return "was paused by user";
@@ -289,7 +294,7 @@ export function ClassificationReasoningLabel({
       return usage.enforcement_reason || "set by custom rules";
     }
     if (isCustomRulesClassification) {
-      return usage.classification_reasoning!;
+      return usage.classification_reason!;
     }
     if (isAllowedDistraction) {
       return usage.enforcement_reason || "user allowed distraction";
@@ -297,7 +302,6 @@ export function ClassificationReasoningLabel({
     return description;
   };
 
-  // Determine if it should be a link
   const shouldBeLink = isCustomRulesAllow || isCustomRulesClassification || isLink;
 
   const labelText = getLabelText();
@@ -305,7 +309,6 @@ export function ClassificationReasoningLabel({
   const displayText = prefixLabel ? `${prefixLabel}: ${labelText}` : labelText;
   const displayIcon = isPausedDistraction ? <IconPlayerPause className="w-3 h-3 text-yellow-500/70" /> : <span className="text-[10px] opacity-70">{enforcementSource?.icon || icon}</span>;
 
-  // Handle paused distraction display with optional resume button
   if (isPausedDistraction) {
     return (
       <span className="text-[10px] text-yellow-500/70 flex items-center gap-1.5">
@@ -375,7 +378,6 @@ function getThemeClasses(
       badge: "border border-zinc-500/30 text-zinc-400",
     };
   }
-  // Default: productive green
   return {
     container: "bg-green-500/5 border-green-500/20 text-green-400 hover:bg-green-500/10",
     iconBg: "bg-green-500/10",
@@ -383,19 +385,15 @@ function getThemeClasses(
   };
 }
 
-export function UsageItem({ usage }: { usage: ApplicationUsage }) {
+export function UsageItem({ usage }: { usage: UsageItemView }) {
   const isWeb = !!usage.application?.hostname;
   const isDistractingEvent = isDistracting(usage.classification);
   const isGrayTheme = isNeutralOrSystem(usage.classification);
-  const resumeProtection = useUsageStore((state) => state.resumeProtection);
-  const currentPause = useUsageStore((state) => state.currentPause);
+  const resumeMutation = useResumeProtection();
+  const isCurrentlyPaused = useIsProtectionPaused();
   const checkoutLink = useAccountStore((state) => state.checkoutLink);
   const [showLogs, setShowLogs] = useState(false);
 
-  // Check if there's currently an active pause
-  const isCurrentlyPaused = !!(currentPause && currentPause.id > 0);
-
-  // Check if this is a paused distraction
   const isPausedDistraction =
     isDistractingEvent &&
     usage.enforcement_action === EnforcementAction.EnforcementActionPaused;
@@ -403,9 +401,8 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
   const isAllowedDistraction =
     isDistractingEvent &&
     usage.enforcement_action === EnforcementAction.EnforcementActionAllow &&
-    (usage.enforcement_source === "custom_rules" || usage.enforcement_source === "whitelist");
+    (usage.enforcement_source === "custom_rules" || usage.enforcement_source === "allowed");
 
-  // Combined flag for yellow styling
   const isYellowTheme = isPausedDistraction || isAllowedDistraction;
 
   const theme = getThemeClasses(isYellowTheme, isDistractingEvent, isGrayTheme);
@@ -413,30 +410,26 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
   const { description, icon, isLink } = formatClassificationSource(
     usage.classification_source,
     usage.classification,
-    usage.classification_reasoning
+    usage.classification_reason
   );
 
   const termSource = formatEnforcementSource(
     usage.enforcement_source,
-    usage.classification_reasoning
+    usage.classification_reason
   );
 
-  // Duration display: show duration for ended items, or elapsed time for ongoing items
   const durationSeconds =
     usage.ended_at && usage.started_at
       ? usage.ended_at - usage.started_at
       : null;
 
-  const classificationSandboxContext =
-    (usage as any).classification_sandbox_context ?? (usage as any).sandbox_context;
-  const classificationSandboxResponse =
-    (usage as any).classification_sandbox_response ?? (usage as any).sandbox_response;
-  const classificationSandboxLogs =
-    (usage as any).classification_sandbox_logs ?? (usage as any).sandbox_logs;
+  const classificationSandboxContext = usage.classification_sandbox?.context;
+  const classificationSandboxResponse = usage.classification_sandbox?.response;
+  const classificationSandboxLogs = usage.classification_sandbox?.logs;
 
-  const enforcementSandboxContext = (usage as any).enforcement_sandbox_context;
-  const enforcementSandboxResponse = (usage as any).enforcement_sandbox_response;
-  const enforcementSandboxLogs = (usage as any).enforcement_sandbox_logs;
+  const enforcementSandboxContext = usage.enforcement_sandbox?.context;
+  const enforcementSandboxResponse = usage.enforcement_sandbox?.response;
+  const enforcementSandboxLogs = usage.enforcement_sandbox?.logs;
 
   const hasSandboxResult = (response?: string | null) => {
     if (!response) return false;
@@ -444,20 +437,18 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
     return normalized !== "" && normalized !== "no response" && normalized !== "null";
   };
 
-  const hasClassificationSandbox =
-    hasSandboxResult(classificationSandboxResponse);
+  const hasClassificationSandbox = hasSandboxResult(classificationSandboxResponse);
   const hasEnforcementSandbox = hasSandboxResult(enforcementSandboxResponse);
   const hasAnySandbox = hasClassificationSandbox || hasEnforcementSandbox;
 
-  // Detect script execution that was ignored (Free tier)
-  let sandboxDecision: any = null;
+  let sandboxDecision: { enforcementAction?: string; classification?: string } | null = null;
   try {
     if (enforcementSandboxResponse && enforcementSandboxResponse !== "no response") {
       sandboxDecision = JSON.parse(enforcementSandboxResponse);
     } else if (classificationSandboxResponse && classificationSandboxResponse !== "no response") {
       sandboxDecision = JSON.parse(classificationSandboxResponse);
     }
-  } catch (e) {
+  } catch {
     // ignore
   }
 
@@ -483,13 +474,16 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
     usage.enforcement_source !== "custom_rules" &&
     scriptDidBlock !== actualDidBlock;
 
+  const onResume = () => {
+    resumeMutation.mutate("user manually resumed");
+  };
+
   return (
     <div
       className={`flex flex-col p-2.5 rounded-lg border transition-all ${theme.container}`}
     >
       <div className="flex items-center justify-between w-full gap-2 min-w-0">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          {/* Icon Container */}
           <div
             className={`w-8 h-8 rounded-md flex items-center justify-center overflow-hidden shrink-0 ${theme.iconBg}`}
           >
@@ -510,7 +504,6 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
             )}
           </div>
 
-          {/* Text Content */}
           <div className="flex min-w-0 flex-1 flex-col">
             <div className="flex items-center gap-2 min-w-0">
               <TruncatedLabel className="text-xs font-semibold text-foreground truncate leading-tight">
@@ -569,7 +562,6 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
           </div>
         </div>
 
-        {/* Right Side Group */}
         <div className="flex min-w-0 items-center gap-2 pl-1">
           <div className="flex min-w-0 flex-col items-end gap-1">
             <div className="flex flex-wrap items-center justify-end gap-1">
@@ -579,13 +571,13 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
               >
                 {isWeb ? "web" : "app"}
               </Badge>
-              {usage.tags?.map((usageTag) => (
+              {usage.tags?.map((tag) => (
                 <Badge
-                  key={usageTag.tag}
+                  key={tag}
                   variant="outline"
                   className={`px-1.5 py-0 text-[9px] font-bold rounded-full ${theme.badge}`}
                 >
-                  {usageTag.tag}
+                  {tag}
                 </Badge>
               ))}
             </div>
@@ -598,14 +590,13 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
               isAllowedDistraction={isAllowedDistraction}
               isPausedDistraction={isPausedDistraction}
               isCurrentlyPaused={isCurrentlyPaused}
-              onResume={resumeProtection}
+              onResume={onResume}
               enforcementSource={
                 termSource?.label === "custom rules" ? termSource : null
               }
             />
           </div>
 
-          {/* Sandbox Logs Toggle */}
           {hasAnySandbox && (
             <button
               onClick={(e) => {
@@ -628,7 +619,6 @@ export function UsageItem({ usage }: { usage: ApplicationUsage }) {
         </div>
       </div>
 
-      {/* Expanded Logs */}
       {showLogs && (
         <div className="w-full mt-2 pt-2 border-t border-border/20 space-y-3">
           {hasClassificationSandbox && (
