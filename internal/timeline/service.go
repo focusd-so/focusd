@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type Service struct {
@@ -92,18 +91,11 @@ func (s Service) UpdateEvent(event *Event, opts ...EventOption) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if len(event.Tags) > 0 {
-		for i := range event.Tags {
-			tag := &event.Tags[i]
-
-			onConflict := clause.OnConflict{
-				Columns:   []clause.Column{{Name: "name"}, {Name: "type"}},
-				DoNothing: true,
-			}
-
-			if err := s.db.Clauses(onConflict).FirstOrCreate(tag).Error; err != nil {
-				return fmt.Errorf("failed to upsert tag %q (%q): %w", tag.Name, tag.Type, err)
-			}
+	for i := range event.Tags {
+		tag := &event.Tags[i]
+		lookup := Tag{Name: tag.Name, Type: tag.Type}
+		if err := s.db.Where(&lookup).FirstOrCreate(tag).Error; err != nil {
+			return fmt.Errorf("failed to upsert tag %q (%q): %w", tag.Name, tag.Type, err)
 		}
 	}
 

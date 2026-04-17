@@ -19,13 +19,13 @@ import (
 )
 
 type ApplicationUsagePayload struct {
-	BasicClassificationResult
-
 	ApplicationID int64 `json:"application_id" gorm:"not null"`
 
 	WindowTitle string `json:"window_title" gorm:"not null"`
 	BrowserURL  string `json:"browser_url,omitempty"`
 
+	Classification       Classification        `json:"classification"`
+	ClassificationReason string                `json:"classification_reason"`
 	ClassificationSource ClassificationSource  `json:"classification_source" gorm:"index:idx_classification_source"`
 	ClassificationResult *ClassificationResult `json:"classification_result,omitempty"`
 
