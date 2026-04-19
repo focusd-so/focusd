@@ -1,0 +1,66 @@
+stream_over_http_enabled: true
+
+server:
+  http_listen_port: 3200
+  log_level: info
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  trace_idle_period: 10s
+  max_block_bytes: 1048576
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 24h
+
+# Span-metrics generator: derives RED-style histograms from incoming spans and
+# remote-writes them to Prometheus. Custom dimensions surface the lock_wait_ms
+# and lock_hold_ms span attributes as histogram labels.
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+      cluster: focusd-dev
+  storage:
+    path: /var/tempo/generator/wal
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+        send_exemplars: true
+  processor:
+    span_metrics:
+      dimensions:
+        - service.name
+        - span.name
+        - status.code
+      intrinsic_dimensions:
+        service: true
+        span_name: true
+        span_kind: true
+        status_code: true
+    service_graphs:
+      max_items: 10000
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [span-metrics, service-graphs]
+
+usage_report:
+  reporting_enabled: false

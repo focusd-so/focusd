@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"sync"
 	"testing"
 	"time"
 
@@ -35,8 +34,6 @@ type usageHarness struct {
 	db      *gorm.DB
 
 	timelineService *timeline.Service
-
-	mu sync.Mutex
 }
 
 type usageHarnessConfig struct {

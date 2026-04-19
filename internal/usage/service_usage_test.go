@@ -668,6 +668,7 @@ export function enforcement(): Enforce | undefined {
 		require.Equal(t, usage.EnforcementActionBlock, payload.EnforcementResult.CustomRulesEnforcementResult.Action)
 		require.Equal(t, usage.EnforcementSourceCustomRules, payload.EnforcementResult.CustomRulesEnforcementResult.Source)
 		require.Equal(t, "custom enforcement block", payload.EnforcementResult.CustomRulesEnforcementResult.Reason)
+		require.Nil(t, payload.EnforcementResult.CustomRulesEnforcementResult.SandboxError)
 	})
 
 	t.Run("custom enforcement helper block shape", func(t *testing.T) {
@@ -702,5 +703,6 @@ export function enforcement(): Enforce | undefined {
 		require.NotNil(t, payload.EnforcementResult.CustomRulesEnforcementResult)
 		require.Equal(t, usage.EnforcementActionBlock, payload.EnforcementResult.CustomRulesEnforcementResult.Action)
 		require.Equal(t, "helper says block", payload.EnforcementResult.CustomRulesEnforcementResult.Reason)
+		require.Nil(t, payload.EnforcementResult.CustomRulesEnforcementResult.SandboxError)
 	})
 }

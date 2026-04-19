@@ -94,6 +94,13 @@ func main() {
 		defer logCloser.Close()
 	}
 
+	profilerCloser, err := startDevelopmentProfiler()
+	if err != nil {
+		slog.Warn("failed to start pyroscope profiler", "error", err)
+	} else if profilerCloser.stop != nil {
+		defer profilerCloser.Close()
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -383,8 +390,7 @@ func setupLogging() (io.Closer, error) {
 	var logPath string
 	logName := "focusd.log"
 
-	// Dev mode: if go.mod exists in current directory, we assume development.
-	if _, err := os.Stat("go.mod"); err == nil {
+	if isDevelopmentMode() {
 		logPath = logName
 	} else {
 		configDir, err := os.UserHomeDir()
@@ -425,8 +431,7 @@ func setupDB() *gorm.DB {
 	dbName := "focusd.db"
 	var dbPath string
 
-	// Dev mode: if go.mod exists in current directory, we assume development.
-	if _, err := os.Stat("go.mod"); err == nil {
+	if isDevelopmentMode() {
 		dbPath = dbName
 	} else {
 		configDir, err := os.UserConfigDir()

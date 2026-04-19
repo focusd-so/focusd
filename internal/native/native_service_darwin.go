@@ -90,7 +90,6 @@ import (
 // NativeService is a Wails-bound service for managing macOS permissions
 // during the onboarding flow.
 type NativeService struct {
-	mu      sync.Mutex
 	started bool
 }
 
@@ -128,18 +127,11 @@ func (s *NativeService) OpenSettings() {
 }
 
 func (s *NativeService) StartObserver() {
-	s.mu.Lock()
-	if s.started {
-		s.mu.Unlock()
-		return
-	}
+	once := sync.Once{}
 
-	s.started = true
-	s.mu.Unlock()
-
-	// The observer enters a long-lived native run loop, so start it
-	// asynchronously after releasing the service lock.
-	go startObserver()
+	once.Do(func() {
+		go startObserver()
+	})
 }
 
 // EnableLoginItem registers the app to open at login.

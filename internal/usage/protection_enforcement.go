@@ -152,6 +152,14 @@ func (s *Service) calculateEnforcementCustomRules(sandboxCtx sandboxContext) (*C
 		slog.Warn("failed to marshal sandbox context", "error", err)
 	}
 
+	contextString := string(contextJSON)
+
+	var sandboxErrorString *string
+	if sandboxErr != nil {
+		errString := sandboxErr.Error()
+		sandboxErrorString = &errString
+	}
+
 	return &CustomRulesEnforcementResult{
 		BasicEnforcementResult: BasicEnforcementResult{
 			Action: EnforcementAction(decision.Action),
@@ -160,8 +168,8 @@ func (s *Service) calculateEnforcementCustomRules(sandboxCtx sandboxContext) (*C
 		},
 		SandboLogs:     result.Logs,
 		SanboxOutput:   &result.Output,
-		SandboxContext: new(string(contextJSON)),
-		SandboxError:   new(string(sandboxErr.Error())),
+		SandboxContext: &contextString,
+		SandboxError:   sandboxErrorString,
 	}, nil
 }
 

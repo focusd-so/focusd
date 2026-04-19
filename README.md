@@ -49,7 +49,40 @@ To build and run Focusd locally, you will need **Go 1.22+** and **Node.js 18+** 
 
    This immediately starts the application with hot-reloading enabled for both the Go backend and the frontend React components.
 
-5. **Run the API server separately (optional)**
+5. **Run local profiling**
+
+   Start Grafana Pyroscope and Grafana locally:
+
+   ```bash
+   docker compose up -d
+   ```
+
+   Then run the app in development mode:
+
+   ```bash
+   wails3 dev
+   ```
+
+   When Focusd detects repo/dev mode, it automatically enables all supported Go Pyroscope profiles:
+
+   - CPU
+   - In-use objects
+   - Alloc objects
+   - In-use space
+   - Alloc space
+   - Goroutines
+   - Mutex count / duration
+   - Block count / duration
+
+   Local URLs:
+
+   - Grafana dashboard: `http://localhost:3000/d/focusd-pyroscope/focusd-pyroscope`
+   - Grafana Explore: `http://localhost:3000/explore`
+   - Pyroscope UI: `http://localhost:4040`
+
+   The app pushes profiles to `http://127.0.0.1:4040` by default. Override it with `PYROSCOPE_SERVER_ADDRESS` if needed.
+
+6. **Run the API server separately (optional)**
    If you need to test the backend API proxy separately, you can run the background server command:
    ```bash
    go run ./cmd/main.go serve
