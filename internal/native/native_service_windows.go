@@ -37,14 +37,15 @@ func (s *NativeService) OpenSettings() {
 
 func (s *NativeService) StartObserver() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if s.started {
+		s.mu.Unlock()
 		return
 	}
 
 	s.started = true
-	startObserver()
+	s.mu.Unlock()
+
+	go startObserver()
 }
 
 func (s *NativeService) EnableLoginItem() error {

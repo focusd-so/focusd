@@ -129,14 +129,17 @@ func (s *NativeService) OpenSettings() {
 
 func (s *NativeService) StartObserver() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if s.started {
+		s.mu.Unlock()
 		return
 	}
 
 	s.started = true
-	startObserver()
+	s.mu.Unlock()
+
+	// The observer enters a long-lived native run loop, so start it
+	// asynchronously after releasing the service lock.
+	go startObserver()
 }
 
 // EnableLoginItem registers the app to open at login.

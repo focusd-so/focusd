@@ -256,9 +256,6 @@ func main() {
 	// })
 
 	wailsApp.OnShutdown(func() {
-		if err := usageService.CloseLastActiveUsageEvent(); err != nil {
-			slog.Error("failed to close last active usage event", "error", err)
-		}
 		cancel()
 	})
 

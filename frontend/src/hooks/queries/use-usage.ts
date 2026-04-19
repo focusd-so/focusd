@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   GetApplicationList,
@@ -10,33 +10,22 @@ import type { Event as TimelineEvent } from "../../../bindings/github.com/focusd
 import { queryKeys } from "@/lib/query-keys";
 import {
   mockDayInsights,
-  mockRecentUsageEvents,
   mockSandboxLogEvents,
   mockUsageAggregation,
 } from "@/lib/mock-data";
 
 const useDevFallback = import.meta.env.DEV;
 
-// useRecentUsages reads the recent timeline events that the wails-events bridge
-// appends in real time. Until the backend implements a paginated GetUsageList
-// over the timeline, we seed the cache with mock data in dev so the UI keeps
-// working.
+// useRecentUsages exposes the recent timeline events that the wails-events
+// bridge appends to the React Query cache in real time. The backend does not
+// expose a paginated GetUsageList yet, so the initial cache value is empty and
+// the list fills in as `UsageChanged` events arrive.
 export function useRecentUsages() {
-  const queryClient = useQueryClient();
-
-  const query = useQuery<TimelineEvent[]>({
+  return useQuery<TimelineEvent[]>({
     queryKey: queryKeys.recentUsages,
-    queryFn: async () => {
-      // GetUsageList no longer exists on the backend (timeline rewrite pending).
-      // Seed with mocks in dev so screens keep rendering; otherwise return [].
-      const seed = useDevFallback ? mockRecentUsageEvents() : [];
-      queryClient.setQueryData(queryKeys.recentUsages, seed);
-      return seed;
-    },
+    queryFn: async () => [],
     staleTime: Infinity,
   });
-
-  return query;
 }
 
 export function useUsageAggregation(_filters: unknown) {

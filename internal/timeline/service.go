@@ -1,9 +1,7 @@
 package timeline
 
 import (
-	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -11,7 +9,6 @@ import (
 
 type Service struct {
 	db *gorm.DB
-	mu *sync.Mutex
 
 	onEvent map[string][]func(*Event)
 }
@@ -23,7 +20,6 @@ func NewService(db *gorm.DB) (*Service, error) {
 
 	return &Service{
 		db:      db,
-		mu:      &sync.Mutex{},
 		onEvent: make(map[string][]func(*Event)),
 	}, nil
 }
@@ -69,9 +65,6 @@ func (s Service) CreateEvent(eventType string, opts ...EventOption) (Event, erro
 		return event, fmt.Errorf("failed to commit create event transaction: %w", err)
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	for _, sub := range s.onEvent[eventType] {
 		sub(&event)
 	}
@@ -87,9 +80,6 @@ func (s Service) UpdateEvent(event *Event, opts ...EventOption) error {
 	for _, opt := range opts {
 		opt(event)
 	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	for i := range event.Tags {
 		tag := &event.Tags[i]
@@ -122,41 +112,40 @@ func (s Service) ListEvents(opts ...EventFilterOption) ([]*Event, error) {
 	return events, nil
 }
 
-// GetActiveEventOfType returns the last active event of requested type.
+func (s Service) GetActiveEventOfTypes(eventTypes ...string) (*Event, error) {
+	events, err := s.ListEvents(ByTypes(eventTypes...), ActiveOnly())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active event of types %q: %w", eventTypes, err)
+	}
+
+	if len(events) == 0 {
+		return nil, nil
+	}
+
+	return events[0], nil
+}
+
 func (s Service) GetActiveEventOfType(eventType string) (*Event, error) {
 	return s.GetActiveEventOfTypes(eventType)
 }
 
-// GetActiveEventOfTypes returns the last active event cross requested types.
-func (s Service) GetActiveEventOfTypes(eventTypes ...string) (*Event, error) {
-	if len(eventTypes) == 0 {
+func (s Service) LastEventOfTypes(eventTypes ...string) (*Event, error) {
+	events, err := s.ListEvents(ByTypes(eventTypes...), ActiveOnly(), Limit(1))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get last event of types %q: %w", eventTypes, err)
+	}
+
+	if len(events) == 0 {
 		return nil, nil
 	}
 
-	var event Event
+	return events[0], nil
+}
 
-	err := s.db.
-		Preload("Tags").
-		Where("type IN ?", eventTypes).
-		Where("finished_at IS NULL OR finished_at > ?", time.Now().UTC().Unix()).
-		Order("occurred_at DESC").
-		Limit(1).
-		First(&event).Error
-
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-
-		return nil, fmt.Errorf("failed to find active event: %w", err)
-	}
-
-	return &event, nil
+func (s Service) LastEventOfType(eventType string) (*Event, error) {
+	return s.LastEventOfTypes(eventType)
 }
 
 func (s Service) On(eventType string, fn func(event *Event)) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	s.onEvent[eventType] = append(s.onEvent[eventType], fn)
 }

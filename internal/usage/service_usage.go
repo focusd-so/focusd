@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"golang.org/x/net/publicsuffix"
 	"gorm.io/gorm"
 
 	"github.com/focusd-so/focusd/internal/timeline"
-	"github.com/google/uuid"
 )
 
 type ApplicationUsagePayload struct {
@@ -33,50 +33,27 @@ type ApplicationUsagePayload struct {
 }
 
 func (s *Service) IdleChanged(ctx context.Context, isIdle bool) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Get the current active usage or idle event
-	event, err := s.timelineService.GetActiveEventOfTypes(EventTypeUsageChanged, EventTypeUserIdleChanged)
+	event, err := s.timelineService.LastEventOfTypes(EventTypeUserIdleChanged, EventTypeUsageChanged)
 	if err != nil {
 		return err
 	}
 
-	// If no active event exists, we can't determine current state; normally there should be an active UsageChanged event.
-	if event == nil {
+	if !isIdle {
 		return nil
 	}
 
-	if isIdle {
-		// If we are already in idle state, do nothing (idempotency)
-		if event.Type == EventTypeUserIdleChanged {
-			return nil
-		}
-		// Transition from active usage to idle: finish current usage and start idle
-		if err := s.timelineService.EventFinished(event); err != nil {
-			return err
-		}
-		_, err = s.timelineService.CreateEvent(EventTypeUserIdleChanged)
-		return err
-	}
-
-	// User is now active (!isIdle)
-	// If we were already active (UsageChanged), do nothing
-	if event.Type == EventTypeUsageChanged {
+	// make it idempotent
+	if event != nil && event.Type == EventTypeUserIdleChanged {
 		return nil
 	}
 
-	// Transition from idle back to active: just finish the idle event
-	// Note: The next window activity will naturally start a new UsageChanged event
-	return s.timelineService.EventFinished(event)
+	_, err = s.timelineService.CreateEvent(EventTypeUserIdleChanged)
+	return err
 }
 
 // TitleChanged is called when the title of the current application changes,
 // whether it's a new application or the same application title has changed
 func (s *Service) TitleChanged(ctx context.Context, appName, windowTitle, icon string, browserURL, appCategory *string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	normalizedURL, _, _ := parseURLNormalized(browserURL)
 
 	application, err := s.getOrCreateApplication(ctx, appName, icon, normalizedURL, appCategory)
@@ -85,20 +62,6 @@ func (s *Service) TitleChanged(ctx context.Context, appName, windowTitle, icon s
 	}
 
 	usageKeyUUID := uuid.NewSHA1(uuid.NameSpaceURL, []byte(fmt.Sprintf("app:%s,window:%s,url:%s", application.Name, windowTitle, fromPtr(browserURL))))
-
-	lastEvent, err := s.timelineService.GetActiveEventOfTypes(EventTypeUsageChanged, EventTypeUserIdleChanged)
-	if err != nil {
-		slog.Warn("failed to get last event", "error", err)
-	}
-
-	if lastEvent != nil {
-		if fromPtr(lastEvent.Key) == usageKeyUUID.String() && usageKeyUUID.String() != "" {
-			return nil
-		}
-		if err := s.timelineService.EventFinished(lastEvent); err != nil {
-			return fmt.Errorf("failed to finish last event: %w", err)
-		}
-	}
 
 	payload := ApplicationUsagePayload{WindowTitle: windowTitle, ApplicationID: application.ID}
 	if normalizedURL != nil {

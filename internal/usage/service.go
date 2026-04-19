@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -17,10 +16,6 @@ type Service struct {
 	timelineService *timeline.Service
 
 	appBlocker func(appName, title, reason string, tags []string, browserURL *string)
-
-	// mu serializes title change processing to prevent race conditions
-	// when multiple events fire concurrently
-	mu sync.Mutex
 
 	db *gorm.DB
 }
@@ -73,19 +68,6 @@ func (s *Service) removeOldSandboxExecutionLogs(ctx context.Context) error {
 
 	// sevenDaysAgo := time.Now().Add(-7 * 24 * time.Hour)
 	// return s.db.Where("created_at < ?", sevenDaysAgo).Delete(&SandboxExecutionLog{}).Error
-
-	return nil
-}
-
-func (s *Service) CloseLastActiveUsageEvent() error {
-	lastEvent, err := s.timelineService.GetActiveEventOfTypes(EventTypeUsageChanged, EventTypeUserIdleChanged)
-	if err != nil {
-		return err
-	}
-
-	if lastEvent != nil {
-		return s.timelineService.EventFinished(lastEvent)
-	}
 
 	return nil
 }
