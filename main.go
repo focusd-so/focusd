@@ -94,11 +94,13 @@ func main() {
 		defer logCloser.Close()
 	}
 
-	profilerCloser, err := startDevelopmentProfiler()
-	if err != nil {
-		slog.Warn("failed to start pyroscope profiler", "error", err)
-	} else if profilerCloser.stop != nil {
-		defer profilerCloser.Close()
+	if !settings.IsProductionBuild() {
+		profilerCloser, err := startDevelopmentProfiler()
+		if err != nil {
+			slog.Warn("failed to start pyroscope profiler", "error", err)
+		} else if profilerCloser.stop != nil {
+			defer profilerCloser.Close()
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -390,7 +392,7 @@ func setupLogging() (io.Closer, error) {
 	var logPath string
 	logName := "focusd.log"
 
-	if isDevelopmentMode() {
+	if !settings.IsProductionBuild() {
 		logPath = logName
 	} else {
 		configDir, err := os.UserHomeDir()
@@ -431,7 +433,7 @@ func setupDB() *gorm.DB {
 	dbName := "focusd.db"
 	var dbPath string
 
-	if isDevelopmentMode() {
+	if !settings.IsProductionBuild() {
 		dbPath = dbName
 	} else {
 		configDir, err := os.UserConfigDir()

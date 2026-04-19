@@ -3,8 +3,6 @@
 
 package native
 
-import "sync"
-
 // NativeService is a Wails-bound service for managing OS permissions.
 // On Linux, these are unimplemented stubs.
 type NativeService struct{}
@@ -33,8 +31,6 @@ func (s *NativeService) OpenSettings() {
 }
 
 func (s *NativeService) StartObserver() {
-	once := sync.Once{}
-
 	once.Do(func() {
 		go startObserver()
 	})

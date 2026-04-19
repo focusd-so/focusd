@@ -83,7 +83,6 @@ import "C"
 import (
 	"fmt"
 	"sort"
-	"sync"
 	"unsafe"
 )
 
@@ -127,8 +126,6 @@ func (s *NativeService) OpenSettings() {
 }
 
 func (s *NativeService) StartObserver() {
-	once := sync.Once{}
-
 	once.Do(func() {
 		go startObserver()
 	})

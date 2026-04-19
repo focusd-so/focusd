@@ -154,6 +154,15 @@ static void hookFocusedWindow(BOOL emitTitle) {
 
 // Hook an application for title watching
 static void hookApp(pid_t pid) {
+    if (gAppElement) {
+        pid_t currentPid = 0;
+        AXUIElementGetPid(gAppElement, &currentPid);
+        if (currentPid == pid) {
+            // Already watching this PID, skip re-hooking
+            return;
+        }
+    }
+
     // Cleanup previous observer
     if (gObserver) {
         CFRunLoopRemoveSource(CFRunLoopGetCurrent(), AXObserverGetRunLoopSource(gObserver), kCFRunLoopDefaultMode);
