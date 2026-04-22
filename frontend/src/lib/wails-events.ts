@@ -31,6 +31,14 @@ export function bootstrapWailsEvents(queryClient: QueryClient): () => void {
         queryKeys.recentUsages,
         (prev) => {
           const next = prev ? prev.filter((e) => e.id !== tlEvent.id) : [];
+
+          if (next.length > 0 && !next[0].ended_at) {
+            next[0] = TimelineEvent.createFrom({
+              ...next[0],
+              ended_at: tlEvent.occurred_at
+            });
+          }
+
           next.unshift(tlEvent);
           return next.slice(0, 200);
         },

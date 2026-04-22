@@ -178,6 +178,7 @@ func (s *Service) getOrCreateApplication(ctx context.Context, name, icon string,
 	}
 
 	application.AppCategory = appCategory
+	application.LastUsedAt = time.Now().Unix()
 
 	if err := s.db.Save(&application).Error; err != nil {
 		return Application{}, fmt.Errorf("failed to create application: %w", err)

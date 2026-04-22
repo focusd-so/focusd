@@ -2,6 +2,8 @@ package usage
 
 import (
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type GetUsageListOptions struct {
@@ -76,10 +78,25 @@ type UsageAggregation struct {
 
 func (s *Service) GetApplicationList() ([]Application, error) {
 	var applications []Application
-	if err := s.db.Find(&applications).Error; err != nil {
+	if err := s.db.
+		Order("last_used_at DESC").
+		Limit(50).
+		Find(&applications).Error; err != nil {
 		return nil, err
 	}
 	return applications, nil
+}
+
+func (s *Service) GetApplicationByID(id int64) (*Application, error) {
+	var application Application
+	if err := s.db.First(&application, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &application, nil
 }
 
 // func (s *Service) GetUsageAggregation(options GetUsageListOptions) ([]UsageAggregation, error) {

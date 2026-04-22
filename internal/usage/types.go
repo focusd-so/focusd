@@ -151,8 +151,9 @@ func (cr ClassificationResult) Tags() []string {
 // It tracks both native applications and browser-based applications.
 type Application struct {
 	// mandatory fields
-	ID   int64  `json:"id" gorm:"primaryKey;autoIncrement;not null"`
-	Name string `json:"name" gorm:"index:idx_application_name;not null"`
+	ID         int64  `json:"id" gorm:"primaryKey;autoIncrement;not null"`
+	Name       string `json:"name" gorm:"index:idx_application_name;not null"`
+	LastUsedAt int64  `json:"last_used_at" gorm:"index:idx_application_last_used_at;not null;default:0"`
 
 	Icon   *string `json:"icon"` // either app icon or favicon if host is present
 	Domain *string `json:"domain"`

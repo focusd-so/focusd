@@ -22,10 +22,10 @@ type CustomRulesEnforcementResult struct {
 	BasicEnforcementResult
 
 	// Custom rules classification only
-	SandboLogs     []string `json:"-"`
-	SandboxContext *string  `json:"-"`
-	SanboxOutput   *string  `json:"-"`
-	SandboxError   *string  `json:"-"`
+	SandboxLogs    []string `json:"logs"`
+	SandboxContext *string  `json:"context"`
+	SandboxOutput  *string  `json:"output"`
+	SandboxError   *string  `json:"error"`
 }
 
 type EnforcementResult struct {
@@ -166,8 +166,8 @@ func (s *Service) calculateEnforcementCustomRules(sandboxCtx sandboxContext) (*C
 			Reason: decision.Reason,
 			Source: EnforcementSourceCustomRules,
 		},
-		SandboLogs:     result.Logs,
-		SanboxOutput:   &result.Output,
+		SandboxLogs:    result.Logs,
+		SandboxOutput:  &result.Output,
 		SandboxContext: &contextString,
 		SandboxError:   sandboxErrorString,
 	}, nil

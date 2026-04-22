@@ -41,7 +41,6 @@ import {
 import { AllowCustomDialog } from "@/components/allow-custom-dialog";
 import { hasNonDefaultCustomRules } from "@/lib/rules/default-rules";
 import {
-  useApplicationList,
   useBlockedItems,
   useRecentUsages,
   type BlockedItemView,
@@ -55,20 +54,33 @@ import {
   type AllowedItem,
 } from "@/hooks/queries/use-allow";
 import {
-  buildApplicationsById,
-  toUsageItemView,
-  type UsageItemView,
-} from "@/lib/usage-view";
-import { parsePayload, type ApplicationUsagePayload } from "@/lib/timeline";
+  parsePayload,
+  pickClassificationTags,
+  pickEnforced,
+  safeHostname,
+  type ApplicationUsagePayload,
+} from "@/lib/timeline";
+import { useApplicationStore } from "@/stores/application-store";
+import type { Event as TimelineEvent } from "../../bindings/github.com/focusd-so/focusd/internal/timeline/models";
+import type { Application } from "../../bindings/github.com/focusd-so/focusd/internal/usage/models";
 import { DeviceHandshakeResponse_AccountTier } from "../../bindings/github.com/focusd-so/focusd/gen/api/v1/models";
 import { usePageSearch } from "@/hooks/use-page-search";
 
 interface BlockedUsageDisplay {
-  view: UsageItemView;
+  event: TimelineEvent;
+  payload: ApplicationUsagePayload | null;
+  application: Application | null;
   count: number;
   isAllowed: boolean;
   expiresAt: number | null;
   allowId: number | null;
+}
+
+function getHostname(
+  payload: ApplicationUsagePayload | null,
+  application: Application | null | undefined,
+): string | undefined {
+  return safeHostname(payload?.browser_url) ?? application?.domain ?? undefined;
 }
 
 export const Route = createFileRoute("/activity")({
@@ -140,15 +152,20 @@ function ClassificationSourceBadge({
   return badgeContent;
 }
 
-function matchesAllowed(view: UsageItemView, allowed: AllowedItem): boolean {
-  if (allowed.hostname && view.application?.hostname) {
-    return allowed.hostname === view.application.hostname;
+function matchesAllowed(
+  payload: ApplicationUsagePayload | null,
+  application: Application | null | undefined,
+  allowed: AllowedItem,
+): boolean {
+  const hostname = getHostname(payload, application);
+  if (allowed.hostname && hostname) {
+    return allowed.hostname === hostname;
   }
-  if (allowed.url && view.browser_url) {
-    return allowed.url === view.browser_url;
+  if (allowed.url && payload?.browser_url) {
+    return allowed.url === payload.browser_url;
   }
-  if (allowed.app_name && view.application?.name) {
-    return allowed.app_name === view.application.name;
+  if (allowed.app_name && application?.name) {
+    return allowed.app_name === application.name;
   }
   return false;
 }
@@ -157,11 +174,7 @@ function ActivityPage() {
   const { data: recentEvents = [] } = useRecentUsages();
   const blockedRaw = useBlockedItems();
   const { items: allowedItems } = useAllowList();
-  const { data: applications } = useApplicationList();
-  const applicationsById = useMemo(
-    () => buildApplicationsById(applications),
-    [applications],
-  );
+  const { applicationsById, getApplicationByID } = useApplicationStore();
 
   const customRules = useSettingsStore((state) => state.customRules);
   const { checkoutLink, fetchAccountTier } = useAccountStore();
@@ -188,14 +201,47 @@ function ActivityPage() {
     }
   }, [recentEvents.length]);
 
-  const activeUsages: UsageItemView[] = useMemo(
+  React.useEffect(() => {
+    const missingIds = new Set<number>();
+
+    for (const event of recentEvents) {
+      const payload = parsePayload<ApplicationUsagePayload>(event);
+      const applicationID = payload?.application_id;
+      if (applicationID && !applicationsById.has(applicationID)) {
+        missingIds.add(applicationID);
+      }
+    }
+
+    for (const item of blockedRaw) {
+      const payload = parsePayload<ApplicationUsagePayload>(item.event);
+      const applicationID = payload?.application_id;
+      if (applicationID && !applicationsById.has(applicationID)) {
+        missingIds.add(applicationID);
+      }
+    }
+
+    if (missingIds.size === 0) {
+      return;
+    }
+
+    void Promise.all(
+      Array.from(missingIds).map((id) =>
+        getApplicationByID(id).catch((error) => {
+          console.error(`Failed to fetch application ${id}:`, error);
+          return null;
+        }),
+      ),
+    );
+  }, [recentEvents, blockedRaw, applicationsById, getApplicationByID]);
+
+  const activeUsages = useMemo(
     () =>
       recentEvents.map((event) => {
         const payload = parsePayload<ApplicationUsagePayload>(event);
-        const app = payload?.application_id
-          ? applicationsById.get(payload.application_id)
-          : undefined;
-        return toUsageItemView(event, app);
+        const application = payload?.application_id
+          ? applicationsById.get(payload.application_id) ?? null
+          : null;
+        return { event, payload, application };
       }),
     [recentEvents, applicationsById],
   );
@@ -203,13 +249,16 @@ function ActivityPage() {
   const blockedItemViews = useMemo<BlockedUsageDisplay[]>(() => {
     return blockedRaw.map(({ event, count }: BlockedItemView) => {
       const payload = parsePayload<ApplicationUsagePayload>(event);
-      const app = payload?.application_id
-        ? applicationsById.get(payload.application_id)
-        : undefined;
-      const view = toUsageItemView(event, app);
-      const allowMatch = allowedItems.find((a) => matchesAllowed(view, a));
+      const application = payload?.application_id
+        ? applicationsById.get(payload.application_id) ?? null
+        : null;
+      const allowMatch = allowedItems.find((a) =>
+        matchesAllowed(payload, application, a),
+      );
       return {
-        view,
+        event,
+        payload,
+        application,
         count,
         isAllowed: !!allowMatch,
         expiresAt: allowMatch?.expires_at ?? null,
@@ -221,20 +270,23 @@ function ActivityPage() {
   const allowedOnlyDisplay = useMemo<BlockedUsageDisplay[]>(() => {
     const seen = new Set<string>();
     for (const item of blockedItemViews) {
-      seen.add(`${item.view.application?.hostname ?? ""}|${item.view.application?.name ?? ""}`);
+      const hostname = getHostname(item.payload, item.application) ?? "";
+      seen.add(`${hostname}|${item.application?.name ?? ""}`);
     }
     const out: BlockedUsageDisplay[] = [];
     for (const allowed of allowedItems) {
       const key = `${allowed.hostname ?? ""}|${allowed.app_name ?? ""}`;
       if (seen.has(key)) continue;
 
-      const matchView = activeUsages.find((u) =>
-        matchesAllowed(u, allowed),
+      const matchEntry = activeUsages.find((u) =>
+        matchesAllowed(u.payload, u.application, allowed),
       );
-      if (!matchView) continue;
+      if (!matchEntry) continue;
 
       out.push({
-        view: matchView,
+        event: matchEntry.event,
+        payload: matchEntry.payload,
+        application: matchEntry.application,
         count: 0,
         isAllowed: true,
         expiresAt: allowed.expires_at,
@@ -247,7 +299,7 @@ function ActivityPage() {
   const blockedUsagesDisplay = useMemo(
     () =>
       [...blockedItemViews, ...allowedOnlyDisplay].sort(
-        (a, b) => (b.view.started_at ?? 0) - (a.view.started_at ?? 0),
+        (a, b) => (b.event.occurred_at ?? 0) - (a.event.occurred_at ?? 0),
       ),
     [blockedItemViews, allowedOnlyDisplay],
   );
@@ -255,11 +307,11 @@ function ActivityPage() {
   const filteredBlockedUsages = useMemo(() => {
     if (!searchQuery) return blockedUsagesDisplay;
     const q = searchQuery.toLowerCase();
-    return blockedUsagesDisplay.filter(({ view }) => {
-      const name = view.application?.name?.toLowerCase() || "";
-      const host = view.application?.hostname?.toLowerCase() || "";
-      const title = view.window_title?.toLowerCase() || "";
-      const tags = view.tags.join(" ").toLowerCase();
+    return blockedUsagesDisplay.filter((entry) => {
+      const name = entry.application?.name?.toLowerCase() || "";
+      const host = getHostname(entry.payload, entry.application)?.toLowerCase() || "";
+      const title = entry.payload?.window_title?.toLowerCase() || "";
+      const tags = pickClassificationTags(entry.payload).join(" ").toLowerCase();
       return name.includes(q) || host.includes(q) || title.includes(q) || tags.includes(q);
     });
   }, [blockedUsagesDisplay, searchQuery]);
@@ -267,11 +319,11 @@ function ActivityPage() {
   const filteredActiveUsages = useMemo(() => {
     if (!searchQuery) return activeUsages;
     const q = searchQuery.toLowerCase();
-    return activeUsages.filter((view) => {
-      const name = view.application?.name?.toLowerCase() || "";
-      const host = view.application?.hostname?.toLowerCase() || "";
-      const title = view.window_title?.toLowerCase() || "";
-      const tags = view.tags.join(" ").toLowerCase();
+    return activeUsages.filter((entry) => {
+      const name = entry.application?.name?.toLowerCase() || "";
+      const host = getHostname(entry.payload, entry.application)?.toLowerCase() || "";
+      const title = entry.payload?.window_title?.toLowerCase() || "";
+      const tags = pickClassificationTags(entry.payload).join(" ").toLowerCase();
       return name.includes(q) || host.includes(q) || title.includes(q) || tags.includes(q);
     });
   }, [activeUsages, searchQuery]);
@@ -305,7 +357,7 @@ function ActivityPage() {
               ) : (
                 filteredBlockedUsages.map((item) => (
                   <BlockedUsageItem
-                    key={item.view.application?.hostname || item.view.application?.name || String(item.view.id)}
+                    key={getHostname(item.payload, item.application) || item.application?.name || String(item.event.id)}
                     item={item}
                   />
                 ))
@@ -349,8 +401,13 @@ function ActivityPage() {
               </div>
             ) : (
               <div className="space-y-1.5">
-                {filteredActiveUsages.slice(0, renderCount).map((view) => (
-                  <UsageItem key={view.id} usage={view} />
+                {filteredActiveUsages.slice(0, renderCount).map((entry) => (
+                  <UsageItem
+                    key={entry.event.id}
+                    event={entry.event}
+                    payload={entry.payload}
+                    application={entry.application}
+                  />
                 ))}
               </div>
             )}
@@ -362,8 +419,18 @@ function ActivityPage() {
 }
 
 function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
-  const { view, count, isAllowed, expiresAt, allowId } = item;
-  const isWeb = !!view.application?.hostname;
+  const { event, payload, application, count, isAllowed, expiresAt, allowId } = item;
+  const hostname = getHostname(payload, application);
+  const browserURL = payload?.browser_url || undefined;
+  const windowTitle = payload?.window_title;
+  const classification = payload?.classification;
+  const classificationSource = payload?.classification_source;
+  const classificationReason = payload?.classification_reason;
+  const tags = pickClassificationTags(payload);
+  const enforced = pickEnforced(payload);
+  const enforcementSrc = enforced?.Source;
+  const startedAt = event.occurred_at;
+  const isWeb = !!hostname;
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [isCustomDialogOpen, setIsCustomDialogOpen] = useState(false);
   const allowAppMutation = useAllowApp();
@@ -372,10 +439,10 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
   const removeAllowMutation = useRemoveAllow();
 
   const isRecentlyBlocked = React.useMemo(() => {
-    if (!view.started_at || isAllowed) return false;
+    if (!startedAt || isAllowed) return false;
     const now = Math.floor(Date.now() / 1000);
-    return (now - view.started_at) < 300;
-  }, [view.started_at, isAllowed]);
+    return (now - startedAt) < 300;
+  }, [startedAt, isAllowed]);
 
   React.useEffect(() => {
     if (!isAllowed || !expiresAt) {
@@ -410,23 +477,23 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
   };
 
   const handleAllowSite = async (durationMinutes: number) => {
-    if (isWeb && view.browser_url) {
+    if (isWeb && browserURL) {
       await allowHostnameMutation.mutateAsync({
-        rawURL: view.browser_url,
+        rawURL: browserURL,
         durationMinutes,
       });
-    } else if (view.application?.name) {
+    } else if (application?.name) {
       await allowAppMutation.mutateAsync({
-        appName: view.application.name,
+        appName: application.name,
         durationMinutes,
       });
     }
   };
 
   const handleAllowExactURL = async (durationMinutes: number) => {
-    if (!view.browser_url) return;
+    if (!browserURL) return;
     await allowURLMutation.mutateAsync({
-      rawURL: view.browser_url,
+      rawURL: browserURL,
       durationMinutes,
     });
   };
@@ -457,8 +524,8 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
   const iconColor = isAllowed ? "text-yellow-500/60" : "text-red-500/60";
 
   const termSource = formatEnforcementSource(
-    view.enforcement_source,
-    view.classification_reason
+    enforcementSrc,
+    classificationReason
   );
 
   const allowSiteLabel = isWeb ? "this site" : "this app";
@@ -470,14 +537,14 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
       <div
         className={`relative w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0 ring-1 ${iconBgColor} transition-all`}
       >
-        {view.application?.icon ? (
+        {application?.icon ? (
           <img
             src={
-              view.application.icon.startsWith("data:")
-                ? view.application.icon
-                : `data:image/png;base64,${view.application.icon}`
+              application.icon.startsWith("data:")
+                ? application.icon
+                : `data:image/png;base64,${application.icon}`
             }
-            alt={view.application?.hostname || view.application?.name}
+            alt={hostname || application?.name}
             className={`w-8 h-8 object-contain ${isAllowed ? "" : "grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100"} transition-all`}
           />
         ) : isWeb ? (
@@ -492,7 +559,7 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
           <TruncatedLabel
             className={`text-xs font-semibold truncate ${textColor} transition-colors`}
           >
-            {view.application?.hostname || view.application?.name || "Unknown"}
+            {hostname || application?.name || "Unknown"}
           </TruncatedLabel>
           <span className={`text-[9px] font-bold ${statusColor} uppercase tracking-wider opacity-90 shrink-0`}>
             {isAllowed ? "ALLOWED" : "BLOCKED"}
@@ -517,19 +584,19 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
               )}
             </span>
           )}
-          {termSource && !isAllowed && view.window_title && (
+          {termSource && !isAllowed && windowTitle && (
             <span className="text-white/20 text-[9px] shrink-0">—</span>
           )}
-          {view.window_title && (
+          {windowTitle && (
             <TruncatedLabel className="text-[9px] text-white/35 truncate max-w-[240px]">
-              {view.window_title}
+              {windowTitle}
             </TruncatedLabel>
           )}
-          {!termSource && !view.window_title && (
+          {!termSource && !windowTitle && (
             <ClassificationSourceBadge
-              source={view.classification_source}
-              classification={view.classification}
-              reasoning={view.classification_reason}
+              source={classificationSource}
+              classification={classification}
+              reasoning={classificationReason}
               variant={isAllowed ? "yellow" : "red"}
               isAllowedDistraction={isAllowed}
               className="!bg-transparent !border-transparent px-0 py-0 opacity-75 hover:opacity-100 transition-opacity font-normal"
@@ -538,11 +605,11 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
           )}
         </div>
 
-        {(termSource || view.window_title) && view.classification_source && (
+        {(termSource || windowTitle) && classificationSource && (
           <ClassificationSourceBadge
-            source={view.classification_source}
-            classification={view.classification}
-            reasoning={view.classification_reason}
+            source={classificationSource}
+            classification={classification}
+            reasoning={classificationReason}
             variant={isAllowed ? "yellow" : "red"}
             isAllowedDistraction={isAllowed}
             className="!bg-transparent !border-transparent px-0 py-0 opacity-75 hover:opacity-100 transition-opacity font-normal self-start text-left"
@@ -553,10 +620,10 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
 
       <div className="flex items-center gap-1.5 shrink-0">
         <span className="text-[9px] text-muted-foreground/35 font-mono">
-          {formatSmartDate(view.started_at)}
+          {formatSmartDate(startedAt)}
         </span>
 
-        {view.tags.map((tag) => (
+        {tags.map((tag) => (
           <Badge
             key={tag}
             variant="outline"
@@ -642,7 +709,7 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
                 <IconCalendar className="w-3.5 h-3.5 opacity-60" />
                 Custom time...
               </DropdownMenuItem>
-              {isWeb && view.browser_url && (
+              {isWeb && browserURL && (
                 <>
                   <DropdownMenuSeparator className="bg-white/8" />
                   <DropdownMenuLabel className="text-[9px] font-semibold text-white/30 uppercase tracking-widest px-2 py-1">
@@ -735,7 +802,7 @@ function BlockedUsageItem({ item }: { item: BlockedUsageDisplay }) {
         open={isCustomDialogOpen}
         onOpenChange={setIsCustomDialogOpen}
         onConfirm={handleAllowSite}
-        appName={view.application?.hostname || view.application?.name || "App"}
+        appName={hostname || application?.name || "App"}
         defaultDate={expiresAt ? new Date(expiresAt * 1000) : undefined}
       />
     </div>

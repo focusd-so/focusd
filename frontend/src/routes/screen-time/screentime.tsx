@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   IconCalendar,
@@ -32,18 +32,27 @@ import { UsageItem, formatDuration } from "@/components/usage-item";
 import { cn } from "@/lib/utils";
 import { useUsageStore } from "@/stores/usage-store";
 import {
-  useApplicationList,
   useRecentUsages,
   useUsageAggregation,
   useUsingDevFallbackData,
 } from "@/hooks/queries/use-usage";
 import {
-  buildApplicationsById,
-  toUsageItemView,
-  type UsageItemView,
-} from "@/lib/usage-view";
-import { parsePayload, type ApplicationUsagePayload } from "@/lib/timeline";
-import { EnforcementAction } from "../../../bindings/github.com/focusd-so/focusd/internal/usage/models";
+  parsePayload,
+  pickEnforced,
+  type ApplicationUsagePayload,
+} from "@/lib/timeline";
+import { useApplicationStore } from "@/stores/application-store";
+import type { Event as TimelineEvent } from "../../../bindings/github.com/focusd-so/focusd/internal/timeline/models";
+import {
+  EnforcementAction,
+  type Application,
+} from "../../../bindings/github.com/focusd-so/focusd/internal/usage/models";
+
+interface UsageEntry {
+  event: TimelineEvent;
+  payload: ApplicationUsagePayload | null;
+  application: Application | null;
+}
 
 export interface UsageAggregation {
   application: {
@@ -70,34 +79,55 @@ function ScreenTimePage() {
 
   const { data: recentEvents = [], isLoading: usagesLoading } = useRecentUsages();
   const { data: aggregation = [], isLoading: aggLoading } = useUsageAggregation(screenTimeFilters);
-  const { data: applications } = useApplicationList();
-  const applicationsById = useMemo(
-    () => buildApplicationsById(applications),
-    [applications],
-  );
+  const { applicationsById, getApplicationByID } = useApplicationStore();
 
   const usingFallback = useUsingDevFallbackData();
   const isLoading = usagesLoading || aggLoading;
 
-  const filteredViews: UsageItemView[] = useMemo(() => {
+  useEffect(() => {
+    const missingIds = new Set<number>();
+
+    for (const event of recentEvents) {
+      const payload = parsePayload<ApplicationUsagePayload>(event);
+      const applicationID = payload?.application_id;
+      if (applicationID && !applicationsById.has(applicationID)) {
+        missingIds.add(applicationID);
+      }
+    }
+
+    if (missingIds.size === 0) {
+      return;
+    }
+
+    void Promise.all(
+      Array.from(missingIds).map((id) =>
+        getApplicationByID(id).catch((error) => {
+          console.error(`Failed to fetch application ${id}:`, error);
+          return null;
+        }),
+      ),
+    );
+  }, [recentEvents, applicationsById, getApplicationByID]);
+
+  const filteredViews: UsageEntry[] = useMemo(() => {
     return recentEvents
-      .map((event) => {
+      .map<UsageEntry>((event) => {
         const payload = parsePayload<ApplicationUsagePayload>(event);
-        const app = payload?.application_id
-          ? applicationsById.get(payload.application_id)
-          : undefined;
-        return toUsageItemView(event, app);
+        const application = payload?.application_id
+          ? applicationsById.get(payload.application_id) ?? null
+          : null;
+        return { event, payload, application };
       })
-      .filter((view) => {
+      .filter(({ payload }) => {
         if (
           screenTimeFilters.classification &&
-          view.classification !== screenTimeFilters.classification
+          payload?.classification !== screenTimeFilters.classification
         ) {
           return false;
         }
         if (
           screenTimeFilters.enforcementAction &&
-          view.enforcement_action !== screenTimeFilters.enforcementAction
+          pickEnforced(payload)?.Action !== screenTimeFilters.enforcementAction
         ) {
           return false;
         }
@@ -225,8 +255,13 @@ function ScreenTimePage() {
                 <EmptyState icon={<IconListSearch className="w-10 h-10" />} message="No activity found for this filter." />
               ) : (
                 <div className="space-y-4">
-                  {filteredViews.map((view) => (
-                    <UsageItem key={view.id} usage={view} />
+                  {filteredViews.map(({ event, payload, application }) => (
+                    <UsageItem
+                      key={event.id}
+                      event={event}
+                      payload={payload}
+                      application={application}
+                    />
                   ))}
                 </div>
               )}

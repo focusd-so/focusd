@@ -16,6 +16,7 @@ export const queryKeys = {
   usageAggregationAll: ["usage", "aggregation"] as const,
 
   applicationList: ["application", "list"] as const,
+  applicationById: (id: number) => ["application", "id", id] as const,
   dayInsights: (date: string) => ["insights", "day", date] as const,
   dayInsightsAll: ["insights", "day"] as const,
   sandboxLogs: (logType: string, search: string) => ["sandbox", "logs", logType, search] as const,

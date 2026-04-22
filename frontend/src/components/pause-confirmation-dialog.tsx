@@ -35,9 +35,12 @@ import { cn } from "@/lib/utils";
 import { usePauseProtection, usePauseHistory } from "@/hooks/queries/use-protection";
 import { useAllowApp, useAllowHostname } from "@/hooks/queries/use-allow";
 import { useBlockedItems } from "@/hooks/queries/use-usage";
-import { useApplicationList } from "@/hooks/queries/use-usage";
-import { buildApplicationsById, toUsageItemView } from "@/lib/usage-view";
-import { parsePayload, type ApplicationUsagePayload } from "@/lib/timeline";
+import {
+  parsePayload,
+  safeHostname,
+  type ApplicationUsagePayload,
+} from "@/lib/timeline";
+import { useApplicationStore } from "@/stores/application-store";
 
 interface PauseConfirmationDialogProps {
   open: boolean;
@@ -99,11 +102,7 @@ export function PauseConfirmationDialog({
   onOpenChange,
 }: PauseConfirmationDialogProps) {
   const blockedItemViews = useBlockedItems();
-  const { data: applications } = useApplicationList();
-  const applicationsById = useMemo(
-    () => buildApplicationsById(applications),
-    [applications],
-  );
+  const { applicationsById, getApplicationByID } = useApplicationStore();
 
   const pauseProtection = usePauseProtection();
   const allowAppMutation = useAllowApp();
@@ -126,6 +125,31 @@ export function PauseConfirmationDialog({
   useEffect(() => {
     if (!open) resetPauseForm();
   }, [open]);
+
+  useEffect(() => {
+    const missingIds = new Set<number>();
+
+    for (const item of blockedItemViews) {
+      const payload = parsePayload<ApplicationUsagePayload>(item.event);
+      const applicationID = payload?.application_id;
+      if (applicationID && !applicationsById.has(applicationID)) {
+        missingIds.add(applicationID);
+      }
+    }
+
+    if (missingIds.size === 0) {
+      return;
+    }
+
+    void Promise.all(
+      Array.from(missingIds).map((id) =>
+        getApplicationByID(id).catch((error) => {
+          console.error(`Failed to fetch application ${id}:`, error);
+          return null;
+        }),
+      ),
+    );
+  }, [blockedItemViews, applicationsById, getApplicationByID]);
 
   const pauseUntilDateTime = useMemo(() => {
     if (!pauseUntilDate || !pauseUntilTime) return null;
@@ -153,10 +177,12 @@ export function PauseConfirmationDialog({
     () =>
       blockedItemViews.slice(0, 2).map(({ event, count }) => {
         const payload = parsePayload<ApplicationUsagePayload>(event);
-        const app = payload?.application_id
-          ? applicationsById.get(payload.application_id)
-          : undefined;
-        return { view: toUsageItemView(event, app), count };
+        const application = payload?.application_id
+          ? applicationsById.get(payload.application_id) ?? null
+          : null;
+        const hostname =
+          safeHostname(payload?.browser_url) ?? application?.domain ?? undefined;
+        return { event, payload, application, hostname, count };
       }),
     [blockedItemViews, applicationsById],
   );
@@ -209,18 +235,19 @@ export function PauseConfirmationDialog({
     item: (typeof blockedItems)[number],
     durationMinutes: number,
   ) => {
-    const view = item.view;
-    const key = view.application?.hostname || view.application?.name || String(view.id);
+    const { event, payload, application, hostname } = item;
+    const browserURL = payload?.browser_url || undefined;
+    const key = hostname || application?.name || String(event.id);
     setAllowingKey(key);
     try {
-      if (view.application?.hostname && view.browser_url) {
+      if (hostname && browserURL) {
         await allowHostnameMutation.mutateAsync({
-          rawURL: view.browser_url,
+          rawURL: browserURL,
           durationMinutes,
         });
-      } else if (view.application?.name) {
+      } else if (application?.name) {
         await allowAppMutation.mutateAsync({
-          appName: view.application.name,
+          appName: application.name,
           durationMinutes,
         });
       }
@@ -231,7 +258,7 @@ export function PauseConfirmationDialog({
   };
 
   const getDisplayName = (item: (typeof blockedItems)[number]) => {
-    return item.view.application?.hostname || item.view.application?.name || "Unknown";
+    return item.hostname || item.application?.name || "Unknown";
   };
 
   return (
@@ -257,15 +284,15 @@ export function PauseConfirmationDialog({
 
                 <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 overflow-hidden divide-y divide-emerald-500/10">
                   {blockedItems.map((item) => {
-                    const view = item.view;
-                    const key = view.application?.hostname || view.application?.name || String(view.id);
+                    const { event, application, hostname } = item;
+                    const key = hostname || application?.name || String(event.id);
                     const isAllowing = allowingKey === key;
 
                     return (
                       <div key={key} className="flex items-center gap-3 px-3 py-2.5">
-                        {view.application?.icon ? (
+                        {application?.icon ? (
                           <img
-                            src={`data:image/png;base64,${view.application.icon}`}
+                            src={`data:image/png;base64,${application.icon}`}
                             alt=""
                             className="w-5 h-5 rounded grayscale-[0.2]"
                           />

@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import {
-  GetApplicationList,
   GetDayInsights,
   GetSandboxExecutionLogs,
 } from "../../../bindings/github.com/focusd-so/focusd/internal/usage/service";
@@ -50,14 +49,6 @@ export function useDayInsights(date: Date) {
       }
       return useDevFallback ? mockDayInsights() : null;
     },
-  });
-}
-
-export function useApplicationList() {
-  return useQuery({
-    queryKey: queryKeys.applicationList,
-    queryFn: () => GetApplicationList(),
-    staleTime: 5 * 60_000,
   });
 }
 

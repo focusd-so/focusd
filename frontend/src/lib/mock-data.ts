@@ -593,7 +593,6 @@ function buildUsagePayload(seed: MockUsageSeed): ApplicationUsagePayload {
     classification_source: seed.classificationSource,
     classification_result: classification,
     enforcement_result: enforcement,
-    tags: seed.tags ?? [],
   });
 }
 
@@ -608,8 +607,6 @@ function buildUsageEvent(seed: MockUsageSeed): TimelineEvent {
     occurred_at: occurredAt,
     type: "usage_changed",
     payload: JSON.stringify(buildUsagePayload(seed)),
-    trace_id: "",
-    parent_id: null,
     ended_at: finishedAt,
     key: null,
     tags: [],
@@ -846,8 +843,6 @@ export function mockSandboxLogEvents(logType: string, search: string): TimelineE
         occurred_at: occurredAt,
         type: "classification",
         payload: JSON.stringify(payload),
-        trace_id: "",
-        parent_id: null,
         ended_at: occurredAt,
         key: null,
         tags: [],
