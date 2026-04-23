@@ -192,8 +192,8 @@ function CustomRulesStatus({
     if (parts.length === 0) return null;
 
     return (
-      <div className="inline-flex min-w-0 items-center gap-1.5 text-[10px] font-medium text-muted-foreground/50">
-        <span className="truncate italic opacity-70">{parts.join(" · ")}</span>
+      <div className="inline-flex min-w-0 items-center gap-1.5 text-[10px] font-medium text-muted-foreground/80">
+        <span className="truncate">{parts.join(" · ")}</span>
       </div>
     );
   }
