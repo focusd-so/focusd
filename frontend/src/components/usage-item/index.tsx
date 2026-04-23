@@ -354,6 +354,8 @@ export function UsageItem({
     !!customRulesClassification &&
     classificationSource !== ClassificationSource.ClassificationSourceCustomRules &&
     classification !== customRulesClassification;
+  const isCustomRulesClassificationApplied =
+    classificationSource === ClassificationSource.ClassificationSourceCustomRules;
 
   const onResume = () => {
     resumeMutation.mutate("user manually resumed");
