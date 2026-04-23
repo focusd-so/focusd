@@ -108,58 +108,97 @@ function UsageAvatar({
   );
 }
 
-function CustomRulesPreview({
+function CustomRulesStatus({
   isIgnoredRule,
   isIgnoredClassification,
+  isCustomRulesEnforcementApplied,
+  isCustomRulesClassificationApplied,
   customRulesAction,
   customRulesClassification,
+  actualClassification,
+  actualEnforcementAction,
   checkoutLink,
 }: {
   isIgnoredRule: boolean;
   isIgnoredClassification: boolean;
+  isCustomRulesEnforcementApplied: boolean;
+  isCustomRulesClassificationApplied: boolean;
   customRulesAction?:
     | (typeof EnforcementAction)[keyof typeof EnforcementAction]
     | null;
   customRulesClassification?: Classification | null;
+  actualClassification?: Classification | null;
+  actualEnforcementAction?:
+    | (typeof EnforcementAction)[keyof typeof EnforcementAction]
+    | null;
   checkoutLink?: string | null;
 }) {
-  if (!isIgnoredRule && !isIgnoredClassification) return null;
+  if (isIgnoredRule || isIgnoredClassification) {
+    const wouldBlock =
+      customRulesAction === EnforcementAction.EnforcementActionBlock;
+    const enforcementVerb = wouldBlock ? "block" : "allow";
+    const classificationLabel = customRulesClassification
+      ? formatClassificationLabel(customRulesClassification).toLowerCase()
+      : "";
 
-  const wouldBlock = customRulesAction === EnforcementAction.EnforcementActionBlock;
-  const enforcementVerb = wouldBlock ? "block" : "allow";
-  const classificationLabel = customRulesClassification
-    ? formatClassificationLabel(customRulesClassification).toLowerCase()
-    : "";
+    let message = "";
+    if (isIgnoredClassification && isIgnoredRule) {
+      message = `Your rule would classify this as ${classificationLabel}, it would ${enforcementVerb} this`;
+    } else if (isIgnoredClassification) {
+      message = `Your rule would classify this as ${classificationLabel}`;
+    } else {
+      message = `Your rule would ${enforcementVerb} this`;
+    }
 
-  let message = "";
-  if (isIgnoredClassification && isIgnoredRule) {
-    message = `Your rule would classify this as ${classificationLabel}, it would ${enforcementVerb} this`;
-  } else if (isIgnoredClassification) {
-    message = `Your rule would classify this as ${classificationLabel}`;
-  } else {
-    message = `Your rule would ${enforcementVerb} this`;
+    return (
+      <div className="inline-flex min-w-0 items-center gap-1.5 text-[10px] font-medium text-amber-300/85">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400/70" />
+        <span className="truncate">
+          {message}
+          {checkoutLink ? " — " : ""}
+          {checkoutLink && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                Browser.OpenURL(checkoutLink);
+              }}
+              className="whitespace-nowrap font-medium text-amber-200 underline decoration-amber-200/40 underline-offset-2 transition-colors hover:text-amber-100"
+            >
+              upgrade →
+            </button>
+          )}
+        </span>
+      </div>
+    );
   }
 
-  return (
-    <div className="inline-flex min-w-0 items-center gap-1.5 text-[10px] font-medium text-amber-300/85">
-      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400/70" />
-      <span className="truncate">
-        {message}
-        {checkoutLink ? " — " : ""}
-        {checkoutLink && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              Browser.OpenURL(checkoutLink);
-            }}
-            className="whitespace-nowrap font-medium text-amber-200 underline decoration-amber-200/40 underline-offset-2 transition-colors hover:text-amber-100"
-          >
-            upgrade →
-          </button>
-        )}
-      </span>
-    </div>
-  );
+  if (isCustomRulesEnforcementApplied || isCustomRulesClassificationApplied) {
+    const parts: string[] = [];
+    if (isCustomRulesClassificationApplied && actualClassification) {
+      parts.push(
+        `custom rules classified as ${formatClassificationLabel(
+          actualClassification,
+        ).toLowerCase()}`,
+      );
+    }
+    if (isCustomRulesEnforcementApplied && actualEnforcementAction) {
+      const verb =
+        actualEnforcementAction === EnforcementAction.EnforcementActionBlock
+          ? "blocked"
+          : "allowed";
+      parts.push(`custom rule enforcement: ${verb}`);
+    }
+
+    if (parts.length === 0) return null;
+
+    return (
+      <div className="inline-flex min-w-0 items-center gap-1.5 text-[10px] font-medium text-muted-foreground/50">
+        <span className="truncate italic opacity-70">{parts.join(" · ")}</span>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function UsageMainInfo({
@@ -202,10 +241,10 @@ function UsageMainInfo({
           <Link
             to="/settings"
             search={{ tab: "rules" }}
-            className="inline-flex items-center rounded border border-border/35 bg-muted/20 px-1 py-px text-[9px] text-muted-foreground/65 transition-colors hover:border-border/60 hover:bg-muted/35 hover:text-muted-foreground"
+            className="inline-flex items-center rounded border border-border/35 bg-muted/20 px-1 py-px text-[9px] font-medium text-muted-foreground/65 transition-colors hover:border-border/60 hover:bg-muted/35 hover:text-muted-foreground"
             onClick={(e) => e.stopPropagation()}
           >
-            rules
+            custom rules
           </Link>
         )}
         <TruncatedLabel className="max-w-[130px] truncate text-[10px] text-muted-foreground sm:max-w-[210px] lg:max-w-[250px]">
@@ -297,10 +336,13 @@ export function UsageItem({
     customRulesAction === EnforcementAction.EnforcementActionBlock ||
     customRulesAction === EnforcementAction.EnforcementActionAllow;
 
+  const isCustomRulesEnforcementApplied =
+    enforcementSource === EnforcementSource.EnforcementSourceCustomRules;
+
   const isIgnoredRule =
     hasComparableActualAction &&
     hasComparableCustomRulesAction &&
-    !isCustomRulesApplied &&
+    !isCustomRulesEnforcementApplied &&
     standardAction !== customRulesAction;
 
   const visibleTags = tags?.slice(0, 2) ?? [];
@@ -317,7 +359,12 @@ export function UsageItem({
     resumeMutation.mutate("user manually resumed");
   };
 
-  const showFooter = isIgnoredRule || isIgnoredClassification || hasAnySandbox;
+  const showFooter =
+    isIgnoredRule ||
+    isIgnoredClassification ||
+    isCustomRulesClassificationApplied ||
+    isCustomRulesEnforcementApplied ||
+    hasAnySandbox;
 
   return (
     <div
@@ -413,11 +460,19 @@ export function UsageItem({
             </div>
 
             <div className="shrink-0">
-              <CustomRulesPreview
+              <CustomRulesStatus
                 isIgnoredRule={isIgnoredRule}
                 isIgnoredClassification={isIgnoredClassification}
+                isCustomRulesEnforcementApplied={
+                  isCustomRulesEnforcementApplied
+                }
+                isCustomRulesClassificationApplied={
+                  isCustomRulesClassificationApplied
+                }
                 customRulesAction={customRulesAction}
                 customRulesClassification={customRulesClassification}
+                actualClassification={classification}
+                actualEnforcementAction={enforcementAction}
                 checkoutLink={checkoutLink}
               />
             </div>
