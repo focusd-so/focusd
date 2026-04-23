@@ -21,12 +21,13 @@ export function UsageItemSandboxPanel({
 
   return (
     <div className="w-full space-y-3">
-      <div className="space-y-0.5">
-        <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/65">
-          Sandbox Trace
+      <div className="space-y-1">
+        <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/45 flex items-center gap-1.5">
+          <span className="h-1 w-1 rounded-full bg-muted-foreground/30" />
+          Execution Trace
         </h4>
-        <p className="text-[10px] text-muted-foreground/55 leading-tight">
-          Debug output from custom rules classification and enforcement.
+        <p className="text-[9px] text-muted-foreground/40 font-medium italic leading-tight">
+          Rule engine debug output
         </p>
       </div>
 
@@ -54,7 +55,7 @@ function SandboxSection({
 
   return (
     <div className="space-y-3">
-      <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 block">
+      <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/30 block">
         {title}
       </span>
 
@@ -62,7 +63,7 @@ function SandboxSection({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {hasContext && (
             <div>
-              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 mb-1 block">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/30 mb-1 block">
                 Context
               </span>
               <pre className="text-[10px] text-muted-foreground/70 bg-background/30 rounded p-1.5 overflow-x-auto max-h-[150px] overflow-y-auto font-mono whitespace-pre-wrap break-all border border-border/10">
@@ -72,7 +73,7 @@ function SandboxSection({
           )}
           {hasResponse && (
             <div>
-              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 mb-1 block">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/30 mb-1 block">
                 Response
               </span>
               <pre className="text-[10px] text-green-400/60 bg-background/30 rounded p-1.5 overflow-x-auto max-h-[150px] overflow-y-auto font-mono whitespace-pre-wrap break-all border border-border/10">
@@ -85,8 +86,8 @@ function SandboxSection({
 
       {hasLogs && (
         <div>
-          <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 mb-1 flex items-center gap-1">
-            <IconTerminal className="w-3 h-3" />
+          <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/30 mb-1 flex items-center gap-1">
+            <IconTerminal className="w-3 h-3 opacity-70" />
             Console Logs
           </span>
           <pre className="text-[10px] text-yellow-400/60 bg-background/30 rounded p-1.5 overflow-x-auto max-h-[150px] overflow-y-auto font-mono whitespace-pre-wrap break-all border border-border/10">

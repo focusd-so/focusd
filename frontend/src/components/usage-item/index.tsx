@@ -4,8 +4,8 @@ import { Browser } from "@wailsio/runtime";
 import {
   IconWorld,
   IconAppWindow,
-  IconChevronDown,
-  IconChevronUp,
+  IconChevronRight,
+  IconTerminal2,
 } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { useResumeProtection, useIsProtectionPaused } from "@/hooks/queries/use-protection";
@@ -17,6 +17,7 @@ import {
   EnforcementSource,
   type Application,
   type ApplicationUsagePayload,
+  type Classification,
 } from "../../../bindings/github.com/focusd-so/focusd/internal/usage/models";
 import {
   pickClassificationSandbox,
@@ -209,6 +210,7 @@ function UsageMainInfo({
   startedAt,
   durationSeconds,
   isDistractingEvent,
+  titles,
 }: {
   payload: ApplicationUsagePayload | null;
   application?: Application | null;
@@ -217,9 +219,16 @@ function UsageMainInfo({
   startedAt?: number | null;
   durationSeconds: number | null;
   isDistractingEvent: boolean;
+  titles?: string[];
 }) {
+  const displayTitles = titles?.length
+    ? titles
+    : [payload?.window_title || (isWeb ? "Browsing" : "Using app")];
+  const visibleTitles = displayTitles.slice(0, 3);
+  const hiddenCount = Math.max(0, displayTitles.length - visibleTitles.length);
+
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-1">
+    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
       <div className="flex min-w-0 items-center gap-1.5">
         <TruncatedLabel className="text-xs font-semibold text-foreground truncate leading-tight">
           {hostname || application?.name || "Unknown"}
@@ -233,28 +242,45 @@ function UsageMainInfo({
         </span>
         <span className="text-[10px] text-muted-foreground/50 tabular-nums leading-none shrink-0">
           at {formatSmartDate(startedAt)}
+          {durationSeconds != null && durationSeconds >= 60 && (
+            <span className="font-medium opacity-70">
+              {" "}
+              · {formatDuration(durationSeconds)}
+            </span>
+          )}
         </span>
       </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+
+      <div className="flex min-w-0 flex-col gap-0.5">
         {payload?.classification_source ===
           ClassificationSource.ClassificationSourceCustomRules && (
-          <Link
-            to="/settings"
-            search={{ tab: "rules" }}
-            className="inline-flex items-center rounded border border-border/35 bg-muted/20 px-1 py-px text-[9px] font-medium text-muted-foreground/65 transition-colors hover:border-border/60 hover:bg-muted/35 hover:text-muted-foreground"
-            onClick={(e) => e.stopPropagation()}
-          >
-            custom rules
-          </Link>
+          <div className="flex min-w-0 items-center">
+            <Link
+              to="/settings"
+              search={{ tab: "rules" }}
+              className="inline-flex items-center rounded border border-border/35 bg-muted/20 px-1 py-px text-[9px] font-medium text-muted-foreground/65 transition-colors hover:border-border/60 hover:bg-muted/35 hover:text-muted-foreground"
+              onClick={(e) => e.stopPropagation()}
+            >
+              custom rules
+            </Link>
+          </div>
         )}
-        <TruncatedLabel className="max-w-[130px] truncate text-[10px] text-muted-foreground sm:max-w-[210px] lg:max-w-[250px]">
-          {payload?.window_title || (isWeb ? "Browsing" : "Using app")}
-        </TruncatedLabel>
-        {durationSeconds != null && durationSeconds >= 60 && (
-          <span className="text-[10px] font-medium text-muted-foreground/50 tabular-nums shrink-0">
-            · {formatDuration(durationSeconds)}
-          </span>
-        )}
+
+        <div className="flex flex-col gap-px">
+          {visibleTitles.map((title, i) => (
+            <TruncatedLabel
+              key={i}
+              className="max-w-[130px] truncate text-[10px] text-muted-foreground/75 sm:max-w-[210px] lg:max-w-[250px] leading-tight"
+            >
+              {title}
+            </TruncatedLabel>
+          ))}
+          {hiddenCount > 0 && (
+            <span className="text-[9px] text-muted-foreground/40 font-medium italic leading-tight">
+              + {hiddenCount} more window{hiddenCount > 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -264,10 +290,16 @@ export function UsageItem({
   event,
   payload,
   application,
+  titles,
+  totalDurationSeconds,
+  tags: passedTags,
 }: {
   event: TimelineEvent;
   payload: ApplicationUsagePayload | null;
   application?: Application | null;
+  titles?: string[];
+  totalDurationSeconds?: number | null;
+  tags?: string[];
 }) {
   const [showLogs, setShowLogs] = useState(false);
   const enforced = pickEnforced(payload);
@@ -278,7 +310,7 @@ export function UsageItem({
   const browserURL = payload?.browser_url || undefined;
   const hostname = safeHostname(browserURL) ?? application?.domain ?? undefined;
   const isWeb = !!hostname;
-  const tags = pickClassificationTags(payload);
+  const tags = passedTags ?? pickClassificationTags(payload);
 
   const classification = payload?.classification;
   const classificationSource = payload?.classification_source;
@@ -326,9 +358,6 @@ export function UsageItem({
 
   const standardAction = payload?.enforcement_result?.StandardEnforcementResult?.Action;
   const customRulesAction = payload?.enforcement_result?.CustomRulesEnforcementResult?.Action;
-  const isCustomRulesApplied =
-    enforcementSource === EnforcementSource.EnforcementSourceCustomRules;
-
   const hasComparableActualAction =
     standardAction === EnforcementAction.EnforcementActionBlock ||
     standardAction === EnforcementAction.EnforcementActionAllow;
@@ -387,8 +416,9 @@ export function UsageItem({
             hostname={hostname}
             isWeb={isWeb}
             startedAt={startedAt}
-            durationSeconds={durationSeconds}
+            durationSeconds={totalDurationSeconds ?? durationSeconds}
             isDistractingEvent={isDistractingEvent}
+            titles={titles}
           />
         </div>
 
@@ -447,16 +477,17 @@ export function UsageItem({
                     e.stopPropagation();
                     setShowLogs((prev) => !prev);
                   }}
-                  className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground/60 hover:text-foreground transition-colors group"
+                  className="flex items-center gap-1.5 rounded-md border border-border/20 bg-muted/15 px-2 py-0.5 text-[10px] font-medium text-muted-foreground/70 transition-all duration-200 hover:bg-muted/30 hover:text-foreground group"
                   aria-label="Toggle sandbox trace"
                   aria-expanded={showLogs}
                 >
-                  <span>Custom rules trace</span>
-                  {showLogs ? (
-                    <IconChevronUp className="h-3 w-3 transition-transform group-hover:-translate-y-0.5" />
-                  ) : (
-                    <IconChevronDown className="h-3 w-3 transition-transform group-hover:translate-y-0.5" />
-                  )}
+                  <IconTerminal2 className="h-3 w-3 opacity-50 transition-opacity group-hover:opacity-100" />
+                  <span>Custom rule trace</span>
+                  <IconChevronRight
+                    className={`h-3.5 w-3.5 transition-transform duration-200 ${
+                      showLogs ? "rotate-90" : ""
+                    }`}
+                  />
                 </button>
               )}
             </div>

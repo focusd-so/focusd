@@ -234,17 +234,68 @@ function ActivityPage() {
     );
   }, [recentEvents, blockedRaw, applicationsById, getApplicationByID]);
 
-  const activeUsages = useMemo(
-    () =>
-      recentEvents.map((event) => {
-        const payload = parsePayload<ApplicationUsagePayload>(event);
-        const application = payload?.application_id
-          ? applicationsById.get(payload.application_id) ?? null
-          : null;
-        return { event, payload, application };
-      }),
-    [recentEvents, applicationsById],
-  );
+  const activeUsages = useMemo(() => {
+    const result: Array<{
+      event: TimelineEvent;
+      payload: ApplicationUsagePayload | null;
+      application: Application | null;
+      titles: string[];
+      totalDurationSeconds: number;
+      tags: Set<string>;
+    }> = [];
+
+    for (const event of recentEvents) {
+      const payload = parsePayload<ApplicationUsagePayload>(event);
+      const application = payload?.application_id
+        ? applicationsById.get(payload.application_id) ?? null
+        : null;
+
+      const hostname = getHostname(payload, application) || "unknown";
+      const classification = payload?.classification || "unknown";
+      const enforced = pickEnforced(payload);
+      const enforcementAction = enforced?.Action || "none";
+      const enforcementSource = enforced?.Source || "none";
+
+      const key = `${hostname}-${classification}-${enforcementAction}-${enforcementSource}`;
+      const title =
+        payload?.window_title || (hostname ? "Browsing" : "Using app");
+      const entryTags = pickClassificationTags(payload);
+
+      const lastGroup = result[result.length - 1];
+      const lastKey = lastGroup
+        ? `${
+            getHostname(lastGroup.payload, lastGroup.application) || "unknown"
+          }-${lastGroup.payload?.classification || "unknown"}-${
+            pickEnforced(lastGroup.payload)?.Action || "none"
+          }-${pickEnforced(lastGroup.payload)?.Source || "none"}`
+        : null;
+
+      const startedAt = event.occurred_at;
+      const endedAt = event.ended_at;
+      const duration = startedAt && endedAt ? endedAt - startedAt : 0;
+
+      if (lastKey === key && lastGroup) {
+        // Merge into consecutive group
+        if (!lastGroup.titles.includes(title)) {
+          lastGroup.titles.push(title);
+        }
+        entryTags.forEach((tag) => lastGroup.tags.add(tag));
+        lastGroup.totalDurationSeconds += Math.max(0, duration);
+      } else {
+        // New group
+        result.push({
+          event,
+          payload,
+          application,
+          titles: [title],
+          totalDurationSeconds: Math.max(0, duration),
+          tags: new Set(entryTags),
+        });
+      }
+    }
+
+    return result;
+  }, [recentEvents, applicationsById]);
 
   const blockedItemViews = useMemo<BlockedUsageDisplay[]>(() => {
     return blockedRaw.map(({ event, count }: BlockedItemView) => {
@@ -319,12 +370,12 @@ function ActivityPage() {
   const filteredActiveUsages = useMemo(() => {
     if (!searchQuery) return activeUsages;
     const q = searchQuery.toLowerCase();
-    return activeUsages.filter((entry) => {
-      const name = entry.application?.name?.toLowerCase() || "";
-      const host = getHostname(entry.payload, entry.application)?.toLowerCase() || "";
-      const title = entry.payload?.window_title?.toLowerCase() || "";
-      const tags = pickClassificationTags(entry.payload).join(" ").toLowerCase();
-      return name.includes(q) || host.includes(q) || title.includes(q) || tags.includes(q);
+    return activeUsages.filter((group) => {
+      const name = group.application?.name?.toLowerCase() || "";
+      const host = getHostname(group.payload, group.application)?.toLowerCase() || "";
+      const tags = Array.from(group.tags).join(" ").toLowerCase();
+      const hasMatchingTitle = group.titles.some(t => t.toLowerCase().includes(q));
+      return name.includes(q) || host.includes(q) || tags.includes(q) || hasMatchingTitle;
     });
   }, [activeUsages, searchQuery]);
 
@@ -401,12 +452,15 @@ function ActivityPage() {
               </div>
             ) : (
               <div className="space-y-1.5">
-                {filteredActiveUsages.slice(0, renderCount).map((entry) => (
+                {filteredActiveUsages.slice(0, renderCount).map((group) => (
                   <UsageItem
-                    key={entry.event.id}
-                    event={entry.event}
-                    payload={entry.payload}
-                    application={entry.application}
+                    key={group.event.id}
+                    event={group.event}
+                    payload={group.payload}
+                    application={group.application}
+                    titles={group.titles}
+                    totalDurationSeconds={group.totalDurationSeconds}
+                    tags={Array.from(group.tags)}
                   />
                 ))}
               </div>

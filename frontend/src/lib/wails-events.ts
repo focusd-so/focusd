@@ -40,7 +40,7 @@ export function bootstrapWailsEvents(queryClient: QueryClient): () => void {
           }
 
           next.unshift(tlEvent);
-          return next.slice(0, 200);
+          return next.slice(0, 100);
         },
       );
 
