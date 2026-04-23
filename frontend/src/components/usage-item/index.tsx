@@ -108,28 +108,43 @@ function UsageAvatar({
   );
 }
 
-function RuleOutcomeNote({
+function CustomRulesPreview({
   isIgnoredRule,
+  isIgnoredClassification,
   customRulesAction,
+  customRulesClassification,
   checkoutLink,
 }: {
   isIgnoredRule: boolean;
+  isIgnoredClassification: boolean;
   customRulesAction?:
     | (typeof EnforcementAction)[keyof typeof EnforcementAction]
     | null;
+  customRulesClassification?: Classification | null;
   checkoutLink?: string | null;
 }) {
-  if (!isIgnoredRule) return null;
+  if (!isIgnoredRule && !isIgnoredClassification) return null;
 
-  const wouldBlock =
-    customRulesAction === EnforcementAction.EnforcementActionBlock;
-  const verb = wouldBlock ? "block" : "allow";
+  const wouldBlock = customRulesAction === EnforcementAction.EnforcementActionBlock;
+  const enforcementVerb = wouldBlock ? "block" : "allow";
+  const classificationLabel = customRulesClassification
+    ? formatClassificationLabel(customRulesClassification).toLowerCase()
+    : "";
+
+  let message = "";
+  if (isIgnoredClassification && isIgnoredRule) {
+    message = `Your rule would classify as ${classificationLabel} and ${enforcementVerb} this`;
+  } else if (isIgnoredClassification) {
+    message = `Your rule would classify this as ${classificationLabel}`;
+  } else {
+    message = `Your rule would ${enforcementVerb} this`;
+  }
 
   return (
     <div className="inline-flex min-w-0 items-center gap-1.5 text-[10px] font-medium text-amber-300/85">
       <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400/70" />
       <span className="truncate">
-        Your rule would {verb} this
+        {message}
         {checkoutLink ? " — " : ""}
         {checkoutLink && (
           <button
@@ -291,11 +306,18 @@ export function UsageItem({
   const visibleTags = tags?.slice(0, 2) ?? [];
   const hiddenTagCount = Math.max(0, (tags?.length ?? 0) - visibleTags.length);
 
+  const customRulesClassification = payload?.classification_result?.custom_rules_classification_result?.classification;
+  const isIgnoredClassification =
+    !!classification &&
+    !!customRulesClassification &&
+    classificationSource !== ClassificationSource.ClassificationSourceCustomRules &&
+    classification !== customRulesClassification;
+
   const onResume = () => {
     resumeMutation.mutate("user manually resumed");
   };
 
-  const showFooter = isIgnoredRule || hasAnySandbox;
+  const showFooter = isIgnoredRule || isIgnoredClassification || hasAnySandbox;
 
   return (
     <div
@@ -391,9 +413,11 @@ export function UsageItem({
             </div>
 
             <div className="shrink-0">
-              <RuleOutcomeNote
+              <CustomRulesPreview
                 isIgnoredRule={isIgnoredRule}
+                isIgnoredClassification={isIgnoredClassification}
                 customRulesAction={customRulesAction}
+                customRulesClassification={customRulesClassification}
                 checkoutLink={checkoutLink}
               />
             </div>
