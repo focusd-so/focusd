@@ -133,7 +133,7 @@ function CustomRulesPreview({
 
   let message = "";
   if (isIgnoredClassification && isIgnoredRule) {
-    message = `Your rule would classify as ${classificationLabel} and ${enforcementVerb} this`;
+    message = `Your rule would classify this as ${classificationLabel}, it would ${enforcementVerb} this`;
   } else if (isIgnoredClassification) {
     message = `Your rule would classify this as ${classificationLabel}`;
   } else {
