@@ -69,8 +69,8 @@ export function ClassificationReasoningLabel({
 
   if (isPausedDistraction) {
     return (
-      <span className="text-[10px] text-yellow-500/70 flex items-center gap-1.5">
-        <IconPlayerPause className="w-3 h-3 text-yellow-500/70" />
+      <span className="inline-flex max-w-full items-center gap-1 text-[10px] text-yellow-500/70">
+        <IconPlayerPause className="h-3 w-3 text-yellow-500/70" />
         <span>{labelText}</span>
         {isCurrentlyPaused && (
           <>
@@ -80,7 +80,7 @@ export function ClassificationReasoningLabel({
                 e.stopPropagation();
                 onResume();
               }}
-              className="text-yellow-500 hover:text-yellow-400 hover:underline transition-colors font-medium"
+              className="font-medium text-yellow-500 transition-colors hover:text-yellow-400 hover:underline"
             >
               resume
             </button>
@@ -91,22 +91,19 @@ export function ClassificationReasoningLabel({
   }
 
   return (
-    <span className="text-[10px] text-muted-foreground/50 flex items-center gap-1.5">
-      <span className="text-[10px] opacity-70">
-        {enforcementSourceMeta?.icon || sourceMeta.icon}
-      </span>
+    <span className="inline-flex min-w-0 items-center text-[10px] text-muted-foreground/55">
       {shouldBeLink ? (
-        <TruncatedLabel className="max-w-[170px] sm:max-w-[260px]">
+        <TruncatedLabel className="max-w-[170px] sm:max-w-[240px]">
           <Link
             to="/settings"
             search={{ tab: "rules" }}
-            className="hover:text-muted-foreground hover:underline transition-colors"
+            className="transition-colors hover:text-muted-foreground/90"
           >
             {displayText}
           </Link>
         </TruncatedLabel>
       ) : (
-        <TruncatedLabel className="max-w-[170px] sm:max-w-[260px]">
+        <TruncatedLabel className="max-w-[170px] sm:max-w-[240px]">
           {displayText}
         </TruncatedLabel>
       )}

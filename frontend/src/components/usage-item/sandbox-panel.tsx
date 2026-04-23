@@ -20,7 +20,7 @@ export function UsageItemSandboxPanel({
   if (!hasClassificationSandbox && !hasEnforcementSandbox) return null;
 
   return (
-    <div className="w-full mt-2 pt-2 border-t border-border/20 space-y-3">
+    <div className="w-full space-y-3">
       <div className="space-y-0.5">
         <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/65">
           Sandbox Trace

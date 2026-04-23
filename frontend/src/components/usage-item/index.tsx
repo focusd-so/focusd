@@ -4,9 +4,8 @@ import { Browser } from "@wailsio/runtime";
 import {
   IconWorld,
   IconAppWindow,
-  IconTerminal,
   IconChevronDown,
-  IconChevronRight,
+  IconChevronUp,
 } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { useResumeProtection, useIsProtectionPaused } from "@/hooks/queries/use-protection";
@@ -109,43 +108,41 @@ function UsageAvatar({
   );
 }
 
-function IgnoredRuleBanner({
-  shouldRender,
+function RuleOutcomeNote({
+  isIgnoredRule,
   customRulesAction,
   checkoutLink,
 }: {
-  shouldRender: boolean;
+  isIgnoredRule: boolean;
   customRulesAction?:
     | (typeof EnforcementAction)[keyof typeof EnforcementAction]
     | null;
   checkoutLink?: string | null;
 }) {
-  if (!shouldRender) return null;
+  if (!isIgnoredRule) return null;
 
   const wouldBlock =
     customRulesAction === EnforcementAction.EnforcementActionBlock;
+  const verb = wouldBlock ? "block" : "allow";
 
   return (
-    <div className="self-start text-[9px] text-amber-200/90 bg-amber-500/10 px-2 py-1 rounded border border-amber-400/20 mt-1 flex items-center gap-1.5 animate-in fade-in slide-in-from-left-1 duration-500">
-      <IconTerminal className="w-2.5 h-2.5 shrink-0 text-amber-300/80" />
+    <div className="inline-flex min-w-0 items-center gap-1.5 text-[10px] font-medium text-amber-300/85">
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400/70" />
       <span className="truncate">
-        Custom rules would have{" "}
-        <span className="font-semibold uppercase text-amber-200">
-          {wouldBlock ? "blocked" : "allowed"}
-        </span>{" "}
-        this action. <span className="text-amber-200/70">Upgrade to Plus to enforce custom rules.</span>
+        Your rule would {verb} this
+        {checkoutLink ? " — " : ""}
+        {checkoutLink && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              Browser.OpenURL(checkoutLink);
+            }}
+            className="whitespace-nowrap font-medium text-amber-200 underline decoration-amber-200/40 underline-offset-2 transition-colors hover:text-amber-100"
+          >
+            upgrade →
+          </button>
+        )}
       </span>
-      {checkoutLink && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            Browser.OpenURL(checkoutLink);
-          }}
-          className="underline hover:text-amber-100 font-semibold whitespace-nowrap"
-        >
-          Upgrade to Plus
-        </button>
-      )}
     </div>
   );
 }
@@ -158,8 +155,6 @@ function UsageMainInfo({
   startedAt,
   durationSeconds,
   isDistractingEvent,
-  isIgnoredRule,
-  customRulesAction,
 }: {
   payload: ApplicationUsagePayload | null;
   application?: Application | null;
@@ -168,57 +163,45 @@ function UsageMainInfo({
   startedAt?: number | null;
   durationSeconds: number | null;
   isDistractingEvent: boolean;
-  isIgnoredRule: boolean;
-  customRulesAction?:
-    | (typeof EnforcementAction)[keyof typeof EnforcementAction]
-    | null;
 }) {
-  const checkoutLink = useAccountStore((state) => state.checkoutLink);
-
   return (
-    <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex items-center gap-2 min-w-0">
+    <div className="flex min-w-0 flex-1 flex-col gap-1">
+      <div className="flex min-w-0 items-center gap-1.5">
         <TruncatedLabel className="text-xs font-semibold text-foreground truncate leading-tight">
           {hostname || application?.name || "Unknown"}
         </TruncatedLabel>
-        <span className="text-[10px] text-muted-foreground/50 tabular-nums leading-none shrink-0">
-          at {formatSmartDate(startedAt)}
-        </span>
-      </div>
-      <div className="flex items-center gap-1.5 mt-0.5">
-        <span className="text-[10px] font-medium uppercase tracking-widest opacity-70">
+        <span className="shrink-0 rounded border border-border/40 bg-muted/25 px-1 py-px text-[9px] font-medium text-muted-foreground/75">
           {payload?.classification
             ? formatClassificationLabel(payload.classification)
             : isDistractingEvent
               ? "Distracting"
               : "Productive"}
         </span>
+        <span className="text-[10px] text-muted-foreground/50 tabular-nums leading-none shrink-0">
+          at {formatSmartDate(startedAt)}
+        </span>
+      </div>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
         {payload?.classification_source ===
           ClassificationSource.ClassificationSourceCustomRules && (
           <Link
             to="/settings"
             search={{ tab: "rules" }}
-            className="inline-flex items-center gap-0.5 text-[9px] font-medium px-1 py-px rounded bg-muted/40 text-muted-foreground/50 border border-muted-foreground/10 hover:bg-muted/70 hover:text-muted-foreground/80 hover:border-muted-foreground/25 transition-colors"
+            className="inline-flex items-center rounded border border-border/35 bg-muted/20 px-1 py-px text-[9px] text-muted-foreground/65 transition-colors hover:border-border/60 hover:bg-muted/35 hover:text-muted-foreground"
             onClick={(e) => e.stopPropagation()}
           >
-            ⚡️ custom rules
+            rules
           </Link>
         )}
-        <span className="text-muted-foreground/40 text-[10px]">—</span>
-        <TruncatedLabel className="text-[10px] text-muted-foreground truncate max-w-[130px] sm:max-w-[210px] lg:max-w-[250px]">
+        <TruncatedLabel className="max-w-[130px] truncate text-[10px] text-muted-foreground sm:max-w-[210px] lg:max-w-[250px]">
           {payload?.window_title || (isWeb ? "Browsing" : "Using app")}
         </TruncatedLabel>
         {durationSeconds != null && durationSeconds >= 60 && (
-          <span className="text-[10px] text-muted-foreground/50 tabular-nums shrink-0 font-medium">
+          <span className="text-[10px] font-medium text-muted-foreground/50 tabular-nums shrink-0">
             · {formatDuration(durationSeconds)}
           </span>
         )}
       </div>
-      <IgnoredRuleBanner
-        shouldRender={isIgnoredRule}
-        customRulesAction={customRulesAction}
-        checkoutLink={checkoutLink}
-      />
     </div>
   );
 }
@@ -236,6 +219,7 @@ export function UsageItem({
   const enforced = pickEnforced(payload);
   const resumeMutation = useResumeProtection();
   const isCurrentlyPaused = useIsProtectionPaused();
+  const checkoutLink = useAccountStore((state) => state.checkoutLink);
 
   const browserURL = payload?.browser_url || undefined;
   const hostname = safeHostname(browserURL) ?? application?.domain ?? undefined;
@@ -304,15 +288,20 @@ export function UsageItem({
     !isCustomRulesApplied &&
     standardAction !== customRulesAction;
 
+  const visibleTags = tags?.slice(0, 2) ?? [];
+  const hiddenTagCount = Math.max(0, (tags?.length ?? 0) - visibleTags.length);
+
   const onResume = () => {
     resumeMutation.mutate("user manually resumed");
   };
+
+  const showFooter = isIgnoredRule || hasAnySandbox;
 
   return (
     <div
       className={`flex flex-col p-2.5 rounded-lg border transition-all ${theme.container}`}
     >
-      <div className="flex items-center justify-between w-full gap-2 min-w-0">
+      <div className="flex items-start justify-between w-full gap-2 min-w-0">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <UsageAvatar
             application={application}
@@ -329,31 +318,37 @@ export function UsageItem({
             startedAt={startedAt}
             durationSeconds={durationSeconds}
             isDistractingEvent={isDistractingEvent}
-            isIgnoredRule={isIgnoredRule}
-            customRulesAction={customRulesAction}
           />
         </div>
 
-        <div className="flex min-w-0 items-center gap-2 pl-1">
-          <div className="flex min-w-0 flex-col items-end gap-1">
-            <div className="flex flex-wrap items-center justify-end gap-1">
+        <div className="flex shrink-0 flex-col items-end gap-1 pl-1">
+          <div className="flex max-w-[170px] flex-wrap items-center justify-end gap-1 sm:max-w-[240px]">
+            <Badge
+              variant="outline"
+              className={`rounded-full px-1.5 py-0 text-[9px] font-medium ${theme.badge} opacity-90`}
+            >
+              {isWeb ? "web" : "app"}
+            </Badge>
+            {visibleTags.map((tag) => (
+              <Badge
+                key={tag}
+                variant="outline"
+                className={`rounded-full px-1.5 py-0 text-[9px] font-medium ${theme.badge} opacity-80`}
+              >
+                {tag}
+              </Badge>
+            ))}
+            {hiddenTagCount > 0 && (
               <Badge
                 variant="outline"
-                className={`px-1.5 py-0 text-[9px] font-bold rounded-full ${theme.badge}`}
+                className={`rounded-full px-1.5 py-0 text-[9px] font-medium ${theme.badge} opacity-65`}
               >
-                {isWeb ? "web" : "app"}
+                +{hiddenTagCount}
               </Badge>
-              {tags?.map((tag) => (
-                <Badge
-                  key={tag}
-                  variant="outline"
-                  className={`px-1.5 py-0 text-[9px] font-bold rounded-full ${theme.badge}`}
-                >
-                  {tag}
-                </Badge>
-              ))}
-            </div>
+            )}
+          </div>
 
+          <div className="flex max-w-[170px] justify-end sm:max-w-[260px]">
             <ClassificationReasoningLabel
               payload={payload}
               sourceMeta={sourceMeta}
@@ -368,38 +363,51 @@ export function UsageItem({
               }
             />
           </div>
-
-          {hasAnySandbox && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowLogs((prev) => !prev);
-              }}
-              className={`px-1.5 py-1 rounded-md border transition-all flex items-center justify-center gap-1 ${showLogs
-                ? "bg-muted/40 border-border/60 text-foreground"
-                : "bg-muted/10 border-border/30 text-muted-foreground/60 hover:bg-muted/30 hover:border-border/60 hover:text-foreground"
-                }`}
-              title="Show sandbox trace (classification/enforcement)"
-              aria-label="Toggle sandbox trace"
-            >
-              <span className="hidden md:inline text-[9px] font-semibold uppercase tracking-wider">
-                Trace
-              </span>
-              {showLogs ? (
-                <IconChevronDown className="w-4 h-4" />
-              ) : (
-                <IconChevronRight className="w-4 h-4" />
-              )}
-            </button>
-          )}
         </div>
       </div>
 
-      {showLogs && hasAnySandbox && (
-        <UsageItemSandboxPanel
-          classificationSandbox={classificationSandbox}
-          enforcementSandbox={enforcementSandbox}
-        />
+      {showFooter && (
+        <div className="-mx-2.5 -mb-2.5 mt-2.5 flex flex-col overflow-hidden rounded-b-lg border-t border-border/10 bg-black/15">
+          <div className="flex items-center justify-between px-2.5 py-1.5">
+            <div className="min-w-0 flex-1">
+              {hasAnySandbox && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowLogs((prev) => !prev);
+                  }}
+                  className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground/60 hover:text-foreground transition-colors group"
+                  aria-label="Toggle sandbox trace"
+                  aria-expanded={showLogs}
+                >
+                  <span>Custom rules trace</span>
+                  {showLogs ? (
+                    <IconChevronUp className="h-3 w-3 transition-transform group-hover:-translate-y-0.5" />
+                  ) : (
+                    <IconChevronDown className="h-3 w-3 transition-transform group-hover:translate-y-0.5" />
+                  )}
+                </button>
+              )}
+            </div>
+
+            <div className="shrink-0">
+              <RuleOutcomeNote
+                isIgnoredRule={isIgnoredRule}
+                customRulesAction={customRulesAction}
+                checkoutLink={checkoutLink}
+              />
+            </div>
+          </div>
+
+          {showLogs && hasAnySandbox && (
+            <div className="border-t border-border/10 px-2.5 py-2.5">
+              <UsageItemSandboxPanel
+                classificationSandbox={classificationSandbox}
+                enforcementSandbox={enforcementSandbox}
+              />
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
