@@ -44,7 +44,7 @@ export function ClassificationReasoningLabel({
 
   const isCustomRulesClassification =
     payload.classification_source ===
-      ClassificationSource.ClassificationSourceCustomRules &&
+    ClassificationSource.ClassificationSourceCustomRules &&
     !!classificationReason;
 
   const labelText = isPausedDistraction
