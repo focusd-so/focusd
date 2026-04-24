@@ -99,11 +99,11 @@ func (s *Service) DailySummary(date time.Time) DailySummary {
 	// Finalize summary
 	s.finalizeSummary(&summary, projects, comms)
 
-	// Fetch LLM summary if exists
-	var llmSummary LLMDailySummary
-	if err := s.db.Where("date = ?", date.Format("2006-01-02")).First(&llmSummary).Error; err == nil {
-		summary.LLMDailySummary = &llmSummary
-	}
+	// // Fetch LLM summary if exists
+	// var llmSummary LLMDailySummary
+	// if err := s.db.Where("date = ?", date.Format("2006-01-02")).First(&llmSummary).Error; err == nil {
+	// 	summary.LLMDailySummary = &llmSummary
+	// }
 
 	return summary
 }
@@ -146,7 +146,7 @@ func (s *Service) processEvent(summary *DailySummary, event *timeline.Event, sta
 	// For simplicity, we accumulate breakdowns at the main level.
 	// If hourly breakdown needs its own ProjectBreakdown etc., we should handle it.
 	// Looking at the struct, HourlyBreakdown is map[string]*DailySummary, so it HAS these fields.
-	
+
 	if !isIdle && payload.ApplicationID != 0 {
 		// We need app name for TopDistractions
 		var app Application
@@ -154,7 +154,7 @@ func (s *Service) processEvent(summary *DailySummary, event *timeline.Event, sta
 			if classification == ClassificationDistracting {
 				summary.TopDistractions[app.Name] += int(duration.Seconds())
 			}
-			
+
 			// Projects and Comms from ClassificationResult
 			if res := payload.ClassificationResult; res != nil && res.LLMClassificationResult != nil {
 				if proj := res.LLMClassificationResult.DetectedProject; proj != "" {
@@ -249,4 +249,3 @@ func (s *Service) finalizeSummary(summary *DailySummary, projects map[projectKey
 		})
 	}
 }
-
