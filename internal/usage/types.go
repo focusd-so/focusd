@@ -176,16 +176,16 @@ type DayInsights struct {
 	CommunicationBreakdown       map[string]CommunicationBreakdown `json:"communication_breakdown"`
 }
 
-type ProjectBreakdown struct {
-	Name            string `json:"name"`
-	DurationSeconds int    `json:"duration_seconds"`
-}
+// type ProjectBreakdown struct {
+// 	Name            string `json:"name"`
+// 	DurationSeconds int    `json:"duration_seconds"`
+// }
 
-type CommunicationBreakdown struct {
-	Name            string `json:"name"`
-	Channel         string `json:"channel"`
-	DurationSeconds int    `json:"duration_seconds"`
-}
+// type CommunicationBreakdown struct {
+// 	ApplicationID   int64  `json:"application_id"`
+// 	Channel         string `json:"channel"`
+// 	DurationSeconds int    `json:"duration_seconds"`
+// }
 
 type ProductivityScore struct {
 	ProductiveSeconds  int `json:"productive_seconds"`

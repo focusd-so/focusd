@@ -23,8 +23,8 @@ type Service struct {
 func NewService(ctx context.Context, db *gorm.DB, timelineService *timeline.Service, options ...Option) (*Service, error) {
 	service := &Service{timelineService: timelineService, db: db}
 
-	if err := db.AutoMigrate(&Application{}); err != nil {
-		return nil, fmt.Errorf("failed to migrate application: %w", err)
+	if err := db.AutoMigrate(&Application{}, &LLMDailySummary{}); err != nil {
+		return nil, fmt.Errorf("failed to migrate usage types: %w", err)
 	}
 
 	for _, option := range options {
